@@ -57,12 +57,13 @@
 		ToggleGroup,
 		ToggleGroupItem,
 	} from "$lib/components/ui/toggle-group";
-	import type { FileStatus } from "$lib/api-types";
 	import type {
-		SessionFilesData,
-		SessionFileTreeNode,
-	} from "$lib/context/context.types";
-	import type { SessionView } from "$lib/context/context.types";
+		FileStatus,
+		SessionDiffFileEntry,
+		SessionDiffFilesResponse,
+		SessionDiffStats,
+	} from "$lib/api-types";
+	import type { SessionFileBufferState } from "$lib/context";
 	import type { ResolvedTheme, ThemeColorScheme } from "$lib/theme";
 	import { downloadFile } from "$lib/shell";
 	import { cn } from "$lib/utils";
@@ -70,15 +71,33 @@
 
 	type MarkdownViewMode = "preview" | "split" | "editor";
 
-	export type FilesPanelView = Pick<
-		SessionView["files"],
-		| "activePath"
-		| "openPaths"
-		| "showChangedOnly"
-		| "expandedPaths"
-		| "loadingPaths"
-		| "buffers"
-	>;
+	export type SessionFileTreeNode = {
+		name: string;
+		path: string;
+		type: "file" | "directory";
+		size?: number;
+		changed?: boolean;
+		status?: FileStatus;
+		children?: SessionFileTreeNode[];
+	};
+
+	export type SessionFilesData = {
+		diff: SessionDiffFileEntry[];
+		diffStats: SessionDiffStats;
+		diffTarget: string;
+		tree: SessionFileTreeNode[];
+	};
+
+	export type FilesPanelView = {
+		activePath: string;
+		openPaths: string[];
+		showChangedOnly: boolean;
+		expandedPaths: string[];
+		loadingPaths: Record<string, boolean>;
+		buffers: Record<string, SessionFileBufferState>;
+		diffTarget: string;
+		diffFilesByTarget: Record<string, SessionDiffFilesResponse>;
+	};
 
 	export type FilesPanelActions = {
 		acceptConflict: (path: string) => void;

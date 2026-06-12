@@ -36,42 +36,6 @@ const (
 	CommandKindBuiltin CommandKind = "built-in"
 )
 
-// Command represents a slash command available to the user.
-type Command struct {
-	// Name is the command's slash-command name without the leading slash (e.g., "commit").
-	Name string
-
-	// Description is a short human-readable description of what the command does.
-	Description string
-
-	// Kind indicates the origin of the command.
-	Kind CommandKind
-
-	// Discobot carries optional Discobot-specific command metadata.
-	Discobot DiscobotCommandMetadata
-}
-
-type DiscobotCommandMetadata struct {
-	UI                bool
-	Label             string
-	ActiveLabel       string
-	Icon              string
-	Group             string
-	Order             int
-	CredentialRequest []DiscobotCredentialRequest
-}
-
-type DiscobotCredentialRequest struct {
-	EnvVar        string
-	Name          string
-	Justification string
-	ApprovedUses  []DiscobotCredentialApprovedUse
-}
-
-type DiscobotCredentialApprovedUse struct {
-	Description string
-}
-
 // PendingQuestion represents an outstanding approval request that needs user input.
 type PendingQuestion struct {
 	ApprovalID  string
@@ -169,7 +133,7 @@ type Agent interface {
 
 	// ListCommands returns all slash commands available to the user, including
 	// user-defined skills, legacy commands, and built-in commands.
-	ListCommands() ([]Command, error)
+	ListCommands() ([]api.Command, error)
 }
 
 type ThreadInfo struct {

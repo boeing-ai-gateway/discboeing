@@ -19,13 +19,13 @@ import (
 )
 
 type testSession struct {
-	commands []agent.Command
+	commands []api.Command
 	threads  map[string]api.Thread
 }
 
 func (s *testSession) WorkspaceRoot() string { return "" }
 func (s *testSession) Close()                {}
-func (s *testSession) ListCommands(context.Context) ([]agent.Command, error) {
+func (s *testSession) ListCommands(context.Context) ([]api.Command, error) {
 	return s.commands, nil
 }
 func (s *testSession) ListThreads(context.Context) ([]api.Thread, error) {
@@ -142,7 +142,7 @@ func TestHandleSlashCommand_ForwardsKnownAgentCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	session := &testSession{commands: []agent.Command{{Name: "deploy"}}}
+	session := &testSession{commands: []api.Command{{Name: "deploy"}}}
 	threadID, handled := handleSlashCommand(context.Background(), "/deploy", session, "thread-1", nil, nil, nil)
 	if handled {
 		t.Fatalf("expected /deploy to be forwarded to agent, handled=%v", handled)

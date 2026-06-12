@@ -1,60 +1,71 @@
 <script lang="ts">
-	import { onDestroy } from "svelte";
 	import ConversationPane from "$lib/components/app/ConversationPane.svelte";
 	import DockPanel from "$lib/components/app/DockPanel.svelte";
 	import SessionHeaderDropdown from "$lib/components/app/SessionHeaderDropdown.svelte";
+	import ThreadActivation from "$lib/components/app/ThreadActivation.svelte";
 	import ThreadWorkspaceHeader from "$lib/components/app/parts/ThreadWorkspaceHeader.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
-	import {
-		connectThread,
-		releaseThreadState,
-	} from "$lib/context/commands/session";
-	import type {
-		SessionContextValue,
-		ThreadContextValue,
-	} from "$lib/session/session-context.types";
-	import { isChatView } from "$lib/session/view/create-session-view-state.svelte";
+	import { useContext } from "$lib/context";
 
 	type Props = {
-		session: SessionContextValue;
-		thread: ThreadContextValue;
+		sessionId: string;
+		threadId: string;
 		visible: boolean;
 		reserveSidebarSpace?: boolean;
 		mode?: "full" | "conversation-only";
 	};
 
 	const props: Props = $props();
-	const session = $derived(props.session);
-	const thread = $derived(props.thread);
-
-	$effect(() => {
-		if (!props.visible || !session.current) {
-			return;
+	const sessionId = $derived(props.sessionId);
+	const threadId = $derived(props.threadId);
+	const context = useContext();
+	const sessionRecord = $derived(context.data.sessions.byId[sessionId] ?? null);
+	const currentSession = $derived(sessionRecord?.value ?? null);
+	const sessionView = $derived(context.view.sessions[sessionId] ?? null);
+	const selectedThreadId = $derived.by(() => {
+		if (context.view.selection.sessionId === sessionId) {
+			return context.view.selection.threadId;
 		}
-		connectThread(session.sessionId, thread.threadId);
+		return (
+			context.view.selection.requestedThreadIdBySessionId[sessionId] ?? null
+		);
 	});
-
-	onDestroy(() => {
-		releaseThreadState(session.sessionId, thread);
-	});
+	const selectedThread = $derived.by(() =>
+		selectedThreadId
+			? (sessionRecord?.threads.byId[selectedThreadId]?.value ?? null)
+			: null,
+	);
 
 	const showDock = $derived(
-		(props.mode ?? "full") === "full" && !isChatView(session.ui.activeView),
+		(props.mode ?? "full") === "full" &&
+			!isChatWorkspaceView(sessionView?.workspace.activeView),
 	);
-	const dockMaximized = $derived(showDock && session.ui.dockMaximized);
+	const dockMaximized = $derived(
+		showDock && (sessionView?.workspace.dockMaximized ?? false),
+	);
 	const headerTitle = $derived.by(() => {
-		if (session.threads.selected?.name) {
-			return session.threads.selected.name;
+		if (selectedThread?.name) {
+			return selectedThread.name;
 		}
-		if (session.isPending) {
+		if (!currentSession) {
 			return "";
 		}
 		return "";
 	});
 	const sessionTitle = $derived.by(
-		() => session.current?.displayName || session.current?.name || "Sessions",
+		() => currentSession?.displayName || currentSession?.name || "Sessions",
 	);
+
+	function isChatWorkspaceView(activeView: string | null | undefined): boolean {
+		return (
+			!activeView || activeView === "conversation" || activeView === "chat"
+		);
+	}
 </script>
+
+{#if props.visible && currentSession}
+	<ThreadActivation {sessionId} {threadId} />
+{/if}
 
 {#snippet sessionHeaderDropdown()}
 	<SessionHeaderDropdown label={sessionTitle} />
@@ -62,11 +73,7 @@
 
 {#if showDock && dockMaximized}
 	<div class="min-h-0 flex-1 overflow-hidden">
-		<DockPanel
-			sessionId={session.sessionId}
-			threadId={thread.threadId}
-			sessionView={session.ui}
-		/>
+		<DockPanel {sessionId} {threadId} />
 	</div>
 {:else if showDock}
 	<Resizable.PaneGroup
@@ -79,12 +86,12 @@
 				<ThreadWorkspaceHeader
 					reserveSidebarSpace={props.reserveSidebarSpace ?? false}
 					title={headerTitle}
-					state={session.threads.selected?.state}
+					state={selectedThread?.state}
 					titleContent={sessionHeaderDropdown}
 				/>
 				<div class="min-h-0 min-w-0 flex-1 overflow-hidden">
 					{#if props.visible}
-						<ConversationPane {session} {thread} visible={props.visible} />
+						<ConversationPane {sessionId} {threadId} visible={props.visible} />
 					{/if}
 				</div>
 			</div>
@@ -92,11 +99,7 @@
 		<Resizable.Handle class="bg-transparent" />
 		<Resizable.Pane defaultSize={65} minSize={25} class="min-h-0 min-w-0">
 			<div class="h-full min-h-0 min-w-0 overflow-auto">
-				<DockPanel
-					sessionId={session.sessionId}
-					threadId={thread.threadId}
-					sessionView={session.ui}
-				/>
+				<DockPanel {sessionId} {threadId} />
 			</div>
 		</Resizable.Pane>
 	</Resizable.PaneGroup>
@@ -104,13 +107,13 @@
 	<ThreadWorkspaceHeader
 		reserveSidebarSpace={props.reserveSidebarSpace ?? false}
 		title={headerTitle}
-		state={session.threads.selected?.state}
+		state={selectedThread?.state}
 		titleContent={sessionHeaderDropdown}
 	/>
 
 	<div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 		{#if props.visible}
-			<ConversationPane {session} {thread} visible={props.visible} />
+			<ConversationPane {sessionId} {threadId} visible={props.visible} />
 		{/if}
 	</div>
 {/if}

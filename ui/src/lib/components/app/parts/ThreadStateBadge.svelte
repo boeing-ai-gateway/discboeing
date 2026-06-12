@@ -3,7 +3,7 @@
 	import {
 		getThreadStateLabel,
 		getThreadStateTone,
-	} from "$lib/app/thread-status";
+	} from "$lib/session-status-helpers";
 	import { cn } from "$lib/utils";
 
 	type Props = {

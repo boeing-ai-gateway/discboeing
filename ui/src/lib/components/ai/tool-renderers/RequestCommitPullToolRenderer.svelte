@@ -289,7 +289,7 @@
 	) {
 		approvalError = null;
 		if (!sessionId || !threadId || !approvalId) {
-			approvalError = "Missing thread context";
+			approvalError = "Missing thread";
 			return;
 		}
 		try {

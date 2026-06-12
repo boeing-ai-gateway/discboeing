@@ -753,6 +753,17 @@
                   "$ref": "#/components/schemas/ServiceOutputEvent"
                 }
               ]
+            },
+            {
+              "x-discobot-discriminator": {
+                "type": "event",
+                "stream": "session"
+              },
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/SessionStreamMessage"
+                }
+              ]
             }
           ]
         }
@@ -7816,6 +7827,7 @@
         "enum": [
           "chat",
           "service",
+          "session",
           "project-events"
         ]
       },
@@ -7832,25 +7844,21 @@
       },
       "ProjectEventName": {
         "type": "string",
-        "description": "Persisted project event name.",
+        "description": "Project-events stream event name.",
         "enum": [
           "connected",
           "session_updated",
           "thread_updated",
           "workspace_updated",
-          "startup_task_updated"
+          "startup_task_updated",
+          "history-start",
+          "history-end"
         ]
       },
       "ProjectEventsSubscriptionOptions": {
         "description": "Project-events stream subscription options.",
         "type": "object",
-        "properties": {
-          "afterId": {
-            "type": "string",
-            "description": "Resume project events after this event id.",
-            "x-go-type-skip-optional-pointer": true
-          }
-        }
+        "properties": {}
       },
       "ChatStreamSubscriptionOptions": {
         "description": "Chat stream subscription options.",
@@ -7861,14 +7869,6 @@
             "x-go-type-skip-optional-pointer": true
           },
           "threadId": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "replay": {
-            "type": "boolean",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "lastEventId": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
           }
@@ -7903,6 +7903,9 @@
           },
           "chat": {
             "$ref": "#/components/schemas/ChatStreamSubscriptionOptions"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionStreamSubscriptionOptions"
           },
           "service": {
             "$ref": "#/components/schemas/ServiceStreamSubscriptionOptions"
@@ -7940,18 +7943,6 @@
           "serviceId": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
-          },
-          "replay": {
-            "type": "boolean",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "lastEventId": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "afterId": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
@@ -7983,12 +7974,16 @@
             "type": "string",
             "x-go-type-skip-optional-pointer": true
           },
-          "replay": {
-            "type": "boolean",
+          "type": {
+            "type": "string",
+            "enum": [
+              "subscribed"
+            ],
             "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "stream"
         ],
         "x-discobot-discriminator": {
@@ -8018,9 +8013,17 @@
           "serviceId": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "unsubscribed"
+            ],
+            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "stream"
         ],
         "x-discobot-discriminator": {
@@ -8050,9 +8053,17 @@
           "serviceId": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "complete"
+            ],
+            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "stream"
         ],
         "x-discobot-discriminator": {
@@ -8086,9 +8097,17 @@
           "error": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "error"
+            ],
+            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "error"
         ],
         "x-discobot-discriminator": {
@@ -8119,15 +8138,44 @@
             ]
           },
           "data": {
-            "type": "string",
+            "description": "Structured project event payload. Synthetic events use their payload directly; persisted events use the project event envelope.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ProjectConnectedEvent"
+              },
+              {
+                "$ref": "#/components/schemas/SessionUpdatedEvent"
+              },
+              {
+                "$ref": "#/components/schemas/ThreadUpdatedEvent"
+              },
+              {
+                "$ref": "#/components/schemas/WorkspaceUpdatedEvent"
+              },
+              {
+                "$ref": "#/components/schemas/StartupTaskUpdatedEvent"
+              },
+              {
+                "$ref": "#/components/schemas/UnknownProjectEvent"
+              }
+            ],
+            "x-go-type": "json.RawMessage",
             "x-go-type-skip-optional-pointer": true
           },
           "id": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "event"
+            ],
+            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "stream",
           "event"
         ],
@@ -8173,9 +8221,17 @@
           "id": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "event"
+            ],
+            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "stream",
           "sessionId",
           "threadId",
@@ -8259,9 +8315,17 @@
           "id": {
             "type": "string",
             "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "event"
+            ],
+            "x-go-type-skip-optional-pointer": true
           }
         },
         "required": [
+          "type",
           "stream",
           "sessionId",
           "serviceId"
@@ -8271,9 +8335,34 @@
         }
       },
       "ProjectStreamMessage": {
-        "description": "Server-to-client project websocket message. See x-discobot-websocket on the websocket operation for the concrete message schemas.",
-        "type": "object",
-        "additionalProperties": true
+        "description": "Server-to-client project websocket message.",
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ProjectStreamSubscribedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectStreamUnsubscribedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectStreamCompleteEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectStreamErrorEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ProjectEventsStreamMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ChatStreamMessage"
+          },
+          {
+            "$ref": "#/components/schemas/SessionStreamMessage"
+          },
+          {
+            "$ref": "#/components/schemas/ServiceOutputEvent"
+          }
+        ],
+        "x-go-type": "any"
       },
       "ProjectEventBase": {
         "description": "Metadata shared by persisted project events.",
@@ -8292,17 +8381,13 @@
           "timestamp": {
             "type": "string",
             "format": "date-time"
-          },
-          "rawData": {
-            "x-go-type": "json.RawMessage"
           }
         },
         "required": [
           "id",
           "seq",
           "type",
-          "timestamp",
-          "rawData"
+          "timestamp"
         ]
       },
       "ProjectConnectedEvent": {
@@ -8317,45 +8402,41 @@
           "projectId"
         ]
       },
-      "SessionUpdatedData": {
-        "description": "Payload for session_updated project events.",
-        "type": "object",
-        "properties": {
-          "sessionId": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "sandboxStatus": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "sandboxStatusMessage": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
-          },
-          "commitStatus": {
-            "type": "string",
-            "x-go-type-skip-optional-pointer": true
-          }
-        },
-        "required": [
-          "sessionId",
-          "sandboxStatus"
-        ]
-      },
       "SessionUpdatedEvent": {
         "description": "Decoded session_updated project event.",
         "type": "object",
         "properties": {
-          "projectEventBase": {
-            "$ref": "#/components/schemas/ProjectEventBase"
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectEventName"
+              }
+            ],
+            "enum": [
+              "session_updated"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           },
           "data": {
-            "$ref": "#/components/schemas/SessionUpdatedData"
+            "$ref": "#/components/schemas/Session"
           }
         },
         "required": [
-          "projectEventBase",
+          "id",
+          "seq",
+          "type",
+          "timestamp",
           "data"
         ]
       },
@@ -8384,47 +8465,75 @@
         "description": "Decoded thread_updated project event.",
         "type": "object",
         "properties": {
-          "projectEventBase": {
-            "$ref": "#/components/schemas/ProjectEventBase"
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectEventName"
+              }
+            ],
+            "enum": [
+              "thread_updated"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           },
           "data": {
             "$ref": "#/components/schemas/ThreadUpdatedData"
           }
         },
         "required": [
-          "projectEventBase",
+          "id",
+          "seq",
+          "type",
+          "timestamp",
           "data"
-        ]
-      },
-      "WorkspaceUpdatedData": {
-        "description": "Payload for workspace_updated project events.",
-        "type": "object",
-        "properties": {
-          "workspaceId": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "workspaceId",
-          "status"
         ]
       },
       "WorkspaceUpdatedEvent": {
         "description": "Decoded workspace_updated project event.",
         "type": "object",
         "properties": {
-          "projectEventBase": {
-            "$ref": "#/components/schemas/ProjectEventBase"
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectEventName"
+              }
+            ],
+            "enum": [
+              "workspace_updated"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           },
           "data": {
-            "$ref": "#/components/schemas/WorkspaceUpdatedData"
+            "$ref": "#/components/schemas/Workspace"
           }
         },
         "required": [
-          "projectEventBase",
+          "id",
+          "seq",
+          "type",
+          "timestamp",
           "data"
         ]
       },
@@ -8432,15 +8541,37 @@
         "description": "Decoded startup_task_updated project event.",
         "type": "object",
         "properties": {
-          "projectEventBase": {
-            "$ref": "#/components/schemas/ProjectEventBase"
+          "id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ProjectEventName"
+              }
+            ],
+            "enum": [
+              "startup_task_updated"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           },
           "data": {
             "$ref": "#/components/schemas/StartupTask"
           }
         },
         "required": [
-          "projectEventBase",
+          "id",
+          "seq",
+          "type",
+          "timestamp",
           "data"
         ]
       },
@@ -8448,15 +8579,27 @@
         "description": "Decoded project event unknown to this client version.",
         "type": "object",
         "properties": {
-          "projectEventBase": {
-            "$ref": "#/components/schemas/ProjectEventBase"
+          "id": {
+            "type": "string"
           },
-          "data": {
-            "x-go-type": "json.RawMessage"
-          }
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ProjectEventName"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "data": {}
         },
         "required": [
-          "projectEventBase",
+          "id",
+          "seq",
+          "type",
+          "timestamp",
           "data"
         ]
       },
@@ -9043,6 +9186,108 @@
           }
         },
         "description": "Ports Response payload returned by the API."
+      },
+      "SessionStreamSubscriptionOptions": {
+        "description": "Session state stream subscription options. Subscribes to the session stream forwarded from the sandbox agent through the project websocket.",
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session identifier to watch."
+          }
+        },
+        "required": [
+          "sessionId"
+        ]
+      },
+      "SessionStreamEventName": {
+        "type": "string",
+        "description": "Session stream event name forwarded over the project websocket. History framing brackets an atomic snapshot replay; subsequent events are live deltas/snapshots.",
+        "enum": [
+          "history-start",
+          "history-end",
+          "session_updated",
+          "threads_updated",
+          "files_updated",
+          "commands_updated",
+          "hooks_updated",
+          "services_updated",
+          "diff_status_updated",
+          "diff_updated"
+        ]
+      },
+      "SessionStreamMessage": {
+        "description": "Session websocket stream message envelope. Delivered when subscribed to stream=session on the project websocket.",
+        "type": "object",
+        "properties": {
+          "stream": {
+            "type": "string",
+            "enum": [
+              "session"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          },
+          "sessionId": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "event": {
+            "x-go-type-skip-optional-pointer": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SessionStreamEventName"
+              }
+            ]
+          },
+          "data": {
+            "description": "Structured payload for the session stream event. history-start and history-end omit data; resource events use the corresponding session resource response.",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/Session"
+              },
+              {
+                "$ref": "#/components/schemas/ThreadsResponse"
+              },
+              {
+                "$ref": "#/components/schemas/FileListResponse"
+              },
+              {
+                "$ref": "#/components/schemas/CommandsResponse"
+              },
+              {
+                "$ref": "#/components/schemas/HooksStateResponse"
+              },
+              {
+                "$ref": "#/components/schemas/ServicesResponse"
+              },
+              {
+                "$ref": "#/components/schemas/DiffResponse"
+              }
+            ],
+            "x-go-type": "json.RawMessage",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "id": {
+            "type": "string",
+            "x-go-type-skip-optional-pointer": true
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "event"
+            ],
+            "x-go-type-skip-optional-pointer": true
+          }
+        },
+        "required": [
+          "type",
+          "stream",
+          "sessionId",
+          "event"
+        ],
+        "x-discobot-discriminator": {
+          "type": "event"
+        }
       }
     }
   }

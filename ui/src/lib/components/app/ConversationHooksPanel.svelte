@@ -10,26 +10,51 @@
 	import { api } from "$lib/api-client";
 	import { Button } from "$lib/components/ui/button";
 	import * as Dialog from "$lib/components/ui/dialog";
-	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
+	import { getHookDisplayState } from "$lib/conversation-helpers";
+	import { useContext } from "$lib/context";
 	import type {
-		HookOutputState,
-		SessionContextValue,
-	} from "$lib/session/session-context.types";
-	import type { HooksStatus } from "$lib/session/session-context.types";
+		HookOutputResponse,
+		HookRunStatus as ApiHookRunStatus,
+	} from "$lib/api-types";
 	import { downloadFile } from "$lib/shell";
 
+	type HookPanelRunStatus = Pick<
+		ApiHookRunStatus,
+		| "hookId"
+		| "hookName"
+		| "type"
+		| "engine"
+		| "phase"
+		| "lastResult"
+		| "runCount"
+		| "failCount"
+	> & {
+		command?: string;
+		lastRunAt?: string;
+		lastExitCode?: number;
+		executionPaused: boolean;
+	};
+
+	type HooksStatus = {
+		hooks: HookPanelRunStatus[];
+		pendingHookIds: string[];
+		executionPaused: boolean;
+	};
+
 	type Props = {
-		session: SessionContextValue;
+		sessionId: string;
+		threadId: string;
 		expanded: boolean;
 		hooksStatus: HooksStatus;
-		outputById: Record<string, HookOutputState>;
+		outputById: Record<string, HookOutputResponse>;
 		onRerunHook: (hookId: string) => void;
 		onSetExecutionPaused: (paused: boolean) => void;
 		onSetHookExecutionPaused: (hookId: string, paused: boolean) => void;
 	};
 
 	let {
-		session,
+		sessionId,
+		threadId,
 		expanded,
 		hooksStatus,
 		outputById,
@@ -38,8 +63,22 @@
 		onSetHookExecutionPaused,
 	}: Props = $props();
 
-	const sessionView = $derived(session.ui);
+	const context = useContext();
+	const sessionView = $derived(context.view.sessions[sessionId]);
+	const selectedHookId = $derived(
+		sessionView?.hooks.dialog.selectedHookId ?? null,
+	);
+	const sessionRecord = $derived(context.data.sessions.byId[sessionId] ?? null);
+	const selectedThread = $derived(
+		sessionRecord?.threads.byId[threadId]?.value ?? null,
+	);
 	let reviewPhaseSaving = $state(false);
+
+	$effect(() => {
+		if (sessionView && !sessionView.hooks.dialog.open) {
+			sessionView.hooks.dialog.selectedHookId = null;
+		}
+	});
 
 	function pendingHookSet() {
 		return new Set(hooksStatus.pendingHookIds);
@@ -111,19 +150,20 @@
 	const draftHooks = $derived.by(() =>
 		hooksStatus.hooks.filter((hook) => hook.phase !== "review"),
 	);
-	const selectedThreadPhase = $derived(session.threads.selected?.phase ?? "");
+	const selectedThreadPhase = $derived(selectedThread?.phase ?? "");
 
 	async function toggleReviewPhase() {
-		const selectedThreadId = session.threads.selectedId;
-		if (!selectedThreadId || reviewPhaseSaving) {
+		if (!threadId || reviewPhaseSaving) {
 			return;
 		}
 
 		reviewPhaseSaving = true;
 		try {
-			await session.threads.setPhase(
-				selectedThreadId,
-				selectedThreadPhase === "review" ? "" : "review",
+			await context.commands.threads.updateThread(
+				sessionId,
+				threadId,
+				{ phase: selectedThreadPhase === "review" ? "" : "review" },
+				{ wait: true },
 			);
 		} finally {
 			reviewPhaseSaving = false;
@@ -131,32 +171,42 @@
 	}
 
 	function openHookDialog(hookId: string) {
-		sessionView.openHookDialog(hookId);
+		if (!sessionView) {
+			return;
+		}
+		sessionView.hooks.dialog.selectedHookId = hookId;
+		sessionView.hooks.dialog.open = true;
+	}
+
+	function closeHookDialog() {
+		if (!sessionView) {
+			return;
+		}
+		sessionView.hooks.dialog.open = false;
+		sessionView.hooks.dialog.selectedHookId = null;
 	}
 
 	function setExecutionPaused(paused: boolean) {
 		onSetExecutionPaused(paused);
 		if (paused) {
-			sessionView.closeHookDialog();
+			closeHookDialog();
 		}
 	}
 
 	const selectedHookData = $derived.by(() => {
-		if (!sessionView.selectedHookId) {
+		if (!selectedHookId) {
 			return null;
 		}
 		return (
-			hooksStatus.hooks.find(
-				(hook) => hook.hookId === sessionView.selectedHookId,
-			) ?? null
+			hooksStatus.hooks.find((hook) => hook.hookId === selectedHookId) ?? null
 		);
 	});
 
 	const selectedHookOutputData = $derived.by(() => {
-		if (!sessionView.selectedHookId) {
+		if (!selectedHookId) {
 			return null;
 		}
-		return outputById[sessionView.selectedHookId] ?? null;
+		return outputById[selectedHookId] ?? null;
 	});
 
 	function formatBytes(value: number) {
@@ -174,16 +224,13 @@
 	}
 
 	async function downloadSelectedHookOutput() {
-		if (!sessionView.selectedHookId) {
+		if (!selectedHookId) {
 			return;
 		}
 
-		const content = await api.downloadHookOutput(
-			session.sessionId,
-			sessionView.selectedHookId,
-		);
+		const content = await api.downloadHookOutput(sessionId, selectedHookId);
 		await downloadFile({
-			filename: `${sessionView.selectedHookId}.log`,
+			filename: `${selectedHookId}.log`,
 			content,
 			mimeType: "text/plain;charset=utf-8",
 		});
@@ -322,7 +369,7 @@
 							? "h-6 gap-1.5 px-2"
 							: "h-7 gap-1.5 px-2.5 shadow-sm"}
 						onclick={toggleReviewPhase}
-						disabled={reviewPhaseSaving || !session.threads.selectedId}
+						disabled={reviewPhaseSaving || !threadId}
 						aria-label={selectedThreadPhase === "review"
 							? "Set this thread to draft"
 							: "Mark this thread ready for review"}
@@ -356,111 +403,113 @@
 	</div>
 {/if}
 
-<Dialog.Root bind:open={sessionView.hookDialogOpen}>
-	{#if selectedHookData}
-		{@const hook = selectedHookData}
-		{@const displayState = hookDisplayState(hook)}
-		<Dialog.Content
-			class="sm:max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
-		>
-			<Dialog.Header>
-				<Dialog.Title class="flex items-center gap-2">
-					{#if displayState === "running"}
-						<Loader2Icon class="size-4 animate-spin text-blue-500" />
-					{:else if displayState === "pending"}
-						<ClockIcon class="size-4 text-muted-foreground" />
-					{:else if displayState === "failure"}
-						<XCircleIcon class="size-4 text-red-500" />
-					{:else if displayState === "success"}
-						<CheckCircleIcon class="size-4 text-green-500" />
-					{:else}
-						<ClockIcon class="size-4 text-muted-foreground" />
-					{/if}
-					{hook.hookName}
-				</Dialog.Title>
-				<Dialog.Description>
-					{hook.type}{hook.phase ? ` · ${hook.phase}` : ""} hook · last run {formatRelativeTime(
-						hook.lastRunAt,
-					)}
-				</Dialog.Description>
-			</Dialog.Header>
+{#if sessionView}
+	<Dialog.Root bind:open={sessionView.hooks.dialog.open}>
+		{#if selectedHookData}
+			{@const hook = selectedHookData}
+			{@const displayState = hookDisplayState(hook)}
+			<Dialog.Content
+				class="sm:max-w-4xl max-h-[85vh] flex flex-col overflow-hidden"
+			>
+				<Dialog.Header>
+					<Dialog.Title class="flex items-center gap-2">
+						{#if displayState === "running"}
+							<Loader2Icon class="size-4 animate-spin text-blue-500" />
+						{:else if displayState === "pending"}
+							<ClockIcon class="size-4 text-muted-foreground" />
+						{:else if displayState === "failure"}
+							<XCircleIcon class="size-4 text-red-500" />
+						{:else if displayState === "success"}
+							<CheckCircleIcon class="size-4 text-green-500" />
+						{:else}
+							<ClockIcon class="size-4 text-muted-foreground" />
+						{/if}
+						{hook.hookName}
+					</Dialog.Title>
+					<Dialog.Description>
+						{hook.type}{hook.phase ? ` · ${hook.phase}` : ""} hook · last run {formatRelativeTime(
+							hook.lastRunAt,
+						)}
+					</Dialog.Description>
+				</Dialog.Header>
 
-			<div class="flex items-center gap-4 text-sm">
-				<span class="text-muted-foreground"
-					>Status: {hookStatusLabel(hook)}</span
-				>
-				{#if hookPaused(hook)}
-					<span class="text-amber-500/80">Paused</span>
-				{/if}
-				<span class="text-muted-foreground">Runs: {hook.runCount}</span>
-				{#if typeof hook.lastExitCode === "number"}
+				<div class="flex items-center gap-4 text-sm">
 					<span class="text-muted-foreground"
-						>Exit code: {hook.lastExitCode}</span
+						>Status: {hookStatusLabel(hook)}</span
 					>
-				{/if}
-				{#if hook.failCount > 0}
-					<span class="text-red-500/80">Failures: {hook.failCount}</span>
-				{/if}
-				<Button
-					variant="outline"
-					size="xs"
-					class="ms-auto"
-					onclick={() =>
-						onSetHookExecutionPaused(hook.hookId, !hookPaused(hook))}
-				>
 					{#if hookPaused(hook)}
-						<PlayCircleIcon class="size-3 text-amber-500" />
-						Resume hook
-					{:else}
-						<PauseCircleIcon class="size-3" />
-						Pause hook
+						<span class="text-amber-500/80">Paused</span>
 					{/if}
-				</Button>
-				{#if canRerunHook(hook)}
+					<span class="text-muted-foreground">Runs: {hook.runCount}</span>
+					{#if typeof hook.lastExitCode === "number"}
+						<span class="text-muted-foreground"
+							>Exit code: {hook.lastExitCode}</span
+						>
+					{/if}
+					{#if hook.failCount > 0}
+						<span class="text-red-500/80">Failures: {hook.failCount}</span>
+					{/if}
 					<Button
 						variant="outline"
 						size="xs"
-						onclick={() => onRerunHook(hook.hookId)}
+						class="ms-auto"
+						onclick={() =>
+							onSetHookExecutionPaused(hook.hookId, !hookPaused(hook))}
 					>
-						<RotateCcwIcon class="size-3" />
-						Rerun
+						{#if hookPaused(hook)}
+							<PlayCircleIcon class="size-3 text-amber-500" />
+							Resume hook
+						{:else}
+							<PauseCircleIcon class="size-3" />
+							Pause hook
+						{/if}
 					</Button>
-				{/if}
-			</div>
-
-			<div
-				class="mt-2 flex-1 min-h-0 overflow-hidden rounded-md border border-border bg-muted/30"
-			>
-				<div
-					class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground"
-				>
-					{hook.command ? `Command: ${hook.command}` : "Output"}
-				</div>
-				<div class="max-h-[50vh] overflow-auto">
-					{#if selectedHookOutputData?.tooLarge}
-						<div
-							class="flex items-center gap-3 border-b border-border px-3 py-2 text-sm"
+					{#if canRerunHook(hook)}
+						<Button
+							variant="outline"
+							size="xs"
+							onclick={() => onRerunHook(hook.hookId)}
 						>
-							<p class="min-w-0 flex-1 text-muted-foreground">
-								Showing the last {formatBytes(
-									selectedHookOutputData.displayedBytes,
-								)} of {formatBytes(selectedHookOutputData.sizeBytes)}.
-							</p>
-							<Button
-								variant="outline"
-								size="sm"
-								onclick={downloadSelectedHookOutput}
-							>
-								<DownloadIcon class="size-4" />
-								Download full log
-							</Button>
-						</div>
+							<RotateCcwIcon class="size-3" />
+							Rerun
+						</Button>
 					{/if}
-					<pre
-						class="p-3 text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">{selectedHookOutputData?.output ??
-							"No output available"}</pre>
 				</div>
-			</div>
-		</Dialog.Content>
-	{/if}
-</Dialog.Root>
+
+				<div
+					class="mt-2 flex-1 min-h-0 overflow-hidden rounded-md border border-border bg-muted/30"
+				>
+					<div
+						class="border-b border-border px-3 py-2 text-xs font-medium text-muted-foreground"
+					>
+						{hook.command ? `Command: ${hook.command}` : "Output"}
+					</div>
+					<div class="max-h-[50vh] overflow-auto">
+						{#if selectedHookOutputData?.tooLarge}
+							<div
+								class="flex items-center gap-3 border-b border-border px-3 py-2 text-sm"
+							>
+								<p class="min-w-0 flex-1 text-muted-foreground">
+									Showing the last {formatBytes(
+										selectedHookOutputData.displayedBytes,
+									)} of {formatBytes(selectedHookOutputData.sizeBytes)}.
+								</p>
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={downloadSelectedHookOutput}
+								>
+									<DownloadIcon class="size-4" />
+									Download full log
+								</Button>
+							</div>
+						{/if}
+						<pre
+							class="p-3 text-xs leading-relaxed text-foreground whitespace-pre-wrap break-words">{selectedHookOutputData?.output ??
+								"No output available"}</pre>
+					</div>
+				</div>
+			</Dialog.Content>
+		{/if}
+	</Dialog.Root>
+{/if}

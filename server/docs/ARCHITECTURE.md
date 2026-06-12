@@ -268,14 +268,13 @@ from server-side chat requests or proxied chat stream chunks. The syncer receive
 sandbox lifecycle events through `SandboxService`, whose watch wrapper refreshes
 and resumes provider watches so dynamically created or removed backing providers
 are picked up. Watch replay and `running` events start an agent-go
-`GET /threads/activity/stream` subscription for the running sandbox. The agent
-stream emits one initial aggregate snapshot and then emits another snapshot
-whenever completion lifecycle, prompt queue, thread, or answer state changes. It
-also periodically emits a full snapshot while subscribed, which gives the server
-a lightweight self-healing path without relying on polling as the primary
-mechanism. This keeps visible session lists synchronized even when no UI thread
-stream is open. The syncer cancels the subscription when sandbox watch reports a
-non-running state, and it does not start stopped sandboxes.
+`GET /session/stream?resources=threads` subscription for the running sandbox.
+The agent stream emits a framed initial thread snapshot and then emits another
+`threads_updated` snapshot whenever completion lifecycle, prompt queue, thread,
+or answer state changes. The server derives the aggregate session activity from
+those thread snapshots. This keeps visible session lists synchronized even when
+no UI thread stream is open. The syncer cancels the subscription when sandbox
+watch reports a non-running state, and it does not start stopped sandboxes.
 
 The periodic poll remains only as a recovery fallback for ready sessions whose
 stored summary is non-terminal (`queued`, `running`, or `unknown`), so a missed

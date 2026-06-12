@@ -4,28 +4,33 @@
 	import FolderOpenIcon from "@lucide/svelte/icons/folder-open";
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import PackageIcon from "@lucide/svelte/icons/package";
-	import { onDestroy, onMount, tick } from "svelte";
-	import type { Workspace } from "$lib/api-types";
+	import { onDestroy, onMount, tick, untrack } from "svelte";
+	import { api } from "$lib/api-client";
+	import type { Workspace, WorkspaceValidationResult } from "$lib/api-types";
 	import type { WorkspaceSelectionResult } from "$lib/components/app/conversation-composer.types";
 	import GithubIcon from "$lib/components/ui/icons/GithubIcon.svelte";
 	import { isDesktopShell, pickDirectory } from "$lib/shell";
 	import { InputGroupButton } from "$lib/components/ui/input-group";
 	import { Input } from "$lib/components/ui/input";
 	import { NativeSelect } from "$lib/components/ui/native-select";
+	import { useContext } from "$lib/context";
 	import {
-		refreshWorkspaces,
-		validateWorkspace,
-	} from "$lib/context/commands/workspace";
-	import { useContext } from "$lib/context/context.svelte";
-	import type { SessionContextValue } from "$lib/session/session-context.types";
+		createCollectionCache,
+		createReadyStatus,
+		upsertById,
+	} from "$lib/context/cache";
+	import { getPendingWorkspaceRequiresSourceInput } from "$lib/pending-workspace-helpers";
 
 	let {
-		session,
+		sessionId,
 		fullWidth = false,
-	}: { session: SessionContextValue; fullWidth?: boolean } = $props();
+	}: { sessionId: string; fullWidth?: boolean } = $props();
 
 	const context = useContext();
-	const sessionView = $derived(session.ui);
+	const mountedSessionId = untrack(() => sessionId);
+	void context.commands.view.mountSessionView(mountedSessionId);
+	const sessionView = $derived(context.view.sessions[mountedSessionId]!);
+	const pendingWorkspace = $derived(sessionView.pendingWorkspace);
 
 	let showWorkspaceSuggestions = $state(false);
 	let selectedWorkspaceSuggestionIndex = $state(-1);
@@ -41,19 +46,23 @@
 		null;
 	let destroyed = false;
 
-	const availableWorkspaces = $derived.by(() => context.data.workspaces.items);
-	const loadingWorkspaces = $derived.by(
-		() => context.data.workspaces.status === "loading",
+	const availableWorkspaces = $derived.by(() =>
+		context.data.workspaces.allIds
+			.map((workspaceId) => context.data.workspaces.byId[workspaceId] ?? null)
+			.filter((workspace): workspace is Workspace => workspace !== null),
 	);
-	const requiresSourceInput = $derived.by(
-		() => sessionView.pendingWorkspaceRequiresSourceInput,
+	const loadingWorkspaces = $derived.by(
+		() => context.data.workspaces.status.state === "loading",
+	);
+	const requiresSourceInput = $derived.by(() =>
+		getPendingWorkspaceRequiresSourceInput(pendingWorkspace),
 	);
 	const selectedExistingWorkspace = $derived.by(() => {
-		if (!sessionView.pendingWorkspaceOption.startsWith("existing:")) {
+		if (!pendingWorkspace.option.startsWith("existing:")) {
 			return null;
 		}
 
-		const selectedWorkspaceId = sessionView.pendingWorkspaceOption.slice(
+		const selectedWorkspaceId = pendingWorkspace.option.slice(
 			"existing:".length,
 		);
 		return (
@@ -67,15 +76,51 @@
 			selectedExistingWorkspace !== null &&
 			isGithubWorkspace(selectedExistingWorkspace),
 	);
-	const workspaceSourceType = $derived.by(
-		() => sessionView.pendingWorkspaceSourceType,
+	const workspaceSourceType = $derived.by(() =>
+		pendingWorkspace.option === "git-repo" ? "git" : "local",
 	);
 	const workspaceSuggestions = $derived.by(
-		() => sessionView.pendingWorkspaceValidation?.suggestions ?? [],
+		() => pendingWorkspace.validation?.suggestions ?? [],
 	);
 	const showLocalDirectoryPicker = $derived.by(
 		() => isDesktopShell() && workspaceSourceType === "local",
 	);
+
+	function setPendingWorkspaceOption(value: string) {
+		pendingWorkspace.option = value;
+	}
+
+	function setPendingWorkspaceBranch(value: string) {
+		pendingWorkspace.branch = value;
+	}
+
+	function setPendingWorkspaceSourceInput(value: string) {
+		pendingWorkspace.sourceInput = value;
+	}
+
+	function setPendingWorkspaceValidation(
+		value: WorkspaceValidationResult | null,
+	) {
+		pendingWorkspace.validation = value;
+	}
+
+	function setPendingWorkspaceValidating(value: boolean) {
+		pendingWorkspace.validating = value;
+	}
+
+	function setPendingWorkspaceSetupMessage(value: string | null) {
+		pendingWorkspace.setupMessage = value;
+	}
+
+	function resetPendingWorkspaceSetup() {
+		pendingWorkspace.option = "new-workspace";
+		pendingWorkspace.branch = "";
+		pendingWorkspace.sourceInput = "";
+		pendingWorkspace.validation = null;
+		pendingWorkspace.validating = false;
+		pendingWorkspace.setupMessage = null;
+		pendingWorkspace.sandboxProviderId = "";
+	}
 
 	function shortenHomePath(path: string): string {
 		const homeMatch = path.match(/^(\/home\/[^/]+|\/Users\/[^/]+)(\/.*)?$/);
@@ -105,6 +150,16 @@
 		const value =
 			`${workspace.path} ${workspace.displayName || ""}`.toLowerCase();
 		return value.includes("github.com") || value.includes("github");
+	}
+
+	async function loadWorkspacesIntoCache() {
+		const response = await api.getWorkspaces();
+		const state = createCollectionCache<Workspace>();
+		for (const workspace of response.workspaces) {
+			upsertById(state, workspace.id, workspace);
+		}
+		state.status = createReadyStatus();
+		context.data.workspaces = state;
 	}
 
 	function isGithubRepoInput(value: string): boolean {
@@ -160,12 +215,12 @@
 	function resetToWorkspaceDropdown() {
 		showWorkspaceSuggestions = false;
 		selectedWorkspaceSuggestionIndex = -1;
-		sessionView.setPendingWorkspaceOption("new-workspace");
-		sessionView.setPendingWorkspaceBranch("");
-		sessionView.setPendingWorkspaceSourceInput("");
-		sessionView.setPendingWorkspaceSetupMessage(null);
-		sessionView.setPendingWorkspaceValidation(null);
-		sessionView.setPendingWorkspaceValidating(false);
+		setPendingWorkspaceOption("new-workspace");
+		setPendingWorkspaceBranch("");
+		setPendingWorkspaceSourceInput("");
+		setPendingWorkspaceSetupMessage(null);
+		setPendingWorkspaceValidation(null);
+		setPendingWorkspaceValidating(false);
 		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 	}
@@ -199,29 +254,29 @@
 
 	function handleWorkspaceOptionChange(nextOption: string) {
 		hasUserSelectedWorkspace = true;
-		sessionView.setPendingWorkspaceOption(nextOption);
-		sessionView.setPendingWorkspaceBranch("");
-		sessionView.setPendingWorkspaceSetupMessage(null);
-		sessionView.setPendingWorkspaceValidation(null);
-		sessionView.setPendingWorkspaceValidating(false);
+		setPendingWorkspaceOption(nextOption);
+		setPendingWorkspaceBranch("");
+		setPendingWorkspaceSetupMessage(null);
+		setPendingWorkspaceValidation(null);
+		setPendingWorkspaceValidating(false);
 		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 		showWorkspaceSuggestions = false;
 		selectedWorkspaceSuggestionIndex = -1;
 
 		if (nextOption === "local-directory" || nextOption === "git-repo") {
-			sessionView.setPendingWorkspaceSourceInput("");
+			setPendingWorkspaceSourceInput("");
 			requestWorkspaceSourceInputFocus();
 			return;
 		}
 
-		sessionView.setPendingWorkspaceSourceInput("");
+		setPendingWorkspaceSourceInput("");
 	}
 
 	function resetWorkspaceValidationState(clearSuggestions = false) {
 		cancelWorkspaceValidation();
-		sessionView.setPendingWorkspaceValidating(false);
-		sessionView.setPendingWorkspaceValidation(null);
+		setPendingWorkspaceValidating(false);
+		setPendingWorkspaceValidation(null);
 		if (clearSuggestions) {
 			showWorkspaceSuggestions = false;
 		}
@@ -234,7 +289,7 @@
 			return;
 		}
 
-		const currentInput = sessionView.pendingWorkspaceSourceInput;
+		const currentInput = pendingWorkspace.sourceInput;
 		if (currentInput.trim().length === 0) {
 			resetWorkspaceValidationState();
 			return;
@@ -242,25 +297,28 @@
 
 		const currentSourceType = workspaceSourceType;
 		clearWorkspaceValidationDebounce();
-		sessionView.setPendingWorkspaceValidating(true);
+		setPendingWorkspaceValidating(true);
 		const requestId = workspaceValidationRequestId + 1;
 		workspaceValidationRequestId = requestId;
 
 		workspaceValidationDebounce = setTimeout(async () => {
 			try {
-				const result = await validateWorkspace(currentInput, currentSourceType);
+				const result = await api.validateWorkspace({
+					path: currentInput,
+					sourceType: currentSourceType,
+				});
 
 				if (destroyed || workspaceValidationRequestId !== requestId) {
 					return;
 				}
 
-				sessionView.setPendingWorkspaceValidation(result);
+				setPendingWorkspaceValidation(result);
 			} catch (error) {
 				if (destroyed || workspaceValidationRequestId !== requestId) {
 					return;
 				}
 
-				sessionView.setPendingWorkspaceValidation({
+				setPendingWorkspaceValidation({
 					path: currentInput,
 					sourceType: currentSourceType,
 					valid: false,
@@ -273,15 +331,15 @@
 				});
 			} finally {
 				if (!destroyed && workspaceValidationRequestId === requestId) {
-					sessionView.setPendingWorkspaceValidating(false);
+					setPendingWorkspaceValidating(false);
 				}
 			}
 		}, 250);
 	}
 
 	function handleWorkspaceSourceInputChange(value: string) {
-		sessionView.setPendingWorkspaceSourceInput(value);
-		sessionView.setPendingWorkspaceSetupMessage(null);
+		setPendingWorkspaceSourceInput(value);
+		setPendingWorkspaceSetupMessage(null);
 		showWorkspaceSuggestions = true;
 		selectedWorkspaceSuggestionIndex = -1;
 		scheduleWorkspaceValidation();
@@ -303,7 +361,7 @@
 			handleWorkspaceSourceInputChange(selectedDirectory);
 			requestWorkspaceSourceInputFocus();
 		} catch (error) {
-			sessionView.setPendingWorkspaceSetupMessage(
+			setPendingWorkspaceSetupMessage(
 				error instanceof Error
 					? error.message
 					: `Failed to open the directory picker: ${String(error)}`,
@@ -322,8 +380,8 @@
 	}
 
 	function applyWorkspaceSuggestion(suggestionValue: string) {
-		sessionView.setPendingWorkspaceSourceInput(suggestionValue);
-		sessionView.setPendingWorkspaceSetupMessage(null);
+		setPendingWorkspaceSourceInput(suggestionValue);
+		setPendingWorkspaceSetupMessage(null);
 		showWorkspaceSuggestions = false;
 		selectedWorkspaceSuggestionIndex = -1;
 		scheduleWorkspaceValidation();
@@ -398,7 +456,7 @@
 	export function resetForNewSession() {
 		hasUserSelectedWorkspace = false;
 		hasInitializedSelection = false;
-		sessionView.resetPendingWorkspaceSetup();
+		resetPendingWorkspaceSetup();
 		cancelWorkspaceValidation();
 		clearWorkspaceSuggestionsCloseTimeout();
 		showWorkspaceSuggestions = false;
@@ -406,18 +464,12 @@
 	}
 
 	export async function getWorkspaceSelection(): Promise<WorkspaceSelectionResult> {
-		if (sessionView.pendingWorkspaceOption.startsWith("existing:")) {
-			const workspaceId = sessionView.pendingWorkspaceOption.slice(
-				"existing:".length,
-			);
+		if (pendingWorkspace.option.startsWith("existing:")) {
+			const workspaceId = pendingWorkspace.option.slice("existing:".length);
 			if (
-				!context.data.workspaces.items.some(
-					(workspace) => workspace.id === workspaceId,
-				)
+				!availableWorkspaces.some((workspace) => workspace.id === workspaceId)
 			) {
-				sessionView.setPendingWorkspaceSetupMessage(
-					"Select an existing workspace.",
-				);
+				setPendingWorkspaceSetupMessage("Select an existing workspace.");
 				return {
 					ready: false,
 					workspaceId: null,
@@ -426,7 +478,7 @@
 				};
 			}
 
-			sessionView.setPendingWorkspaceSetupMessage(null);
+			setPendingWorkspaceSetupMessage(null);
 			return {
 				ready: true,
 				workspaceId,
@@ -436,7 +488,7 @@
 		}
 
 		if (!requiresSourceInput) {
-			sessionView.setPendingWorkspaceSetupMessage(null);
+			setPendingWorkspaceSetupMessage(null);
 			return {
 				ready: true,
 				workspaceId: null,
@@ -445,8 +497,8 @@
 			};
 		}
 
-		if (sessionView.pendingWorkspaceValidating) {
-			sessionView.setPendingWorkspaceSetupMessage("Validating workspace...");
+		if (pendingWorkspace.validating) {
+			setPendingWorkspaceSetupMessage("Validating workspace...");
 			return {
 				ready: false,
 				workspaceId: null,
@@ -456,10 +508,10 @@
 		}
 
 		if (
-			!sessionView.pendingWorkspaceValidation ||
-			sessionView.pendingWorkspaceValidation.sourceType !== workspaceSourceType
+			!pendingWorkspace.validation ||
+			pendingWorkspace.validation.sourceType !== workspaceSourceType
 		) {
-			sessionView.setPendingWorkspaceSetupMessage(
+			setPendingWorkspaceSetupMessage(
 				workspaceSourceType === "git"
 					? "Enter a Git repository URL."
 					: "Enter a local directory path.",
@@ -472,9 +524,9 @@
 			};
 		}
 
-		if (!sessionView.pendingWorkspaceValidation.valid) {
-			sessionView.setPendingWorkspaceSetupMessage(
-				sessionView.pendingWorkspaceValidation.error ||
+		if (!pendingWorkspace.validation.valid) {
+			setPendingWorkspaceSetupMessage(
+				pendingWorkspace.validation.error ||
 					(workspaceSourceType === "git"
 						? "Enter a valid Git repository URL."
 						: "Enter a valid local directory path."),
@@ -487,9 +539,9 @@
 			};
 		}
 
-		const normalizedPath = sessionView.pendingWorkspaceValidation.path.trim();
+		const normalizedPath = pendingWorkspace.validation.path.trim();
 		if (normalizedPath.length === 0) {
-			sessionView.setPendingWorkspaceSetupMessage(
+			setPendingWorkspaceSetupMessage(
 				workspaceSourceType === "git"
 					? "Enter a Git repository URL."
 					: "Enter a local directory path.",
@@ -502,7 +554,7 @@
 			};
 		}
 
-		sessionView.setPendingWorkspaceSetupMessage(null);
+		setPendingWorkspaceSetupMessage(null);
 		return {
 			ready: true,
 			workspaceId: null,
@@ -514,8 +566,8 @@
 	function syncPendingWorkspaceSelection() {
 		const workspacesList = availableWorkspaces;
 		if (workspacesList.length === 0) {
-			if (sessionView.pendingWorkspaceOption.startsWith("existing:")) {
-				sessionView.setPendingWorkspaceOption("new-workspace");
+			if (pendingWorkspace.option.startsWith("existing:")) {
+				setPendingWorkspaceOption("new-workspace");
 			}
 			return false;
 		}
@@ -527,8 +579,8 @@
 			return false;
 		}
 
-		if (sessionView.pendingWorkspaceOption.startsWith("existing:")) {
-			const selectedWorkspaceId = sessionView.pendingWorkspaceOption.slice(
+		if (pendingWorkspace.option.startsWith("existing:")) {
+			const selectedWorkspaceId = pendingWorkspace.option.slice(
 				"existing:".length,
 			);
 			if (
@@ -537,9 +589,7 @@
 				) &&
 				!hasUserSelectedWorkspace
 			) {
-				sessionView.setPendingWorkspaceOption(
-					`existing:${preferredWorkspace.id}`,
-				);
+				setPendingWorkspaceOption(`existing:${preferredWorkspace.id}`);
 				return true;
 			}
 			return false;
@@ -548,12 +598,10 @@
 		if (
 			!hasUserSelectedWorkspace &&
 			!hasInitializedSelection &&
-			sessionView.pendingWorkspaceOption === "new-workspace"
+			pendingWorkspace.option === "new-workspace"
 		) {
 			hasInitializedSelection = true;
-			sessionView.setPendingWorkspaceOption(
-				`existing:${preferredWorkspace.id}`,
-			);
+			setPendingWorkspaceOption(`existing:${preferredWorkspace.id}`);
 			return true;
 		}
 		return false;
@@ -561,8 +609,8 @@
 
 	onMount(() => {
 		void (async () => {
-			if (context.data.workspaces.status === "idle") {
-				await refreshWorkspaces();
+			if (context.data.workspaces.status.state === "idle") {
+				await loadWorkspacesIntoCache();
 				if (destroyed) {
 					return;
 				}
@@ -630,17 +678,17 @@
 		>
 			{#if workspaceSourceType === "local"}
 				<FolderIcon class="size-4" />
-			{:else if isGithubRepoInput(sessionView.pendingWorkspaceSourceInput)}
+			{:else if isGithubRepoInput(pendingWorkspace.sourceInput)}
 				<GithubIcon class="size-4" />
 			{:else}
 				<GitCommitIcon class="size-4" />
 			{/if}
 		</button>
-	{:else if sessionView.pendingWorkspaceOption === "local-directory"}
+	{:else if pendingWorkspace.option === "local-directory"}
 		<FolderIcon class="size-4 text-muted-foreground" />
-	{:else if sessionView.pendingWorkspaceOption === "git-repo"}
+	{:else if pendingWorkspace.option === "git-repo"}
 		<GithubIcon class="size-4 text-muted-foreground" />
-	{:else if sessionView.pendingWorkspaceOption.startsWith("existing:")}
+	{:else if pendingWorkspace.option.startsWith("existing:")}
 		{#if selectedExistingWorkspace?.sourceType === "managed"}
 			<PackageIcon class="size-4 text-muted-foreground" />
 		{:else if selectedExistingWorkspace?.sourceType === "local"}
@@ -674,7 +722,7 @@
 					class="h-8 {fullWidth
 						? 'w-full'
 						: 'w-[320px]'} min-w-0 flex-1 text-xs"
-					value={sessionView.pendingWorkspaceSourceInput}
+					value={pendingWorkspace.sourceInput}
 					placeholder={workspaceSourceType === "local"
 						? "~/projects/my-app"
 						: "https://github.com/org/repo or org/repo"}
@@ -743,7 +791,7 @@
 			aria-label="Workspace"
 			bind:ref={workspaceSelectRef}
 			class="h-8 {fullWidth ? 'w-full' : 'w-[320px]'} min-w-0 text-xs"
-			value={sessionView.pendingWorkspaceOption}
+			value={pendingWorkspace.option}
 			disabled={loadingWorkspaces}
 			onchange={(event) => {
 				handleWorkspaceOptionChange(

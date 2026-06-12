@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -165,7 +166,7 @@ func TestProjectSubscriptionRunBuffersEventsBeforeProjectSubscribed(t *testing.T
 	go func() {
 		var err error
 		sub, err = client.SubscribeProject(ctx, "project-1", ProjectSubscriptionOptions{
-			ProjectEvents: serverapi.ProjectEventsSubscriptionOptions{AfterID: "event-1"},
+			ProjectEvents: serverapi.ProjectEventsSubscriptionOptions{},
 			EventBuffer:   4,
 		})
 		subscribeErr <- err
@@ -173,14 +174,14 @@ func TestProjectSubscriptionRunBuffersEventsBeforeProjectSubscribed(t *testing.T
 
 	conn := streamServer.nextConn(ctx, t)
 	projectReq := conn.nextRequest(ctx, t)
-	if projectReq.Type != "subscribe" || projectReq.Stream != string(serverapi.ProjectStreamTypeProjectEvents) || projectReq.AfterID != "event-1" {
+	if projectReq.Type != "subscribe" || projectReq.Stream != string(serverapi.ProjectStreamTypeProjectEvents) {
 		t.Fatalf("project subscribe request = %#v", projectReq)
 	}
 
 	conn.writeEvent(ctx, t, serverapi.ProjectEventsStreamMessage{
 		Stream: serverapi.ProjectStreamTypeProjectEvents,
-		Event:  serverapi.Connected,
-		Data:   `{"projectId":"project-1"}`,
+		Event:  serverapi.ProjectEventNameConnected,
+		Data:   json.RawMessage(`{"projectId":"project-1"}`),
 		ID:     "queued-event",
 	})
 	conn.writeEvent(ctx, t, serverapi.ProjectStreamSubscribedEvent{Stream: serverapi.ProjectStreamTypeProjectEvents})
@@ -342,8 +343,8 @@ func TestProjectSubscriptionRunReconnectsAndRestoresThreadSubscriptions(t *testi
 	firstThreadReq := secondConn.nextRequest(ctx, t)
 	secondThreadReq := secondConn.nextRequest(ctx, t)
 	wantThreadReqs := []projectStreamSocketRequest{
-		{Type: "subscribe", Stream: string(serverapi.ProjectStreamTypeChat), SessionID: "session-a", ThreadID: "thread-a", Replay: true},
-		{Type: "subscribe", Stream: string(serverapi.ProjectStreamTypeChat), SessionID: "session-b", ThreadID: "thread-b", Replay: true},
+		{Type: "subscribe", Stream: string(serverapi.ProjectStreamTypeChat), SessionID: "session-a", ThreadID: "thread-a"},
+		{Type: "subscribe", Stream: string(serverapi.ProjectStreamTypeChat), SessionID: "session-b", ThreadID: "thread-b"},
 	}
 	gotThreadReqs := []projectStreamSocketRequest{firstThreadReq, secondThreadReq}
 	if !reflect.DeepEqual(gotThreadReqs, wantThreadReqs) {

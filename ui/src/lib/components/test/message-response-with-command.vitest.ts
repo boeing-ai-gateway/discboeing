@@ -1,0 +1,126 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { test } from "vitest";
+
+const MESSAGE_RESPONSE_WITH_COMMAND_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/parts/MessageResponseWithCommand.svelte",
+);
+const CONVERSATION_PANE_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/ConversationPane.svelte",
+);
+
+function readComponentSource(filePath: string) {
+	return readFileSync(filePath, "utf-8");
+}
+
+test("message response with command component renders command, skill, and script sections", () => {
+	const source = readComponentSource(MESSAGE_RESPONSE_WITH_COMMAND_COMPONENT);
+
+	assert.match(
+		source,
+		/import ChevronRightIcon from "@lucide\/svelte\/icons\/chevron-right"/,
+	);
+	assert.match(source, /getUserMessageOriginalCommandDisplay/);
+	assert.match(source, /getUserMessageOriginalText/);
+	assert.match(source, /originalCommand\.kind === "script"/);
+	assert.match(source, /"Skill text"/);
+	assert.match(source, /"Generated text"/);
+	assert.match(
+		source,
+		/originalCommand\.kind === "skill" \|\| originalCommand\.kind === "script"/,
+	);
+	assert.match(source, /\? "Script"/);
+	assert.match(
+		source,
+		/The script completed without output, so no model response was/,
+	);
+	assert.doesNotMatch(source, /"Generated text sent to LLM"/);
+	assert.doesNotMatch(source, /"Script execution failed"/);
+	assert.doesNotMatch(source, />\s*Stdout\s*</);
+	assert.doesNotMatch(source, />\s*Stderr\s*</);
+});
+
+test("conversation pane delegates user text rendering to MessageResponseWithCommand", () => {
+	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
+
+	assert.match(
+		source,
+		/import MessageResponseWithCommand from "\$lib\/components\/app\/parts\/MessageResponseWithCommand\.svelte"/,
+	);
+	assert.match(source, /<MessageResponseWithCommand/);
+	assert.doesNotMatch(source, /Command: \{originalCommand\.command\}/);
+});
+
+test("conversation pane reads the session error directly from the active session", () => {
+	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
+
+	assert.match(
+		source,
+		/const sessionError = \$derived\.by\(\(\) =>\s*getErrorMessage\(sessionErrorOverride \?\? activeSession\?\.errorMessage\),\s*\);/,
+	);
+	assert.doesNotMatch(source, /session\?\.current\?\.status === "error"/);
+});
+
+test("conversation pane suppresses session errors while the session is transitioning", () => {
+	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
+
+	assert.match(
+		source,
+		/import \{[\s\S]*canLoadSessionThreads,[\s\S]*isSessionTransitioningStatus,[\s\S]*\} from "\$lib\/api-constants"/,
+	);
+	assert.match(
+		source,
+		/const shouldShowSessionError = \$derived\.by\(\s*\(\) => !isSessionTransitioningStatus\(activeSession\?\.sandboxStatus\),/,
+	);
+	assert.match(
+		source,
+		/const visibleSessionError = \$derived\.by\(\(\) =>\s*shouldShowSessionError \? sessionError : null,\s*\);/,
+	);
+	assert.match(
+		source,
+		/\{@render renderErrorBanner\("session", visibleSessionError\)\}/,
+	);
+	assert.doesNotMatch(
+		source,
+		/\{@render renderErrorBanner\("session", sessionError\)\}/,
+	);
+});
+
+test("conversation pane renders expandable top-level error banners with thread retry actions", () => {
+	const source = readComponentSource(CONVERSATION_PANE_COMPONENT);
+
+	assert.match(
+		source,
+		/type ConversationPaneErrorBannerKey = "session" \| "thread";/,
+	);
+	assert.match(
+		source,
+		/function shouldCollapseErrorBanner\(errorText: string\): boolean/,
+	);
+	assert.match(source, /function getErrorBannerAction\(/);
+	assert.match(source, /if \(key !== "thread" \|\| !activeThreadId\) \{/);
+	assert.match(source, /label: "Retry"/);
+	assert.match(
+		source,
+		/void context\.commands\.threadComposer\.refreshThread\(\s*activeSessionId,\s*activeThreadId,\s*\)/,
+	);
+	assert.match(source, /function isDroppedModelConnectionError/);
+	assert.match(source, /The model connection dropped unexpectedly/);
+	assert.match(source, /Show details/);
+	assert.match(source, /Hide details/);
+	assert.match(source, /line-clamp-3/);
+	assert.match(source, /max-h-64 overflow-auto pr-2/);
+	assert.match(source, /Show full error/);
+	assert.match(source, /Show less/);
+	assert.match(
+		source,
+		/\{@render renderErrorBanner\("session", visibleSessionError\)\}/,
+	);
+	assert.match(
+		source,
+		/\{@render renderErrorBanner\("thread", threadError\)\}/,
+	);
+});

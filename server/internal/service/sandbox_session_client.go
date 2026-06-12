@@ -130,6 +130,18 @@ func (c *SessionClient) GetStream(ctx context.Context, threadID string, opts *Re
 	return c.trackStream(ch), nil
 }
 
+// GetSessionStream returns a channel of SSE events for agent-owned
+// session-level resources.
+func (c *SessionClient) GetSessionStream(ctx context.Context) (<-chan SSELine, error) {
+	ch, err := withReconciliation(ctx, c, func() (<-chan SSELine, error) {
+		return c.inner.GetSessionStream(ctx, c.sessionID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return c.trackStream(ch), nil
+}
+
 // ListThreads retrieves all threads from the sandbox.
 func (c *SessionClient) ListThreads(ctx context.Context) (*sandboxapi.ListThreadsResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.ListThreadsResponse, error) {

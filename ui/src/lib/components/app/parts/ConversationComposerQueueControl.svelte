@@ -1,7 +1,7 @@
 <script lang="ts">
 	import CheckCircleIcon from "@lucide/svelte/icons/check-circle";
 	import { Button } from "$lib/components/ui/button";
-	import type { PlanEntry } from "$lib/app/plan-entry";
+	import type { PlanEntry } from "$lib/plan-entry";
 
 	type Props = {
 		expanded?: boolean;

@@ -229,7 +229,7 @@
 		try {
 			if (!threadId) {
 				approvalStatus = "pending";
-				approvalError = "Missing thread context";
+				approvalError = "Missing thread";
 				return;
 			}
 

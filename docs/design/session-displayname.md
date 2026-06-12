@@ -198,7 +198,7 @@ const SessionNode = () => {
 
 ```bash
 # Frontend tests
-node --import tsx --test ui/src/lib/components/test/<test-file>.test.ts
+cd ui && pnpm vitest run src/lib/<path>/test/<test-file>.vitest.ts
 
 # Backend tests
 go test ./internal/integration -run TestSessionDisplayName

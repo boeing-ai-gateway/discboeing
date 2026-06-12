@@ -1,10 +1,8 @@
 <script lang="ts">
-	import { onDestroy, untrack } from "svelte";
+	import { untrack } from "svelte";
+	import SessionActivation from "$lib/components/app/SessionActivation.svelte";
 	import ThreadWorkspace from "$lib/components/app/ThreadWorkspace.svelte";
-	import {
-		ensureSessionState,
-		releaseSessionState,
-	} from "$lib/context/commands/session";
+	import { useContext } from "$lib/context";
 
 	type Props = {
 		sessionId: string;
@@ -13,24 +11,47 @@
 	};
 
 	let { sessionId, visible, mainClass }: Props = $props();
-	const session = ensureSessionState(untrack(() => sessionId));
+	const context = useContext();
+	const mountedSessionId = untrack(() => sessionId);
+	const sessionRecord = $derived(
+		context.data.sessions.byId[mountedSessionId] ?? null,
+	);
+	const currentSession = $derived(sessionRecord?.value ?? null);
+	const projectReady = $derived(context.data.project.status.state === "ready");
+	const isPendingWorkspace = $derived.by(
+		() =>
+			mountedSessionId === context.view.selection.pendingSessionId &&
+			context.view.selection.sessionId !== mountedSessionId,
+	);
+	const requestedThreadId = $derived.by(() => {
+		if (context.view.selection.sessionId === mountedSessionId) {
+			return context.view.selection.threadId;
+		}
+		return (
+			context.view.selection.requestedThreadIdBySessionId[mountedSessionId] ??
+			null
+		);
+	});
 	const threadId = $derived.by(
-		() => session.threads.selectedId ?? session.sessionId,
+		() =>
+			requestedThreadId ?? sessionRecord?.threads.allIds[0] ?? mountedSessionId,
 	);
 
-	onDestroy(() => {
-		releaseSessionState(session);
-	});
+	void context.commands.view.mountSessionView(mountedSessionId);
 </script>
+
+{#if !isPendingWorkspace && projectReady}
+	<SessionActivation sessionId={mountedSessionId} />
+{/if}
 
 <div class={visible ? "contents" : "hidden"}>
 	{#key threadId}
 		<ThreadWorkspace
-			{session}
+			sessionId={mountedSessionId}
 			{threadId}
 			{visible}
 			{mainClass}
-			mode={session.isPending ? "conversation-only" : undefined}
+			mode={!currentSession ? "conversation-only" : undefined}
 		/>
 	{/key}
 </div>

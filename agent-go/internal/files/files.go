@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/obot-platform/discobot/agent-go/internal/api"
 )
 
 // MaxFileSize is the maximum file size for read operations (10MB).
@@ -31,56 +33,28 @@ func newError(status int, message string) *Error {
 }
 
 // FileEntry represents a single file or directory entry.
-type FileEntry struct {
-	Name string `json:"name"`
-	Type string `json:"type"` // "file" or "directory"
-	Size int64  `json:"size,omitempty"`
-}
+type FileEntry = api.FileEntry
 
 // ListResult is the result of a directory listing.
-type ListResult struct {
-	Path    string      `json:"path"`
-	Entries []FileEntry `json:"entries"`
-}
+type ListResult = api.ListFilesResponse
 
 // ReadResult is the result of reading a file.
-type ReadResult struct {
-	Path     string `json:"path"`
-	Content  string `json:"content"`
-	Encoding string `json:"encoding"` // "utf8" or "base64"
-	Size     int64  `json:"size"`
-}
+type ReadResult = api.ReadFileResponse
 
 // WriteResult is the result of writing a file.
-type WriteResult struct {
-	Path string `json:"path"`
-	Size int64  `json:"size"`
-}
+type WriteResult = api.WriteFileResponse
 
 // DeleteResult is the result of deleting a file.
-type DeleteResult struct {
-	Path string `json:"path"`
-	Type string `json:"type"` // "file" or "directory"
-}
+type DeleteResult = api.DeleteFileResponse
 
 // RenameResult is the result of renaming a file.
-type RenameResult struct {
-	OldPath string `json:"oldPath"`
-	NewPath string `json:"newPath"`
-}
+type RenameResult = api.RenameFileResponse
 
 // SearchResultEntry is a single result from file search.
-type SearchResultEntry struct {
-	Path  string  `json:"path"`
-	Type  string  `json:"type"` // "file" or "directory"
-	Score float64 `json:"score"`
-}
+type SearchResultEntry = api.SearchResultEntry
 
 // SearchResult is the result of a file search.
-type SearchResult struct {
-	Query   string              `json:"query"`
-	Results []SearchResultEntry `json:"results"`
-}
+type SearchResult = api.SearchFilesResponse
 
 // Known text file extensions.
 var textExtensions = map[string]bool{

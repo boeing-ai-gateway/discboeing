@@ -80,6 +80,7 @@ func (h *Handler) StartService(w http.ResponseWriter, r *http.Request) {
 		Status:    "starting",
 		ServiceID: serviceID,
 	})
+	h.notifyActivityChanged()
 }
 
 // StopService handles POST /services/{serviceId}/stop — stops a service.
@@ -131,6 +132,7 @@ func (h *Handler) StopService(w http.ResponseWriter, r *http.Request) {
 		Status:    "stopped",
 		ServiceID: serviceID,
 	})
+	h.notifyActivityChanged()
 }
 
 // ServiceOutput handles GET /services/{serviceId}/output — streams service output via SSE.

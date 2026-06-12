@@ -18,25 +18,40 @@ const (
 
 // Defines values for ChatStreamEventName.
 const (
-	Chunk          ChatStreamEventName = "chunk"
-	HistoryEnd     ChatStreamEventName = "history-end"
-	HistoryMessage ChatStreamEventName = "history-message"
-	HistoryStart   ChatStreamEventName = "history-start"
-	Ping           ChatStreamEventName = "ping"
+	ChatStreamEventNameChunk          ChatStreamEventName = "chunk"
+	ChatStreamEventNameHistoryEnd     ChatStreamEventName = "history-end"
+	ChatStreamEventNameHistoryMessage ChatStreamEventName = "history-message"
+	ChatStreamEventNameHistoryStart   ChatStreamEventName = "history-start"
+	ChatStreamEventNamePing           ChatStreamEventName = "ping"
 )
 
 // Valid indicates whether the value is a known member of the ChatStreamEventName enum.
 func (e ChatStreamEventName) Valid() bool {
 	switch e {
-	case Chunk:
+	case ChatStreamEventNameChunk:
 		return true
-	case HistoryEnd:
+	case ChatStreamEventNameHistoryEnd:
 		return true
-	case HistoryMessage:
+	case ChatStreamEventNameHistoryMessage:
 		return true
-	case HistoryStart:
+	case ChatStreamEventNameHistoryStart:
 		return true
-	case Ping:
+	case ChatStreamEventNamePing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChatStreamMessageType.
+const (
+	ChatStreamMessageTypeEvent ChatStreamMessageType = "event"
+)
+
+// Valid indicates whether the value is a known member of the ChatStreamMessageType enum.
+func (e ChatStreamMessageType) Valid() bool {
+	switch e {
+	case ChatStreamMessageTypeEvent:
 		return true
 	default:
 		return false
@@ -96,25 +111,76 @@ func (e PortEntryProtocol) Valid() bool {
 
 // Defines values for ProjectEventName.
 const (
-	Connected          ProjectEventName = "connected"
-	SessionUpdated     ProjectEventName = "session_updated"
-	StartupTaskUpdated ProjectEventName = "startup_task_updated"
-	ThreadUpdated      ProjectEventName = "thread_updated"
-	WorkspaceUpdated   ProjectEventName = "workspace_updated"
+	ProjectEventNameConnected          ProjectEventName = "connected"
+	ProjectEventNameHistoryEnd         ProjectEventName = "history-end"
+	ProjectEventNameHistoryStart       ProjectEventName = "history-start"
+	ProjectEventNameSessionUpdated     ProjectEventName = "session_updated"
+	ProjectEventNameStartupTaskUpdated ProjectEventName = "startup_task_updated"
+	ProjectEventNameThreadUpdated      ProjectEventName = "thread_updated"
+	ProjectEventNameWorkspaceUpdated   ProjectEventName = "workspace_updated"
 )
 
 // Valid indicates whether the value is a known member of the ProjectEventName enum.
 func (e ProjectEventName) Valid() bool {
 	switch e {
-	case Connected:
+	case ProjectEventNameConnected:
 		return true
-	case SessionUpdated:
+	case ProjectEventNameHistoryEnd:
 		return true
-	case StartupTaskUpdated:
+	case ProjectEventNameHistoryStart:
 		return true
-	case ThreadUpdated:
+	case ProjectEventNameSessionUpdated:
 		return true
-	case WorkspaceUpdated:
+	case ProjectEventNameStartupTaskUpdated:
+		return true
+	case ProjectEventNameThreadUpdated:
+		return true
+	case ProjectEventNameWorkspaceUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectEventsStreamMessageType.
+const (
+	ProjectEventsStreamMessageTypeEvent ProjectEventsStreamMessageType = "event"
+)
+
+// Valid indicates whether the value is a known member of the ProjectEventsStreamMessageType enum.
+func (e ProjectEventsStreamMessageType) Valid() bool {
+	switch e {
+	case ProjectEventsStreamMessageTypeEvent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectStreamCompleteEventType.
+const (
+	Complete ProjectStreamCompleteEventType = "complete"
+)
+
+// Valid indicates whether the value is a known member of the ProjectStreamCompleteEventType enum.
+func (e ProjectStreamCompleteEventType) Valid() bool {
+	switch e {
+	case Complete:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectStreamErrorEventType.
+const (
+	ProjectStreamErrorEventTypeError ProjectStreamErrorEventType = "error"
+)
+
+// Valid indicates whether the value is a known member of the ProjectStreamErrorEventType enum.
+func (e ProjectStreamErrorEventType) Valid() bool {
+	switch e {
+	case ProjectStreamErrorEventTypeError:
 		return true
 	default:
 		return false
@@ -139,11 +205,27 @@ func (e ProjectStreamRequestType) Valid() bool {
 	}
 }
 
+// Defines values for ProjectStreamSubscribedEventType.
+const (
+	Subscribed ProjectStreamSubscribedEventType = "subscribed"
+)
+
+// Valid indicates whether the value is a known member of the ProjectStreamSubscribedEventType enum.
+func (e ProjectStreamSubscribedEventType) Valid() bool {
+	switch e {
+	case Subscribed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProjectStreamType.
 const (
 	ProjectStreamTypeChat          ProjectStreamType = "chat"
 	ProjectStreamTypeProjectEvents ProjectStreamType = "project-events"
 	ProjectStreamTypeService       ProjectStreamType = "service"
+	ProjectStreamTypeSession       ProjectStreamType = "session"
 )
 
 // Valid indicates whether the value is a known member of the ProjectStreamType enum.
@@ -154,6 +236,23 @@ func (e ProjectStreamType) Valid() bool {
 	case ProjectStreamTypeProjectEvents:
 		return true
 	case ProjectStreamTypeService:
+		return true
+	case ProjectStreamTypeSession:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProjectStreamUnsubscribedEventType.
+const (
+	Unsubscribed ProjectStreamUnsubscribedEventType = "unsubscribed"
+)
+
+// Valid indicates whether the value is a known member of the ProjectStreamUnsubscribedEventType enum.
+func (e ProjectStreamUnsubscribedEventType) Valid() bool {
+	switch e {
+	case Unsubscribed:
 		return true
 	default:
 		return false
@@ -169,6 +268,93 @@ const (
 func (e ReasoningMessagePartType) Valid() bool {
 	switch e {
 	case Reasoning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ServiceOutputEventType.
+const (
+	ServiceOutputEventTypeEvent ServiceOutputEventType = "event"
+)
+
+// Valid indicates whether the value is a known member of the ServiceOutputEventType enum.
+func (e ServiceOutputEventType) Valid() bool {
+	switch e {
+	case ServiceOutputEventTypeEvent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionStreamEventName.
+const (
+	CommandsUpdated   SessionStreamEventName = "commands_updated"
+	DiffStatusUpdated SessionStreamEventName = "diff_status_updated"
+	DiffUpdated       SessionStreamEventName = "diff_updated"
+	FilesUpdated      SessionStreamEventName = "files_updated"
+	HistoryEnd        SessionStreamEventName = "history-end"
+	HistoryStart      SessionStreamEventName = "history-start"
+	HooksUpdated      SessionStreamEventName = "hooks_updated"
+	ServicesUpdated   SessionStreamEventName = "services_updated"
+	SessionUpdated    SessionStreamEventName = "session_updated"
+	ThreadsUpdated    SessionStreamEventName = "threads_updated"
+)
+
+// Valid indicates whether the value is a known member of the SessionStreamEventName enum.
+func (e SessionStreamEventName) Valid() bool {
+	switch e {
+	case CommandsUpdated:
+		return true
+	case DiffStatusUpdated:
+		return true
+	case DiffUpdated:
+		return true
+	case FilesUpdated:
+		return true
+	case HistoryEnd:
+		return true
+	case HistoryStart:
+		return true
+	case HooksUpdated:
+		return true
+	case ServicesUpdated:
+		return true
+	case SessionUpdated:
+		return true
+	case ThreadsUpdated:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionStreamMessageStream.
+const (
+	SessionStreamMessageStreamSession SessionStreamMessageStream = "session"
+)
+
+// Valid indicates whether the value is a known member of the SessionStreamMessageStream enum.
+func (e SessionStreamMessageStream) Valid() bool {
+	switch e {
+	case SessionStreamMessageStreamSession:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionStreamMessageType.
+const (
+	SessionStreamMessageTypeEvent SessionStreamMessageType = "event"
+)
+
+// Valid indicates whether the value is a known member of the SessionStreamMessageType enum.
+func (e SessionStreamMessageType) Valid() bool {
+	switch e {
+	case SessionStreamMessageTypeEvent:
 		return true
 	default:
 		return false
@@ -396,20 +582,22 @@ type ChatStreamEventName string
 
 // ChatStreamMessage Chat websocket stream message envelope.
 type ChatStreamMessage struct {
-	Data      string              `json:"data,omitempty"`
-	Event     ChatStreamEventName `json:"event"`
-	ID        string              `json:"id,omitempty"`
-	SessionID string              `json:"sessionId"`
-	Stream    ProjectStreamType   `json:"stream"`
-	ThreadID  string              `json:"threadId"`
+	Data      string                `json:"data,omitempty"`
+	Event     ChatStreamEventName   `json:"event"`
+	ID        string                `json:"id,omitempty"`
+	SessionID string                `json:"sessionId"`
+	Stream    ProjectStreamType     `json:"stream"`
+	ThreadID  string                `json:"threadId"`
+	Type      ChatStreamMessageType `json:"type"`
 }
+
+// ChatStreamMessageType defines model for ChatStreamMessage.Type.
+type ChatStreamMessageType string
 
 // ChatStreamSubscriptionOptions Chat stream subscription options.
 type ChatStreamSubscriptionOptions struct {
-	LastEventID string `json:"lastEventId,omitempty"`
-	Replay      bool   `json:"replay,omitempty"`
-	SessionID   string `json:"sessionId"`
-	ThreadID    string `json:"threadId"`
+	SessionID string `json:"sessionId"`
+	ThreadID  string `json:"threadId"`
 }
 
 // CodexAuthorizeRequest codex Authorize Request payload accepted by the API.
@@ -1261,31 +1449,32 @@ type ProjectConnectedEvent struct {
 
 // ProjectEventBase Metadata shared by persisted project events.
 type ProjectEventBase struct {
-	ID        string          `json:"id"`
-	RawData   json.RawMessage `json:"rawData"`
-	Seq       int64           `json:"seq"`
-	Timestamp time.Time       `json:"timestamp"`
+	ID        string    `json:"id"`
+	Seq       int64     `json:"seq"`
+	Timestamp time.Time `json:"timestamp"`
 
-	// Type Persisted project event name.
+	// Type Project-events stream event name.
 	Type ProjectEventName `json:"type"`
 }
 
-// ProjectEventName Persisted project event name.
+// ProjectEventName Project-events stream event name.
 type ProjectEventName string
 
 // ProjectEventsStreamMessage Project-events websocket stream message envelope.
 type ProjectEventsStreamMessage struct {
-	Data   string            `json:"data,omitempty"`
-	Event  ProjectEventName  `json:"event"`
-	ID     string            `json:"id,omitempty"`
-	Stream ProjectStreamType `json:"stream"`
+	// Data Structured project event payload. Synthetic events use their payload directly; persisted events use the project event envelope.
+	Data   json.RawMessage                `json:"data,omitempty"`
+	Event  ProjectEventName               `json:"event"`
+	ID     string                         `json:"id,omitempty"`
+	Stream ProjectStreamType              `json:"stream"`
+	Type   ProjectEventsStreamMessageType `json:"type"`
 }
 
+// ProjectEventsStreamMessageType defines model for ProjectEventsStreamMessage.Type.
+type ProjectEventsStreamMessageType string
+
 // ProjectEventsSubscriptionOptions Project-events stream subscription options.
-type ProjectEventsSubscriptionOptions struct {
-	// AfterID Resume project events after this event id.
-	AfterID string `json:"afterId,omitempty"`
-}
+type ProjectEventsSubscriptionOptions = map[string]interface{}
 
 // ProjectMember project Member API object.
 type ProjectMember struct {
@@ -1311,23 +1500,31 @@ type ProjectMembersResponse struct {
 
 // ProjectStreamCompleteEvent Server notification that a sub-stream completed.
 type ProjectStreamCompleteEvent struct {
-	ServiceID string            `json:"serviceId,omitempty"`
-	SessionID string            `json:"sessionId,omitempty"`
-	Stream    ProjectStreamType `json:"stream"`
-	ThreadID  string            `json:"threadId,omitempty"`
+	ServiceID string                         `json:"serviceId,omitempty"`
+	SessionID string                         `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType              `json:"stream"`
+	ThreadID  string                         `json:"threadId,omitempty"`
+	Type      ProjectStreamCompleteEventType `json:"type"`
 }
+
+// ProjectStreamCompleteEventType defines model for ProjectStreamCompleteEvent.Type.
+type ProjectStreamCompleteEventType string
 
 // ProjectStreamErrorEvent Project websocket error event.
 type ProjectStreamErrorEvent struct {
-	Error     string            `json:"error"`
-	ServiceID string            `json:"serviceId,omitempty"`
-	SessionID string            `json:"sessionId,omitempty"`
-	Stream    ProjectStreamType `json:"stream,omitempty"`
-	ThreadID  string            `json:"threadId,omitempty"`
+	Error     string                      `json:"error"`
+	ServiceID string                      `json:"serviceId,omitempty"`
+	SessionID string                      `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType           `json:"stream,omitempty"`
+	ThreadID  string                      `json:"threadId,omitempty"`
+	Type      ProjectStreamErrorEventType `json:"type"`
 }
 
-// ProjectStreamMessage Server-to-client project websocket message. See x-discobot-websocket on the websocket operation for the concrete message schemas.
-type ProjectStreamMessage map[string]interface{}
+// ProjectStreamErrorEventType defines model for ProjectStreamErrorEvent.Type.
+type ProjectStreamErrorEventType string
+
+// ProjectStreamMessage Server-to-client project websocket message.
+type ProjectStreamMessage = any
 
 // ProjectStreamOptions Set of project websocket streams to subscribe or unsubscribe.
 type ProjectStreamOptions struct {
@@ -1339,18 +1536,18 @@ type ProjectStreamOptions struct {
 
 	// Service Service output stream subscription options.
 	Service *ServiceStreamSubscriptionOptions `json:"service,omitempty"`
+
+	// Session Session state stream subscription options. Subscribes to the session stream forwarded from the sandbox agent through the project websocket.
+	Session *SessionStreamSubscriptionOptions `json:"session,omitempty"`
 }
 
 // ProjectStreamRequest Client-to-server project websocket control message.
 type ProjectStreamRequest struct {
-	AfterID     string                   `json:"afterId,omitempty"`
-	LastEventID string                   `json:"lastEventId,omitempty"`
-	Replay      bool                     `json:"replay,omitempty"`
-	ServiceID   string                   `json:"serviceId,omitempty"`
-	SessionID   string                   `json:"sessionId,omitempty"`
-	Stream      ProjectStreamType        `json:"stream"`
-	ThreadID    string                   `json:"threadId,omitempty"`
-	Type        ProjectStreamRequestType `json:"type"`
+	ServiceID string                   `json:"serviceId,omitempty"`
+	SessionID string                   `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType        `json:"stream"`
+	ThreadID  string                   `json:"threadId,omitempty"`
+	Type      ProjectStreamRequestType `json:"type"`
 }
 
 // ProjectStreamRequestType defines model for ProjectStreamRequest.Type.
@@ -1358,23 +1555,30 @@ type ProjectStreamRequestType string
 
 // ProjectStreamSubscribedEvent Server acknowledgement that a sub-stream was subscribed.
 type ProjectStreamSubscribedEvent struct {
-	Replay    bool              `json:"replay,omitempty"`
-	ServiceID string            `json:"serviceId,omitempty"`
-	SessionID string            `json:"sessionId,omitempty"`
-	Stream    ProjectStreamType `json:"stream"`
-	ThreadID  string            `json:"threadId,omitempty"`
+	ServiceID string                           `json:"serviceId,omitempty"`
+	SessionID string                           `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType                `json:"stream"`
+	ThreadID  string                           `json:"threadId,omitempty"`
+	Type      ProjectStreamSubscribedEventType `json:"type"`
 }
+
+// ProjectStreamSubscribedEventType defines model for ProjectStreamSubscribedEvent.Type.
+type ProjectStreamSubscribedEventType string
 
 // ProjectStreamType Multiplexed project websocket sub-stream identifier.
 type ProjectStreamType string
 
 // ProjectStreamUnsubscribedEvent Server acknowledgement that a sub-stream was unsubscribed.
 type ProjectStreamUnsubscribedEvent struct {
-	ServiceID string            `json:"serviceId,omitempty"`
-	SessionID string            `json:"sessionId,omitempty"`
-	Stream    ProjectStreamType `json:"stream"`
-	ThreadID  string            `json:"threadId,omitempty"`
+	ServiceID string                             `json:"serviceId,omitempty"`
+	SessionID string                             `json:"sessionId,omitempty"`
+	Stream    ProjectStreamType                  `json:"stream"`
+	ThreadID  string                             `json:"threadId,omitempty"`
+	Type      ProjectStreamUnsubscribedEventType `json:"type"`
 }
+
+// ProjectStreamUnsubscribedEventType defines model for ProjectStreamUnsubscribedEvent.Type.
+type ProjectStreamUnsubscribedEventType string
 
 // ProviderResources Sandbox provider CPU-independent resource limits used for VM-backed providers.
 type ProviderResources struct {
@@ -1574,12 +1778,16 @@ type ServiceActionResponse map[string]interface{}
 
 // ServiceOutputEvent Service output stream event.
 type ServiceOutputEvent struct {
-	Data      string            `json:"data,omitempty"`
-	ID        string            `json:"id,omitempty"`
-	ServiceID string            `json:"serviceId"`
-	SessionID string            `json:"sessionId"`
-	Stream    ProjectStreamType `json:"stream"`
+	Data      string                 `json:"data,omitempty"`
+	ID        string                 `json:"id,omitempty"`
+	ServiceID string                 `json:"serviceId"`
+	SessionID string                 `json:"sessionId"`
+	Stream    ProjectStreamType      `json:"stream"`
+	Type      ServiceOutputEventType `json:"type"`
 }
+
+// ServiceOutputEventType defines model for ServiceOutputEvent.Type.
+type ServiceOutputEventType string
 
 // ServiceStreamSubscriptionOptions Service output stream subscription options.
 type ServiceStreamSubscriptionOptions struct {
@@ -1671,6 +1879,32 @@ type SessionCredentialAssignmentsResponse struct {
 	Credentials []SessionCredentialAssignment `json:"credentials"`
 }
 
+// SessionStreamEventName Session stream event name forwarded over the project websocket. History framing brackets an atomic snapshot replay; subsequent events are live deltas/snapshots.
+type SessionStreamEventName string
+
+// SessionStreamMessage Session websocket stream message envelope. Delivered when subscribed to stream=session on the project websocket.
+type SessionStreamMessage struct {
+	// Data Structured payload for the session stream event. history-start and history-end omit data; resource events use the corresponding session resource response.
+	Data      json.RawMessage            `json:"data,omitempty"`
+	Event     SessionStreamEventName     `json:"event"`
+	ID        string                     `json:"id,omitempty"`
+	SessionID string                     `json:"sessionId"`
+	Stream    SessionStreamMessageStream `json:"stream"`
+	Type      SessionStreamMessageType   `json:"type"`
+}
+
+// SessionStreamMessageStream defines model for SessionStreamMessage.Stream.
+type SessionStreamMessageStream string
+
+// SessionStreamMessageType defines model for SessionStreamMessage.Type.
+type SessionStreamMessageType string
+
+// SessionStreamSubscriptionOptions Session state stream subscription options. Subscribes to the session stream forwarded from the sandbox agent through the project websocket.
+type SessionStreamSubscriptionOptions struct {
+	// SessionID Session identifier to watch.
+	SessionID string `json:"sessionId"`
+}
+
 // SessionThreadStatus session Thread Status API object.
 type SessionThreadStatus struct {
 	// NeedsAttentionCount needs Attention Count value for the session Thread Status object.
@@ -1698,21 +1932,14 @@ type SessionThreadStatus struct {
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 }
 
-// SessionUpdatedData Payload for session_updated project events.
-type SessionUpdatedData struct {
-	CommitStatus         string `json:"commitStatus,omitempty"`
-	SandboxStatus        string `json:"sandboxStatus"`
-	SandboxStatusMessage string `json:"sandboxStatusMessage,omitempty"`
-	SessionID            string `json:"sessionId"`
-}
-
 // SessionUpdatedEvent Decoded session_updated project event.
 type SessionUpdatedEvent struct {
-	// Data Payload for session_updated project events.
-	Data SessionUpdatedData `json:"data"`
-
-	// ProjectEventBase Metadata shared by persisted project events.
-	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+	// Data Agent session record and its sandbox, thread, commit, and workspace state.
+	Data      Session          `json:"data"`
+	ID        string           `json:"id"`
+	Seq       int64            `json:"seq"`
+	Timestamp time.Time        `json:"timestamp"`
+	Type      ProjectEventName `json:"type"`
 }
 
 // SessionsResponse sessions Response payload returned by the API.
@@ -1800,10 +2027,11 @@ type StartupTask struct {
 // StartupTaskUpdatedEvent Decoded startup_task_updated project event.
 type StartupTaskUpdatedEvent struct {
 	// Data startup Task API object.
-	Data StartupTask `json:"data"`
-
-	// ProjectEventBase Metadata shared by persisted project events.
-	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+	Data      StartupTask      `json:"data"`
+	ID        string           `json:"id"`
+	Seq       int64            `json:"seq"`
+	Timestamp time.Time        `json:"timestamp"`
+	Type      ProjectEventName `json:"type"`
 }
 
 // StatusMessage status Message API object.
@@ -2002,10 +2230,11 @@ type ThreadUpdatedData struct {
 // ThreadUpdatedEvent Decoded thread_updated project event.
 type ThreadUpdatedEvent struct {
 	// Data Payload for thread_updated project events.
-	Data ThreadUpdatedData `json:"data"`
-
-	// ProjectEventBase Metadata shared by persisted project events.
-	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+	Data      ThreadUpdatedData `json:"data"`
+	ID        string            `json:"id"`
+	Seq       int64             `json:"seq"`
+	Timestamp time.Time         `json:"timestamp"`
+	Type      ProjectEventName  `json:"type"`
 }
 
 // ThreadsResponse threads Response payload returned by the API.
@@ -2026,10 +2255,13 @@ type ToolApproval struct {
 
 // UnknownProjectEvent Decoded project event unknown to this client version.
 type UnknownProjectEvent struct {
-	Data json.RawMessage `json:"data"`
+	Data      interface{} `json:"data"`
+	ID        string      `json:"id"`
+	Seq       int64       `json:"seq"`
+	Timestamp time.Time   `json:"timestamp"`
 
-	// ProjectEventBase Metadata shared by persisted project events.
-	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+	// Type Project-events stream event name.
+	Type ProjectEventName `json:"type"`
 }
 
 // UpdateDefaultSandboxProviderRequest update Default Sandbox Provider Request payload accepted by the API.
@@ -2274,19 +2506,14 @@ type WorkspaceFilesEventData struct {
 	Snapshot *[]WorkspaceFileEntry `json:"snapshot,omitempty"`
 }
 
-// WorkspaceUpdatedData Payload for workspace_updated project events.
-type WorkspaceUpdatedData struct {
-	Status      string `json:"status"`
-	WorkspaceID string `json:"workspaceId"`
-}
-
 // WorkspaceUpdatedEvent Decoded workspace_updated project event.
 type WorkspaceUpdatedEvent struct {
-	// Data Payload for workspace_updated project events.
-	Data WorkspaceUpdatedData `json:"data"`
-
-	// ProjectEventBase Metadata shared by persisted project events.
-	ProjectEventBase ProjectEventBase `json:"projectEventBase"`
+	// Data Workspace record that links a project to a source checkout or directory.
+	Data      Workspace        `json:"data"`
+	ID        string           `json:"id"`
+	Seq       int64            `json:"seq"`
+	Timestamp time.Time        `json:"timestamp"`
+	Type      ProjectEventName `json:"type"`
 }
 
 // WorkspacesResponse workspaces Response payload returned by the API.

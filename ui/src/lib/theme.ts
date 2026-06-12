@@ -1,3 +1,5 @@
+import { themeStore } from "$lib/context/stores/theme";
+
 export type ResolvedTheme = "dark" | "light";
 export type ThemeMode = ResolvedTheme | "system";
 
@@ -25,10 +27,7 @@ export type ThemeMetadata = {
 	};
 };
 
-const THEME_KEY = "theme";
-const COLOR_SCHEME_KEY = "theme.colorScheme";
-
-export const THEME_METADATA: ThemeMetadata[] = [
+const THEME_METADATA: ThemeMetadata[] = [
 	{
 		id: "default",
 		name: "Default",
@@ -161,42 +160,11 @@ export const THEME_METADATA: ThemeMetadata[] = [
 	},
 ];
 
-function resolveStoredThemeMode(): ThemeMode | null {
-	if (typeof window === "undefined") {
-		return null;
-	}
-
-	const storedTheme = window.localStorage.getItem(THEME_KEY);
-	return storedTheme === "light" ||
-		storedTheme === "dark" ||
-		storedTheme === "system"
-		? storedTheme
-		: null;
-}
-
-function resolveStoredColorScheme(): ThemeColorScheme | null {
-	if (typeof window === "undefined") {
-		return null;
-	}
-
-	const storedScheme = window.localStorage.getItem(COLOR_SCHEME_KEY);
-	return storedScheme === "default" ||
-		storedScheme === "flexoki" ||
-		storedScheme === "nord" ||
-		storedScheme === "tokyo-night" ||
-		storedScheme === "solarized" ||
-		storedScheme === "dracula" ||
-		storedScheme === "catppuccin-mocha" ||
-		storedScheme === "catppuccin-macchiato" ||
-		storedScheme === "catppuccin-frappe" ||
-		storedScheme === "alucard" ||
-		storedScheme === "catppuccin-latte"
-		? storedScheme
-		: null;
-}
-
 function resolvePreferredTheme(): ResolvedTheme {
-	if (typeof window === "undefined") {
+	if (
+		typeof window === "undefined" ||
+		typeof window.matchMedia !== "function"
+	) {
 		return "dark";
 	}
 
@@ -210,15 +178,11 @@ export function resolveThemeMode(theme: ThemeMode): ResolvedTheme {
 }
 
 export function getThemeMode(): ThemeMode {
-	return resolveStoredThemeMode() ?? "system";
-}
-
-export function getTheme(): ResolvedTheme {
-	return resolveThemeMode(getThemeMode());
+	return themeStore.readThemeMode() ?? "system";
 }
 
 export function getColorScheme(): ThemeColorScheme {
-	return resolveStoredColorScheme() ?? "default";
+	return themeStore.readColorScheme() ?? "default";
 }
 
 export function applyTheme(theme: ThemeMode): ThemeMode {
@@ -229,11 +193,7 @@ export function applyTheme(theme: ThemeMode): ThemeMode {
 	const resolved = resolveThemeMode(theme);
 	document.documentElement.classList.toggle("dark", resolved === "dark");
 
-	if (typeof window !== "undefined") {
-		window.localStorage.setItem(THEME_KEY, theme);
-	}
-
-	return theme;
+	return themeStore.setThemeMode(theme);
 }
 
 export function applyColorScheme(scheme: ThemeColorScheme): ThemeColorScheme {
@@ -243,19 +203,9 @@ export function applyColorScheme(scheme: ThemeColorScheme): ThemeColorScheme {
 
 	document.documentElement.setAttribute("data-theme", scheme);
 
-	if (typeof window !== "undefined") {
-		window.localStorage.setItem(COLOR_SCHEME_KEY, scheme);
-	}
-
-	return scheme;
+	return themeStore.setColorScheme(scheme);
 }
 
 export function getAvailableThemes(mode: ResolvedTheme): ThemeMetadata[] {
 	return THEME_METADATA.filter((theme) => theme.mode === mode);
-}
-
-export function toggleTheme(): ResolvedTheme {
-	const nextTheme = getTheme() === "dark" ? "light" : "dark";
-	applyTheme(nextTheme);
-	return nextTheme;
 }

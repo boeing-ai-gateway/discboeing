@@ -6,9 +6,7 @@
 	import { onDestroy, onMount } from "svelte";
 	import { Button } from "$lib/components/ui/button";
 	import * as Dialog from "$lib/components/ui/dialog";
-	import { closeSupportInfoDialog } from "$lib/context/commands/dialog";
-	import { fetchSupportInfo } from "$lib/context/commands/support";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
 	import { downloadFile } from "$lib/shell";
 
 	const context = useContext();
@@ -67,12 +65,12 @@
 		if (open) {
 			return;
 		}
-		closeSupportInfoDialog();
+		void context.commands.dialogs.closeSupportInfoDialog();
 	}
 
 	onMount(() => {
 		resetCopiedState();
-		void fetchSupportInfo();
+		void context.commands.supportInfo.fetchSupportInfo();
 	});
 
 	onDestroy(() => {
@@ -97,18 +95,18 @@
 		<div
 			class="mt-1 min-h-0 flex-1 overflow-auto rounded-md border border-border bg-muted/30 p-3"
 		>
-			{#if supportInfo.status === "loading"}
+			{#if supportInfo.status.state === "loading"}
 				<div
 					class="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground"
 				>
 					<Loader2Icon class="size-4 animate-spin" />
 					Loading support information...
 				</div>
-			{:else if supportInfo.status === "error"}
+			{:else if supportInfo.status.state === "error"}
 				<div
 					class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
 				>
-					{supportInfo.error ?? "Failed to load support information."}
+					{supportInfo.status.error ?? "Failed to load support information."}
 				</div>
 			{:else if supportJson}
 				<pre

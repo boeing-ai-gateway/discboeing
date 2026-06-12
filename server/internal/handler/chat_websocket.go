@@ -7,17 +7,18 @@ import (
 	"github.com/coder/websocket"
 
 	"github.com/obot-platform/discobot/server/internal/middleware"
+	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/realtime"
 )
 
 // ChatWebSocket multiplexes project-scoped realtime streams over a single WebSocket.
 //
 // Client messages:
-//   - {"type":"subscribe","stream":"chat","sessionId":"...","threadId":"...","replay":true,"lastEventId":"..."}
+//   - {"type":"subscribe","stream":"chat","sessionId":"...","threadId":"..."}
 //   - {"type":"unsubscribe","stream":"chat","sessionId":"...","threadId":"..."}
 //   - {"type":"subscribe","stream":"service","sessionId":"...","serviceId":"..."}
 //   - {"type":"unsubscribe","stream":"service","sessionId":"...","serviceId":"..."}
-//   - {"type":"subscribe","stream":"project-events","afterId":"..."}
+//   - {"type":"subscribe","stream":"project-events"}
 //   - {"type":"unsubscribe","stream":"project-events"}
 //
 // Server messages:
@@ -45,13 +46,20 @@ func (h *Handler) ChatWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := h.withShutdownContext(r.Context())
 	defer cancel()
 
+	var startupTasks realtime.StartupTaskProvider
+	if projectID == model.DefaultProjectID && h.systemManager != nil {
+		startupTasks = h.systemManager
+	}
+
 	socket := realtime.NewProjectStreamSocket(
 		ctx,
 		cancel,
 		conn,
 		projectID,
 		h.chatService,
+		h.workspaceService,
 		h.eventBroker,
+		startupTasks,
 	)
 	socket.Run()
 }

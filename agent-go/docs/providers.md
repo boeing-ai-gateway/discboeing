@@ -157,3 +157,40 @@ These require dedicated providers only if their extra features (search filters, 
 - **Amazon Bedrock** — AWS SigV4 request signing, region-scoped endpoints, and a multi-model converse API that differs significantly from OpenAI Chat Completions.
 - **Google Vertex AI** — GCP service account / Workload Identity auth, regional endpoints, and the Gemini API format.
 - **SAP AI Core** — Complex service key auth (XSUAA OAuth) and SAP-specific API paths.
+
+## Test-only e2e mock LLM provider
+
+`agent-go` can be built with the explicit Go build tag `e2e_mock_llm` to register a deterministic provider for full-stack e2e tests without broad UI/API mocking:
+
+```sh
+go build -tags=e2e_mock_llm ./cmd/agent-api
+DISCOBOT_MODEL=e2e-mock-llm/mock ./agent-api -server
+```
+
+The provider ID is `e2e-mock-llm` and its default model is `mock`. It is not compiled or registered in normal builds. The build-tagged provider embeds JSON fixtures from `agent-go/llm-responses/*.json`; tests can override the fixture directory at runtime with `DISCOBOT_E2E_MOCK_LLM_RESPONSES_DIR=/path/to/fixtures`.
+
+Fixture files are merged in filename order. Each file maps input text to deterministic responses:
+
+```json
+{
+  "responses": [
+    {
+      "name": "greeting",
+      "match": { "exact": "hello" },
+      "response": { "text": "Hello from the mock LLM." }
+    },
+    {
+      "name": "run pwd",
+      "match": { "contains": "where am I" },
+      "response": {
+        "toolCalls": [
+          { "name": "Bash", "input": "{\"command\":\"pwd\"}" }
+        ]
+      }
+    }
+  ],
+  "fallback": { "text": "Default e2e mock response." }
+}
+```
+
+Matching uses the latest non-synthetic user text and supports `exact`, `contains`, and `regex` fields. If no fixture matches and no fallback is configured, the provider returns a clear error.

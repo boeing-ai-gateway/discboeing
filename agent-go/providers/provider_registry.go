@@ -384,6 +384,10 @@ func (r *ProviderRegistry) IDs() []string {
 //
 // Returns an empty Config if no credentials are found.
 func (r *ProviderRegistry) configForProvider(id string) Config {
+	if cfg := testOnlyConfigForProvider(id); len(cfg) > 0 {
+		return cfg
+	}
+
 	cfg := Config{}
 
 	// Check for OAuth credentials from the Manager first — they take priority.

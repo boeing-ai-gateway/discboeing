@@ -14,7 +14,7 @@ The agent-go API uses different route naming than the original TypeScript agent-
 | `POST /session/{id}/{agent}/cancel` | `POST /threads/{id}/cancel` | Removed `{agent}` path param |
 | `GET /session/{id}/{agent}/chat/status` | _(removed)_ | Server doesn't have equivalent |
 | `GET /sessions` | `GET /threads` | Renamed |
-| _(none)_ | `GET /threads/activity/stream` | Session-level activity SSE: initial snapshot, change snapshots, and periodic resnapshots |
+| _(none)_ | `GET /session/stream?resources=threads` | Thread-only session SSE: framed with `history-start` / `history-end`, then live `threads_updated` snapshots |
 | Question routes | `GET /threads/{id}/chat/question` and `GET /threads/{id}/chat/question/{questionId}` | Current pending question or question-by-id |
 | Answer routes | `POST /threads/{id}/chat/answer/{questionId}` | Path param instead of body |
 
@@ -24,8 +24,8 @@ The agent-go API uses different route naming than the original TypeScript agent-
 2. **`sessions` → `threads`** — a session can have multiple threads
 3. **History replay happens on the SSE endpoint** — `GET /chat/stream` replays persisted messages and then continues with live deltas
 4. **Chat SSE is long-lived** — `GET /chat/stream` no longer closes after a single completion; it stays connected and emits `ping` events while idle, without a terminal `done` event
-5. **Sessions stay `ready` while chat streams** — completion activity is projected through `/threads/activity` snapshots and `/threads/activity/stream`, not by changing the sandbox session lifecycle status
-6. **Activity sync is snapshot-plus-events** — the server can fetch `/threads/activity` once or connect to `/threads/activity/stream`, which emits an initial aggregate snapshot, another `activity` event whenever completion lifecycle, queue, thread, or answer state changes, and periodic resnapshots while subscribed
+5. **Sessions stay `ready` while chat streams** — completion activity is projected through `/threads/activity` snapshots and `/session/stream?resources=threads`, not by changing the sandbox session lifecycle status
+6. **Activity sync is snapshot-plus-events** — the server can fetch `/threads/activity` once or connect to `/session/stream?resources=threads`, which emits initial and live `threads_updated` snapshots whenever completion lifecycle, queue, thread, or answer state changes
 7. **Interrupted-turn recovery is stream-anchored** — resume streams now always start with either `start` or `data-thread-resume`, a new user prompt closes the interrupted turn before starting a fresh completion, preserves any recoverable partial assistant content in history, and queued follow-ups such as hook-failure re-prompts resume interrupted turns instead of surfacing a raw `interrupted turn requires resume` error
 
 ## Server Changes Needed

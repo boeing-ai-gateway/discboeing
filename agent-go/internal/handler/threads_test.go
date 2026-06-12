@@ -24,7 +24,7 @@ func newThreadsTestServer(t *testing.T, h *Handler) *httptest.Server {
 	r := chi.NewRouter()
 	r.Post("/threads", h.CreateThread)
 	r.Get("/threads/{id}", h.GetThread)
-	r.Get("/threads/activity/stream", h.StreamSessionActivity)
+	r.Get("/session/stream", h.StreamSession)
 	return httptest.NewServer(r)
 }
 
@@ -212,19 +212,18 @@ func TestSessionActivityResponseTreatsRunningTerminalThreadAsRunning(t *testing.
 	}
 }
 
-func TestStreamSessionActivityEmitsInitialAndChangedSnapshots(t *testing.T) {
+func TestStreamSessionWithThreadResourcesEmitsOnlyThreadSnapshots(t *testing.T) {
 	manager := &activityStreamThreadManager{}
 	h := &Handler{
 		threadManager: manager,
 		activity:      newActivityNotifier(),
 		chatPingEvery: time.Hour,
-		activityEvery: time.Hour,
 	}
 	ts := newThreadsTestServer(t, h)
 	defer ts.Close()
 
 	ctx := t.Context()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/threads/activity/stream", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/session/stream?resources=threads", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,9 +237,22 @@ func TestStreamSessionActivityEmitsInitialAndChangedSnapshots(t *testing.T) {
 	}
 
 	reader := bufio.NewReader(resp.Body)
-	initial := readActivityStreamSnapshot(t, reader)
-	if initial.Status != "idle" {
-		t.Fatalf("expected initial idle snapshot, got %q", initial.Status)
+	if event := readSessionStreamEvent(t, reader); event.name != "history-start" {
+		t.Fatalf("expected history-start, got %q", event.name)
+	}
+	initial := readSessionStreamEvent(t, reader)
+	if initial.name != "threads_updated" {
+		t.Fatalf("expected threads_updated, got %q", initial.name)
+	}
+	var initialThreads api.ListThreadsResponse
+	if err := json.Unmarshal([]byte(initial.data), &initialThreads); err != nil {
+		t.Fatal(err)
+	}
+	if len(initialThreads.Threads) != 0 {
+		t.Fatalf("expected empty initial threads, got %+v", initialThreads.Threads)
+	}
+	if event := readSessionStreamEvent(t, reader); event.name != "history-end" {
+		t.Fatalf("expected history-end, got %q", event.name)
 	}
 
 	manager.setInfos([]agent.ThreadInfo{{
@@ -249,112 +261,61 @@ func TestStreamSessionActivityEmitsInitialAndChangedSnapshots(t *testing.T) {
 	}})
 	h.notifyActivityChanged()
 
-	changed := readActivityStreamSnapshot(t, reader)
-	if changed.Status != "running" {
-		t.Fatalf("expected changed running snapshot, got %q", changed.Status)
+	changed := readSessionStreamEvent(t, reader)
+	if changed.name != "threads_updated" {
+		t.Fatalf("expected changed threads_updated, got %q", changed.name)
 	}
-	if changed.RunningCount != 1 || changed.RepresentativeThreadID != "thread-1" {
-		t.Fatalf("unexpected changed snapshot: %+v", changed)
+	var changedThreads api.ListThreadsResponse
+	if err := json.Unmarshal([]byte(changed.data), &changedThreads); err != nil {
+		t.Fatal(err)
+	}
+	if len(changedThreads.Threads) != 1 || changedThreads.Threads[0].ID != "thread-1" {
+		t.Fatalf("unexpected changed threads: %+v", changedThreads.Threads)
+	}
+	if changedThreads.Threads[0].ActivityStatus == nil || changedThreads.Threads[0].ActivityStatus.Status != "running" {
+		t.Fatalf("expected running activity status, got %+v", changedThreads.Threads[0].ActivityStatus)
 	}
 }
 
-func TestStreamSessionActivityPeriodicallyEmitsSnapshots(t *testing.T) {
-	manager := &activityStreamThreadManager{}
-	h := &Handler{
-		threadManager: manager,
-		activity:      newActivityNotifier(),
-		chatPingEvery: time.Hour,
-		activityEvery: 25 * time.Millisecond,
-	}
-	ts := newThreadsTestServer(t, h)
-	defer ts.Close()
-
-	ctx := t.Context()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ts.URL+"/threads/activity/stream", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp, err := ts.Client().Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, resp.StatusCode)
-	}
-
-	reader := bufio.NewReader(resp.Body)
-	initial := readActivityStreamSnapshot(t, reader)
-	if initial.Status != "idle" {
-		t.Fatalf("expected initial idle snapshot, got %q", initial.Status)
-	}
-
-	manager.setInfos([]agent.ThreadInfo{{
-		ID:            "thread-1",
-		ActiveCommand: "pnpm test",
-	}})
-
-	var periodic api.SessionActivityResponse
-	for range 10 {
-		periodic = readActivityStreamSnapshot(t, reader)
-		if periodic.Status == "running" {
-			break
-		}
-	}
-	if periodic.Status != "running" {
-		t.Fatalf("expected periodic running snapshot, got %q", periodic.Status)
-	}
-	if periodic.RunningCount != 1 || periodic.RepresentativeThreadID != "thread-1" {
-		t.Fatalf("unexpected periodic snapshot: %+v", periodic)
-	}
-}
-
-func readActivityStreamSnapshot(t *testing.T, reader *bufio.Reader) api.SessionActivityResponse {
+func readSessionStreamEvent(t *testing.T, reader *bufio.Reader) struct {
+	name string
+	data string
+} {
 	t.Helper()
 
 	type result struct {
-		snapshot api.SessionActivityResponse
-		err      error
+		name string
+		data string
+		err  error
 	}
 	resultCh := make(chan result, 1)
 	go func() {
+		eventName := ""
+		data := ""
 		for {
-			eventName := ""
-			data := ""
-			for {
-				line, err := reader.ReadString('\n')
-				if err != nil {
-					resultCh <- result{err: err}
-					return
-				}
-				line = strings.TrimRight(line, "\r\n")
-				if line == "" {
-					break
-				}
-				if field, value, ok := strings.Cut(line, ":"); ok {
-					value = strings.TrimPrefix(value, " ")
-					switch field {
-					case "event":
-						eventName = value
-					case "data":
-						if data == "" {
-							data = value
-						} else {
-							data += "\n" + value
-						}
-					}
-				}
-			}
-			if eventName != "activity" {
-				continue
-			}
-			var snapshot api.SessionActivityResponse
-			if err := json.Unmarshal([]byte(data), &snapshot); err != nil {
+			line, err := reader.ReadString('\n')
+			if err != nil {
 				resultCh <- result{err: err}
 				return
 			}
-			resultCh <- result{snapshot: snapshot}
-			return
+			line = strings.TrimRight(line, "\r\n")
+			if line == "" {
+				resultCh <- result{name: eventName, data: data}
+				return
+			}
+			if field, value, ok := strings.Cut(line, ":"); ok {
+				value = strings.TrimPrefix(value, " ")
+				switch field {
+				case "event":
+					eventName = value
+				case "data":
+					if data == "" {
+						data = value
+					} else {
+						data += "\n" + value
+					}
+				}
+			}
 		}
 	}()
 
@@ -363,9 +324,15 @@ func readActivityStreamSnapshot(t *testing.T, reader *bufio.Reader) api.SessionA
 		if result.err != nil {
 			t.Fatal(result.err)
 		}
-		return result.snapshot
+		return struct {
+			name string
+			data string
+		}{name: result.name, data: result.data}
 	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for activity stream snapshot")
+		t.Fatal("timed out waiting for session stream event")
 	}
-	return api.SessionActivityResponse{}
+	return struct {
+		name string
+		data string
+	}{}
 }

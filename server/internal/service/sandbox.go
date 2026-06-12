@@ -208,9 +208,9 @@ func (s *SandboxService) GetSessionActivityIfRunning(ctx context.Context, sessio
 	return s.newAgentClient(ctx).GetSessionActivity(ctx, sessionID)
 }
 
-// StreamSessionActivityIfRunning connects to the sandbox activity stream only
-// when the sandbox already exists and is running. It never starts a stopped
-// sandbox.
+// StreamSessionActivityIfRunning connects to the sandbox's thread-filtered
+// session stream only when the sandbox already exists and is running. It never
+// starts a stopped sandbox.
 func (s *SandboxService) StreamSessionActivityIfRunning(ctx context.Context, sessionID string) (<-chan *sandboxapi.SessionActivityResponse, error) {
 	if _, err := s.store.GetSessionByID(ctx, sessionID); err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)

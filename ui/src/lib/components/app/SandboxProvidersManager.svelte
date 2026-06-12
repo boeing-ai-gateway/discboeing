@@ -6,7 +6,6 @@
 	import ServerCogIcon from "@lucide/svelte/icons/server-cog";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
 	import * as simpleIcons from "simple-icons";
-	import { api } from "$lib/api-client";
 	import { Button } from "$lib/components/ui/button";
 	import { Input } from "$lib/components/ui/input";
 	import { Label } from "$lib/components/ui/label";
@@ -31,8 +30,7 @@
 		SandboxProviderInstance,
 		SandboxProviderType,
 	} from "$lib/api-types";
-	import { refreshCredentials } from "$lib/context/commands/workspace";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
 
 	type SimpleIconData = {
 		title: string;
@@ -46,10 +44,34 @@
 	const context = useContext();
 	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
 
-	let providerTypes = $state<SandboxProviderType[]>([]);
-	let providers = $state<SandboxProviderInstance[]>([]);
-	let defaultProviderId = $state("");
-	let projectDefaultProviderId = $state("");
+	const providerTypes = $derived.by(() =>
+		context.data.sandboxProviders.types.allIds
+			.map(
+				(providerTypeId) =>
+					context.data.sandboxProviders.types.byId[providerTypeId],
+			)
+			.filter(
+				(providerType): providerType is SandboxProviderType =>
+					providerType !== undefined,
+			),
+	);
+	const providers = $derived.by(() =>
+		context.data.sandboxProviders.instances.allIds
+			.map(
+				(providerId) =>
+					context.data.sandboxProviders.instances.byId[providerId],
+			)
+			.filter(
+				(provider): provider is SandboxProviderInstance =>
+					provider !== undefined,
+			),
+	);
+	const defaultProviderId = $derived(
+		context.data.sandboxProviders.defaultProviderId,
+	);
+	const projectDefaultProviderId = $derived(
+		context.data.sandboxProviders.projectDefaultProviderId,
+	);
 	let loading = $state(false);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
@@ -181,15 +203,12 @@
 		loading = true;
 		error = null;
 		try {
-			const [typesResponse, providersResponse] = await Promise.all([
-				api.getSandboxProviderTypes(),
-				api.getSandboxProviders(),
-				refreshCredentials(),
+			await Promise.all([
+				context.commands.sandboxProviders.refreshSandboxProviders({
+					wait: true,
+				}),
+				context.commands.credentials.refreshCredentials({ wait: true }),
 			]);
-			providerTypes = typesResponse.providerTypes;
-			providers = providersResponse.providers;
-			defaultProviderId = providersResponse.default;
-			projectDefaultProviderId = providersResponse.projectDefault ?? "";
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to load providers";
 		} finally {
@@ -260,13 +279,16 @@
 	function credentialOptions(field: SandboxProviderConfigField) {
 		const provider = credentialProvider(field);
 		const authType = credentialAuthType(field);
-		return context.data.credentials.items.filter(
-			(credential) =>
-				credential.provider === provider &&
-				credential.authType === authType &&
-				credential.isConfigured &&
-				!credential.inactive,
-		);
+		return context.data.credentials.allIds
+			.map((credentialId) => context.data.credentials.byId[credentialId])
+			.filter(
+				(credential) =>
+					credential !== undefined &&
+					credential.provider === provider &&
+					credential.authType === authType &&
+					credential.isConfigured &&
+					!credential.inactive,
+			);
 	}
 
 	function credentialDefaultName(field: SandboxProviderConfigField): string {
@@ -337,13 +359,12 @@
 		saving = true;
 		error = null;
 		try {
-			const credential = await api.createCredential({
+			const credential = await context.commands.credentials.createCredential({
 				provider,
 				name,
 				authType,
 				apiKey,
 			});
-			await refreshCredentials();
 			setConfigFieldValue(field, credential.id);
 			creatingCredentialField = null;
 			newCredentialSecrets = {
@@ -381,13 +402,20 @@
 				config: buildConfig(),
 			};
 			if (editingId) {
-				await api.updateSandboxProvider(editingId, payload);
+				await context.commands.sandboxProviders.updateSandboxProvider(
+					editingId,
+					payload,
+					{
+						wait: true,
+					},
+				);
 			} else {
-				await api.createSandboxProvider(payload);
+				await context.commands.sandboxProviders.createSandboxProvider(payload, {
+					wait: true,
+				});
 			}
 			formOpen = false;
 			resetForm();
-			await refresh();
 			notifySandboxProvidersUpdated();
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to save provider";
@@ -404,11 +432,13 @@
 		saving = true;
 		error = null;
 		try {
-			await api.deleteSandboxProvider(provider.id);
+			await context.commands.sandboxProviders.deleteSandboxProvider(
+				provider.id,
+				{ wait: true },
+			);
 			if (editingId === provider.id) {
 				resetForm();
 			}
-			await refresh();
 			notifySandboxProvidersUpdated();
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to delete provider";
@@ -424,8 +454,11 @@
 		saving = true;
 		error = null;
 		try {
-			await api.updateSandboxProvider(provider.id, { disabled });
-			await refresh();
+			await context.commands.sandboxProviders.updateSandboxProvider(
+				provider.id,
+				{ disabled },
+				{ wait: true },
+			);
 			notifySandboxProvidersUpdated();
 		} catch (err) {
 			error = err instanceof Error ? err.message : "Failed to update provider";
@@ -438,10 +471,12 @@
 		saving = true;
 		error = null;
 		try {
-			const response = await api.updateDefaultSandboxProvider(providerId);
-			defaultProviderId = response.default;
-			projectDefaultProviderId = response.projectDefault;
-			await refresh();
+			await context.commands.sandboxProviders.updateDefaultSandboxProvider(
+				providerId,
+				{
+					wait: true,
+				},
+			);
 			notifySandboxProvidersUpdated();
 		} catch (err) {
 			error =

@@ -120,7 +120,7 @@ func (s *ProjectSubscription) Done() <-chan struct{} {
 // thread and records the subscription so it can be restored after a reconnect.
 func (s *ProjectSubscription) SubscribeThread(ctx context.Context, sessionID, threadID string) error {
 	key := ProjectThreadSubscription{SessionID: sessionID, ThreadID: threadID}
-	chat := serverapi.ChatStreamSubscriptionOptions{SessionID: sessionID, ThreadID: threadID, Replay: true}
+	chat := serverapi.ChatStreamSubscriptionOptions{SessionID: sessionID, ThreadID: threadID}
 
 	s.mu.Lock()
 	s.threads[key] = chat

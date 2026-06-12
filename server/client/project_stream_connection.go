@@ -73,19 +73,23 @@ func (s *ProjectStreamConnection) Subscribe(ctx context.Context, opts serverapi.
 	var requests []projectStreamSocketRequest
 	if opts.ProjectEvents != nil {
 		requests = append(requests, projectStreamSocketRequest{
-			Type:    "subscribe",
-			Stream:  string(serverapi.ProjectStreamTypeProjectEvents),
-			AfterID: opts.ProjectEvents.AfterID,
+			Type:   "subscribe",
+			Stream: string(serverapi.ProjectStreamTypeProjectEvents),
 		})
 	}
 	if opts.Chat != nil {
 		requests = append(requests, projectStreamSocketRequest{
-			Type:        "subscribe",
-			Stream:      string(serverapi.ProjectStreamTypeChat),
-			SessionID:   opts.Chat.SessionID,
-			ThreadID:    opts.Chat.ThreadID,
-			Replay:      opts.Chat.Replay,
-			LastEventID: opts.Chat.LastEventID,
+			Type:      "subscribe",
+			Stream:    string(serverapi.ProjectStreamTypeChat),
+			SessionID: opts.Chat.SessionID,
+			ThreadID:  opts.Chat.ThreadID,
+		})
+	}
+	if opts.Session != nil {
+		requests = append(requests, projectStreamSocketRequest{
+			Type:      "subscribe",
+			Stream:    string(serverapi.ProjectStreamTypeSession),
+			SessionID: opts.Session.SessionID,
 		})
 	}
 	if opts.Service != nil {
@@ -104,19 +108,23 @@ func (s *ProjectStreamConnection) Unsubscribe(ctx context.Context, opts serverap
 	var requests []projectStreamSocketRequest
 	if opts.ProjectEvents != nil {
 		requests = append(requests, projectStreamSocketRequest{
-			Type:    "unsubscribe",
-			Stream:  string(serverapi.ProjectStreamTypeProjectEvents),
-			AfterID: opts.ProjectEvents.AfterID,
+			Type:   "unsubscribe",
+			Stream: string(serverapi.ProjectStreamTypeProjectEvents),
 		})
 	}
 	if opts.Chat != nil {
 		requests = append(requests, projectStreamSocketRequest{
-			Type:        "unsubscribe",
-			Stream:      string(serverapi.ProjectStreamTypeChat),
-			SessionID:   opts.Chat.SessionID,
-			ThreadID:    opts.Chat.ThreadID,
-			Replay:      opts.Chat.Replay,
-			LastEventID: opts.Chat.LastEventID,
+			Type:      "unsubscribe",
+			Stream:    string(serverapi.ProjectStreamTypeChat),
+			SessionID: opts.Chat.SessionID,
+			ThreadID:  opts.Chat.ThreadID,
+		})
+	}
+	if opts.Session != nil {
+		requests = append(requests, projectStreamSocketRequest{
+			Type:      "unsubscribe",
+			Stream:    string(serverapi.ProjectStreamTypeSession),
+			SessionID: opts.Session.SessionID,
 		})
 	}
 	if opts.Service != nil {

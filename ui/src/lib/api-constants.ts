@@ -61,18 +61,18 @@ const SESSION_THREAD_ACCESSIBLE_STATUSES = new Set<SessionStatusValue>([
 ]);
 
 export function isSessionTransitioningStatus(
-	status: SessionStatusValue | null | undefined,
+	status: string | null | undefined,
 ): boolean {
 	return status !== null && status !== undefined
-		? SESSION_TRANSITIONING_STATUSES.has(status)
+		? SESSION_TRANSITIONING_STATUSES.has(status as SessionStatusValue)
 		: false;
 }
 
 export function canLoadSessionThreads(
-	status: SessionStatusValue | null | undefined,
+	status: string | null | undefined,
 ): boolean {
 	return status !== null && status !== undefined
-		? SESSION_THREAD_ACCESSIBLE_STATUSES.has(status)
+		? SESSION_THREAD_ACCESSIBLE_STATUSES.has(status as SessionStatusValue)
 		: false;
 }
 

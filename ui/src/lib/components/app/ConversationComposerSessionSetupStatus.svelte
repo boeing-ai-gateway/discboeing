@@ -1,38 +1,58 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import { openGitHubCredentialFlow } from "$lib/context/commands/dialog";
-	import { useContext } from "$lib/context/context.svelte";
-	import type {
-		SessionContextValue,
-		ThreadContextValue,
-	} from "$lib/session/session-context.types";
+	import { useContext } from "$lib/context";
+	import {
+		getPendingWorkspaceSourceIsValid,
+		getPendingWorkspaceValidationMessage,
+	} from "$lib/pending-workspace-helpers";
 
 	type Props = {
-		session: SessionContextValue;
-		thread: ThreadContextValue;
+		sessionId: string;
+		threadId: string;
 	};
 
-	let { session, thread }: Props = $props();
+	let { sessionId, threadId }: Props = $props();
 	const context = useContext();
+	const sessionRecord = $derived(context.data.sessions.byId[sessionId] ?? null);
+	const sessionView = $derived(context.view.sessions[sessionId] ?? null);
+	const pendingWorkspace = $derived(sessionView?.pendingWorkspace ?? null);
+	const threadRecord = $derived(sessionRecord?.threads.byId[threadId] ?? null);
+	const threadContent = $derived(threadRecord?.content ?? null);
+	const isPending = $derived(
+		context.view.selection.pendingSessionId === sessionId,
+	);
 	const sessionStatus = $derived.by(
-		() => session.current?.sandboxStatus ?? null,
+		() => sessionRecord?.value?.sandboxStatus ?? null,
 	);
 	const sessionErrorMessage = $derived.by(
-		() => session.current?.errorMessage?.trim() ?? "",
+		() => sessionRecord?.value?.errorMessage?.trim() ?? "",
 	);
 	const sessionStatusMessage = $derived.by(
-		() => session.current?.sandboxStatusMessage?.trim() ?? "",
+		() => sessionRecord?.value?.sandboxStatusMessage?.trim() ?? "",
 	);
 	const showSessionStatus = $derived.by(
 		() => sessionStatus !== null && sessionStatus !== "ready",
 	);
+	const isThreadStarting = $derived.by(
+		() =>
+			threadContent?.isStreaming === true ||
+			threadContent?.messages.some(
+				(message) => message.provisional === true,
+			) === true,
+	);
+	const pendingWorkspaceSourceIsValid = $derived.by(() =>
+		getPendingWorkspaceSourceIsValid(pendingWorkspace),
+	);
+	const pendingWorkspaceValidationMessage = $derived.by(() =>
+		getPendingWorkspaceValidationMessage(pendingWorkspace),
+	);
 	const pendingSessionStarted = $derived.by(
-		() => session.isPending && thread.isStreaming,
+		() => isPending && isThreadStarting,
 	);
 </script>
 
-{#if session.isPending || showSessionStatus}
+{#if isPending || showSessionStatus}
 	<div class="mb-2 px-1">
 		{#if pendingSessionStarted && !sessionStatus}
 			<div
@@ -68,34 +88,36 @@
 			</p>
 		{/if}
 	</div>
-	{#if session.isPending && context.data.workspaces.status === "loading"}
+	{#if isPending && context.data.workspaces.status.state === "loading"}
 		<p class="mb-2 px-1 text-xs text-muted-foreground">Loading workspaces...</p>
 	{/if}
-	{#if session.isPending && session.ui.pendingWorkspaceSetupMessage}
+	{#if isPending && pendingWorkspace?.setupMessage}
 		<p
 			class="mb-2 truncate px-1 text-xs text-destructive"
-			title={session.ui.pendingWorkspaceSetupMessage}
+			title={pendingWorkspace.setupMessage}
 		>
-			{session.ui.pendingWorkspaceSetupMessage}
+			{pendingWorkspace.setupMessage}
 		</p>
 	{/if}
-	{#if session.isPending && session.ui.pendingWorkspaceValidationMessage}
+	{#if isPending && pendingWorkspaceValidationMessage}
 		<p
-			class={`mb-2 truncate px-1 text-xs ${session.ui.pendingWorkspaceSourceIsValid ? "text-muted-foreground" : "text-destructive"}`}
-			title={session.ui.pendingWorkspaceValidationMessage}
+			class={`mb-2 truncate px-1 text-xs ${pendingWorkspaceSourceIsValid ? "text-muted-foreground" : "text-destructive"}`}
+			title={pendingWorkspaceValidationMessage}
 		>
-			{session.ui.pendingWorkspaceValidationMessage}
+			{pendingWorkspaceValidationMessage}
 		</p>
 	{/if}
-	{#if session.isPending && session.ui.pendingWorkspaceValidation?.authMessage}
+	{#if isPending && pendingWorkspace?.validation?.authMessage}
 		<p class="mb-2 px-1 text-xs text-muted-foreground">
-			{session.ui.pendingWorkspaceValidation.authMessage}
+			{pendingWorkspace.validation.authMessage}
 		</p>
-		{#if session.ui.pendingWorkspaceValidation.authRequired && session.ui.pendingWorkspaceValidation.authProvider === "github-git"}
+		{#if pendingWorkspace.validation.authRequired && pendingWorkspace.validation.authProvider === "github-git"}
 			<button
 				type="button"
 				class="mb-2 px-1 text-xs text-primary underline underline-offset-2 hover:text-primary/80"
-				onclick={openGitHubCredentialFlow}
+				onclick={() => {
+					void context.commands.dialogs.openGitHubCredentialFlow();
+				}}
 			>
 				Connect GitHub credential
 			</button>

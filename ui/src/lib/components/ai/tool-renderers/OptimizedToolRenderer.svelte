@@ -7,7 +7,7 @@
 		ToolOutput,
 	} from "$lib/components/ai/tool";
 	import type { DynamicToolPart } from "$lib/components/ai/types";
-	import type { PlanEntry } from "$lib/app/plan-entry";
+	import type { PlanEntry } from "$lib/plan-entry";
 	import type { ResolvedTheme } from "$lib/theme";
 	import { getToolRenderer, getToolTitle } from "./registry";
 

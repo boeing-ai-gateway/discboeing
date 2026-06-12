@@ -2,176 +2,33 @@ import {
 	getContext as getSvelteContext,
 	setContext as setSvelteContext,
 } from "svelte";
+import { MediaQuery } from "svelte/reactivity";
 
-import type { Context, ContextBootstrap } from "$lib/context/context.types";
-import { getAvailableThemes } from "$lib/theme";
-import { getAppEnvironment } from "$lib/app/app-helpers";
-import { detectIsMacPlatform } from "$lib/app/global-shortcuts";
-import { IsMobile } from "$lib/hooks/is-mobile.svelte";
+import { createCommands } from "$lib/context/commands";
+import type { Bootstrap, Context } from "$lib/context/context.types";
+import {
+	createInitialDataState,
+	createInitialViewState,
+} from "$lib/context/initial-state";
+import { detectIsMacPlatform } from "$lib/shortcuts/global-shortcuts";
 
 const CONTEXT_KEY = Symbol.for("discobot-ui-context");
+const MOBILE_BREAKPOINT = 1024;
 
 let currentContext: Context | null = null;
 
-export function createContext(bootstrap: ContextBootstrap): Context {
-	const environment = getAppEnvironment();
-	const mobileQuery = new IsMobile(1024);
+export function createContext(bootstrap: Bootstrap = {}): Context {
+	const mobileQuery = new MediaQuery(`max-width: ${MOBILE_BREAKPOINT - 1}px`);
 	const context = $state<Context>({
-		view: {
-			app: {
-				environment: {
-					isMobile: mobileQuery.current,
-					isMacPlatform: detectIsMacPlatform(),
-				},
-				navigation: {
-					desktopSidebarOpen: false,
-					mobileSidebarOpen: false,
-					mountedSessionIds: [],
-				},
-				selection: {
-					sessionId: bootstrap.selectedSessionId ?? null,
-					threadId: bootstrap.selectedThreadId ?? null,
-					pendingSessionId: "",
-					requestedThreadIdBySessionId: {},
-				},
-				dialogs: {
-					settings: {
-						open: false,
-						tab: "appearance",
-					},
-					credentials: {
-						open: false,
-						targetId: null,
-						flowIntent: null,
-					},
-					supportInfo: {
-						open: false,
-					},
-					keyboardShortcuts: {
-						open: false,
-					},
-					recentThreadSwitcher: {
-						open: false,
-						selectedKey: null,
-						commitModifier: null,
-					},
-				},
-				preferences: {
-					theme: "system",
-					resolvedTheme: "dark",
-					colorScheme: "default",
-					availableThemes: getAvailableThemes("dark"),
-					promptHistory: [],
-					pinnedPrompts: [],
-					preferredIde: "cursor",
-					ideOptions: bootstrap.ideOptions,
-					chatWidthMode: "constrained",
-					defaultModel: "",
-					defaultReasoning: "",
-					defaultServiceTier: "",
-					recentThreadsVisibleLimit: 5,
-					sidebarRecentOpen: true,
-					sidebarAllOpen: true,
-					sidebarAllGroupedByWorkspace: true,
-					showRefreshButton: true,
-					topBarIconOnly: false,
-					autoScrollOnStream: true,
-					ignoredUpdateVersion: null,
-					trackPrereleases: false,
-				},
-				recentThreads: {
-					visibleItems: [],
-				},
-				startupTasks: {
-					visibleIds: [],
-					hasActiveTasks: false,
-				},
-				updates: {
-					showBadge: false,
-				},
-				projectEvents: {
-					connected: false,
-				},
-			},
-			sessions: {},
-		},
-		data: {
-			environment: {
-				apiBase: environment.apiBase,
-				runtime: environment.runtime,
-				isDesktop: environment.isDesktop,
-				supportsNativeWindowControls: environment.supportsNativeWindowControls,
-				supportsAppUpdates: environment.supportsAppUpdates,
-				windowControlsSide: environment.windowControlsSide,
-				windowControls: bootstrap.windowControls,
-			},
-			sessions: {
-				items: [],
-				byId: {},
-				status: "idle",
-				error: null,
-				recentThreads: [],
-			},
-			threads: {
-				bySessionId: {},
-			},
-			conversations: {
-				byThreadId: {},
-			},
-			workspaces: {
-				items: [],
-				byId: {},
-				status: "idle",
-				error: null,
-			},
-			models: {
-				items: [],
-				byId: {},
-				status: "idle",
-				error: null,
-			},
-			credentials: {
-				items: [],
-				byId: {},
-				types: [],
-				status: "idle",
-				error: null,
-			},
-			startupTasks: {
-				items: [],
-				byId: {},
-				status: "idle",
-				error: null,
-			},
-			files: {
-				bySessionId: {},
-			},
-			hooks: {
-				bySessionId: {},
-			},
-			services: {
-				bySessionId: {},
-			},
-			commands: {
-				bySessionId: {},
-			},
-			supportInfo: {
-				value: null,
-				status: "idle",
-				error: null,
-			},
-			updates: {
-				status: "idle",
-				availableVersion: null,
-				error: null,
-				downloadedBytes: 0,
-				totalBytes: null,
-				isIgnored: false,
-				canTrackPrereleases: false,
-			},
-		},
-		actions: {},
+		data: createInitialDataState(bootstrap),
+		view: createInitialViewState(bootstrap),
+		commands: undefined as unknown as Context["commands"],
 	});
+
+	context.view.app.environment.isMobile = mobileQuery.current;
+	context.view.app.environment.isMacPlatform = detectIsMacPlatform();
+	context.commands = createCommands(context);
+	currentContext = context;
 
 	$effect.root(() => {
 		$effect(() => {
@@ -182,8 +39,7 @@ export function createContext(bootstrap: ContextBootstrap): Context {
 	return context;
 }
 
-export function setDiscobotContext(bootstrap: ContextBootstrap): Context {
-	const context = createContext(bootstrap);
+export function setContext(context: Context): Context {
 	currentContext = context;
 	setSvelteContext(CONTEXT_KEY, context);
 	return context;
@@ -197,9 +53,9 @@ export function useContext(): Context {
 	return context;
 }
 
-export function getContextForCommand(): Context {
+export function getContext(): Context {
 	if (!currentContext) {
-		throw new Error("Context has not been initialized");
+		throw new Error("context has not been created");
 	}
 	return currentContext;
 }

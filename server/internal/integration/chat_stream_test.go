@@ -416,7 +416,6 @@ type chatWebSocketFrame struct {
 	Data      string `json:"data,omitempty"`
 	ID        string `json:"id,omitempty"`
 	Error     string `json:"error,omitempty"`
-	Replay    bool   `json:"replay,omitempty"`
 }
 
 func chatWebSocketURL(ts *TestServer, user *TestUser, projectID string) string {
@@ -542,7 +541,6 @@ func TestChatWebSocket_SubscribeForwardsEvents(t *testing.T) {
 		"stream":    "chat",
 		"sessionId": session.ID,
 		"threadId":  session.ID,
-		"replay":    true,
 	}); err != nil {
 		t.Fatalf("Failed to subscribe: %v", err)
 	}
@@ -592,7 +590,6 @@ func TestChatWebSocket_InvalidSessionReturnsError(t *testing.T) {
 		"stream":    "chat",
 		"sessionId": "missing-session",
 		"threadId":  "missing-thread",
-		"replay":    true,
 	}); err != nil {
 		t.Fatalf("Failed to subscribe: %v", err)
 	}

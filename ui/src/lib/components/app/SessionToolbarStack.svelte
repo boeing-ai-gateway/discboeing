@@ -1,19 +1,17 @@
 <script lang="ts">
 	import SessionToolbar from "$lib/components/app/SessionToolbar.svelte";
-	import { shouldLoadSessionToolbar } from "$lib/context/commands/session";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
+	import { shouldLoadSessionToolbar } from "$lib/shell-selectors";
 
 	const context = useContext();
 	const mountedSessionIds = $derived.by(
-		() => context.view.app.navigation.mountedSessionIds,
+		() => context.view.navigation.mountedSessionIds,
 	);
-	const selectedSessionId = $derived.by(
-		() => context.view.app.selection.sessionId,
-	);
+	const selectedSessionId = $derived.by(() => context.view.selection.sessionId);
 </script>
 
 {#each mountedSessionIds as sessionId (sessionId)}
-	{#if shouldLoadSessionToolbar(sessionId)}
+	{#if shouldLoadSessionToolbar(context, sessionId)}
 		<div class={sessionId === selectedSessionId ? "contents" : "hidden"}>
 			<SessionToolbar {sessionId} />
 		</div>

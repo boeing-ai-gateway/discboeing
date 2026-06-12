@@ -82,6 +82,33 @@ for ((i = 1; i < ${#lines[@]}; i++)); do
 	fi
 done
 
+body_content_lines=0
+adjacent_body_content_lines=0
+previous_body_content_line=0
+for ((i = 2; i < ${#lines[@]}; i++)); do
+	line="${lines[$i]}"
+	if [ -z "$line" ]; then
+		previous_body_content_line=0
+		continue
+	fi
+
+	case "$line" in
+		Signed-off-by:*|Co-authored-by:*|Co-Authored-By:*|Reviewed-by:*|Acked-by:*|Tested-by:*|Reported-by:*|Fixes:*|Closes:*|Refs:*)
+			continue
+			;;
+	esac
+
+	body_content_lines=$((body_content_lines + 1))
+	if [ "$previous_body_content_line" -eq 1 ]; then
+		adjacent_body_content_lines=$((adjacent_body_content_lines + 1))
+	fi
+	previous_body_content_line=1
+done
+
+if [ "$body_content_lines" -ge 4 ] && [ "$adjacent_body_content_lines" -eq 0 ]; then
+	errors+=("- Body appears double-spaced; use blank lines only between paragraphs, not between every wrapped line.")
+fi
+
 if [ ${#errors[@]} -gt 0 ]; then
 	printf '%s\n' "Commit message does not match the repository style:" >&2
 	printf '%s\n' "" >&2
@@ -91,6 +118,7 @@ if [ ${#errors[@]} -gt 0 ]; then
 	printf '%s\n' "- Subject line: 50 characters or fewer" >&2
 	printf '%s\n' "- Blank line between subject and body" >&2
 	printf '%s\n' "- Body lines: 72 characters or fewer" >&2
+	printf '%s\n' "- Body paragraphs: wrapped lines should be consecutive; do not double-space every line" >&2
 	exit 1
 fi
 EOF

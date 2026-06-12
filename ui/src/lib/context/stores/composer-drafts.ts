@@ -1,0 +1,49 @@
+import { readStorage, writeStorage } from "../../local-storage";
+
+const COMPOSER_DRAFT_STORAGE_PREFIX = "discobot:composer-draft:";
+export const PENDING_COMPOSER_DRAFT_STORAGE_KEY = `${COMPOSER_DRAFT_STORAGE_PREFIX}pending`;
+
+export function resolveComposerDraftStorageKey({
+	isPending,
+	threadId,
+	sessionId,
+}: {
+	isPending: boolean;
+	threadId: string | null | undefined;
+	sessionId?: string | null | undefined;
+}): string {
+	const resolvedId = threadId || sessionId;
+	if (isPending || !resolvedId) {
+		return PENDING_COMPOSER_DRAFT_STORAGE_KEY;
+	}
+
+	return `${COMPOSER_DRAFT_STORAGE_PREFIX}${resolvedId}`;
+}
+
+export function readComposerDraft(storageKey: string): string {
+	return readStorage(storageKey) ?? "";
+}
+
+export function writeComposerDraft(storageKey: string, value: string): void {
+	writeStorage(storageKey, value || null);
+}
+
+export function clearComposerDraft(storageKey: string): void {
+	writeStorage(storageKey, null);
+}
+
+export function moveComposerDraft({
+	fromStorageKey,
+	toStorageKey,
+	value,
+}: {
+	fromStorageKey: string;
+	toStorageKey: string;
+	value?: string;
+}): void {
+	const nextValue = value ?? readComposerDraft(fromStorageKey);
+	writeComposerDraft(toStorageKey, nextValue);
+	if (fromStorageKey !== toStorageKey) {
+		clearComposerDraft(fromStorageKey);
+	}
+}

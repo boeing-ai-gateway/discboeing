@@ -2054,27 +2054,27 @@ func (a *DefaultAgent) clearActiveCommand(
 
 // builtinCommands are slash commands handled natively by the agent, independent
 // of any user-defined skills or legacy commands.
-var builtinCommands = []agent.Command{
-	{Name: "compact", Description: "Force conversation compaction immediately.", Kind: agent.CommandKindBuiltin},
-	{Name: "clear", Description: "Clear the active conversation context.", Kind: agent.CommandKindBuiltin},
+var builtinCommands = []api.Command{
+	{Name: "compact", Description: "Force conversation compaction immediately.", Kind: string(agent.CommandKindBuiltin)},
+	{Name: "clear", Description: "Clear the active conversation context.", Kind: string(agent.CommandKindBuiltin)},
 }
 
 // ListCommands returns all slash commands available to the user: user-defined
 // skills, legacy commands discovered from the project and home directories,
 // and built-in commands handled by the agent itself.
-func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
+func (a *DefaultAgent) ListCommands() ([]api.Command, error) {
 	sessionCfg, err := sessionconfig.Load(a.cwd)
 	if err != nil {
 		// Non-fatal: return built-ins only.
 		return builtinCommands, nil //nolint:nilerr
 	}
 
-	commands := make([]agent.Command, 0, len(sessionCfg.Skills)+len(sessionCfg.Scripts)+len(builtinCommands))
+	commands := make([]api.Command, 0, len(sessionCfg.Skills)+len(sessionCfg.Scripts)+len(builtinCommands))
 	for _, s := range sessionCfg.Skills {
-		commands = append(commands, agent.Command{
+		commands = append(commands, api.Command{
 			Name:        s.Name,
 			Description: s.Description,
-			Kind:        agent.CommandKind(s.Kind),
+			Kind:        s.Kind,
 			Discobot:    discobotCommandMetadata(s.Discobot),
 		})
 	}
@@ -2082,10 +2082,10 @@ func (a *DefaultAgent) ListCommands() ([]agent.Command, error) {
 		if !script.Visible {
 			continue
 		}
-		commands = append(commands, agent.Command{
+		commands = append(commands, api.Command{
 			Name:        script.Name,
 			Description: script.Description,
-			Kind:        agent.CommandKindScript,
+			Kind:        string(agent.CommandKindScript),
 			Discobot:    discobotCommandMetadata(script.Discobot),
 		})
 	}

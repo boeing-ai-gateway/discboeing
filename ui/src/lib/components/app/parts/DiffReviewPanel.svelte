@@ -397,7 +397,7 @@
 		generation: number,
 	) {
 		const state = getDiffState(path);
-		if (state?.status === "loading" || state?.status === "ready") {
+		if (state && state.status !== "idle") {
 			return;
 		}
 
@@ -1022,6 +1022,8 @@
 	async function refreshPanel() {
 		refreshing = true;
 		try {
+			loadGeneration += 1;
+			clearDiffStates();
 			await onRefresh();
 		} finally {
 			refreshing = false;

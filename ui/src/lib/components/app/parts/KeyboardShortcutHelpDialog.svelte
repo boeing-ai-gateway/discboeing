@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { GlobalShortcut } from "$lib/app/global-shortcuts";
+	import type { GlobalShortcut } from "$lib/shortcuts/global-shortcuts";
 	import { Kbd, KbdGroup } from "$lib/components/ui/kbd";
 
 	type Props = {

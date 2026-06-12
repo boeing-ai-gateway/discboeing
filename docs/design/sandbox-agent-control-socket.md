@@ -116,8 +116,8 @@ Payload: <feature-owned JSON>
 
 No current production feature publishes named control changes. In particular,
 session activity is not routed over the control socket; `SessionThreadStatusSyncer`
-continues to read activity snapshots through the sandbox agent's existing
-`/threads/activity` and `/threads/activity/stream` HTTP/SSE endpoints.
+continues to read one-shot activity snapshots through `/threads/activity` and
+live thread snapshots through `/session/stream?resources=threads`.
 
 ## Named byte streams
 

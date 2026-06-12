@@ -1,11 +1,13 @@
 <script lang="ts">
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
+	import type { Service } from "$lib/api-types";
 	import { appendAuthToken, getApiRootBase } from "$lib/api-config";
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { syncEditorTheme } from "$lib/editor-control";
 	import type { ResolvedTheme } from "$lib/theme";
-	import type { ServiceItem } from "$lib/session/session-context.types";
+
+	type VSCodeService = Pick<Service, "id" | "https" | "urlPath">;
 
 	type Props = {
 		dockMaximized: boolean;
@@ -13,7 +15,7 @@
 		onToggleDockMaximized: () => void;
 		resolvedTheme: ResolvedTheme;
 		sessionId: string;
-		service: ServiceItem | null;
+		service: VSCodeService | null;
 		shiftWindowControlsForSidebar?: boolean;
 	};
 
@@ -52,7 +54,7 @@
 
 	function buildServiceUrl(
 		nextSessionId: string,
-		nextService: ServiceItem,
+		nextService: VSCodeService,
 		nextPath: string,
 	): string {
 		if (typeof window === "undefined") {

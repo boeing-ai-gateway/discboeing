@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { recentThreadKey } from "$lib/app/thread-switcher";
+	import { recentThreadKey } from "$lib/context/view/thread-switcher";
 	import AppThreadStatus from "$lib/components/app/AppThreadStatus.svelte";
-	import type { RecentThreadEntry } from "$lib/app/thread-switcher";
+	import type { RecentThreadEntry } from "$lib/context/view/thread-switcher";
 
 	type Props = {
 		open: boolean;

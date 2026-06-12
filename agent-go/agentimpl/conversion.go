@@ -1,7 +1,7 @@
 package agentimpl
 
 import (
-	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/scriptexec"
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/agent-go/thread"
@@ -18,8 +18,8 @@ func scriptExecutionMetadata(execution scriptexec.Execution) *thread.ScriptExecu
 	}
 }
 
-func discobotCommandMetadata(metadata sessionconfig.DiscobotCommandMetadata) agent.DiscobotCommandMetadata {
-	converted := agent.DiscobotCommandMetadata{
+func discobotCommandMetadata(metadata sessionconfig.DiscobotCommandMetadata) api.CommandDiscobotMetadata {
+	converted := api.CommandDiscobotMetadata{
 		UI:          metadata.UI,
 		Label:       metadata.Label,
 		ActiveLabel: metadata.ActiveLabel,
@@ -28,17 +28,17 @@ func discobotCommandMetadata(metadata sessionconfig.DiscobotCommandMetadata) age
 		Order:       metadata.Order,
 	}
 	if len(metadata.CredentialRequest) > 0 {
-		converted.CredentialRequest = make([]agent.DiscobotCredentialRequest, 0, len(metadata.CredentialRequest))
+		converted.CredentialRequest = make([]api.CommandCredentialRequest, 0, len(metadata.CredentialRequest))
 		for _, request := range metadata.CredentialRequest {
-			credential := agent.DiscobotCredentialRequest{
+			credential := api.CommandCredentialRequest{
 				EnvVar:        request.EnvVar,
 				Name:          request.Name,
 				Justification: request.Justification,
 			}
 			if len(request.ApprovedUses) > 0 {
-				credential.ApprovedUses = make([]agent.DiscobotCredentialApprovedUse, 0, len(request.ApprovedUses))
+				credential.ApprovedUses = make([]api.CommandApprovedUse, 0, len(request.ApprovedUses))
 				for _, use := range request.ApprovedUses {
-					credential.ApprovedUses = append(credential.ApprovedUses, agent.DiscobotCredentialApprovedUse{
+					credential.ApprovedUses = append(credential.ApprovedUses, api.CommandApprovedUse{
 						Description: use.Description,
 					})
 				}

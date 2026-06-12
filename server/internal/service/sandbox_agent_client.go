@@ -952,6 +952,90 @@ func (c *SandboxAgentClient) GetStream(ctx context.Context, sessionID, threadID 
 	return lineCh, nil
 }
 
+// GetSessionStream connects to the sandbox's long-lived SSE stream for
+// session-level agent-owned resources.
+func (c *SandboxAgentClient) GetSessionStream(ctx context.Context, sessionID string) (<-chan SSELine, error) {
+	return c.getSessionStream(ctx, sessionID, nil)
+}
+
+func (c *SandboxAgentClient) getSessionStream(ctx context.Context, sessionID string, resources []string) (<-chan SSELine, error) {
+	var streamLease *sandbox.HTTPClientLease
+	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
+		lease, err := c.acquireHTTPClient(ctx, sessionID)
+		if err != nil {
+			return nil, 0, err
+		}
+		client := *lease.Client
+		client.Timeout = 0
+
+		streamURL := "http://sandbox/session/stream"
+		if len(resources) > 0 {
+			values := url.Values{}
+			values.Set("resources", strings.Join(resources, ","))
+			streamURL += "?" + values.Encode()
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, streamURL, nil)
+		if err != nil {
+			lease.Release()
+			return nil, 0, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("Accept", "text/event-stream")
+
+		if err := c.applyRequestAuth(ctx, req, sessionID, nil); err != nil {
+			lease.Release()
+			return nil, 0, err
+		}
+
+		resp, err := client.Do(req)
+		if err != nil {
+			lease.Release()
+			return nil, 0, err
+		}
+		streamLease = lease
+		return resp, resp.StatusCode, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if streamLease != nil {
+			streamLease.Release()
+		}
+		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	lineCh := make(chan SSELine, 100)
+	go func() {
+		defer close(lineCh)
+		defer func() { _ = resp.Body.Close() }()
+		defer func() {
+			if streamLease != nil {
+				streamLease.Release()
+			}
+		}()
+
+		if err := streamSSELines(ctx, resp.Body, lineCh); err != nil && ctx.Err() == nil {
+			log.Printf("[SandboxAgentClient] Error reading session stream for session %s: %v", sessionID, err)
+			errorData, marshalErr := json.Marshal(struct {
+				Error string `json:"error"`
+			}{
+				Error: fmt.Sprintf("failed to read session stream: %v", err),
+			})
+			if marshalErr == nil {
+				select {
+				case lineCh <- SSELine{Event: "error", Data: string(errorData)}:
+				case <-ctx.Done():
+				}
+			}
+		}
+	}()
+
+	return lineCh, nil
+}
+
 func streamSSELines(ctx context.Context, body io.Reader, lineCh chan<- SSELine) error {
 	reader := newChunkedLineReader(body)
 	current := SSELine{}
@@ -1148,97 +1232,89 @@ func (c *SandboxAgentClient) GetSessionActivity(ctx context.Context, sessionID s
 }
 
 // StreamSessionActivity connects to the sandbox agent's session-level activity
-// SSE stream. The agent sends an initial snapshot followed by snapshots whenever
-// activity changes.
+// stream in thread-only mode and converts thread snapshots to aggregate
+// activity snapshots for the status syncer.
 func (c *SandboxAgentClient) StreamSessionActivity(ctx context.Context, sessionID string) (<-chan *sandboxapi.SessionActivityResponse, error) {
-	var streamLease *sandbox.HTTPClientLease
-	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
-		lease, err := c.acquireHTTPClient(ctx, sessionID)
-		if err != nil {
-			return nil, 0, err
-		}
-		client := *lease.Client
-		client.Timeout = 0
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.threadsURL()+"/activity/stream", nil)
-		if err != nil {
-			lease.Release()
-			return nil, 0, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("Accept", "text/event-stream")
-		if err := c.applyRequestAuth(ctx, req, sessionID, &RequestOptions{SkipCredentials: true}); err != nil {
-			lease.Release()
-			return nil, 0, err
-		}
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lease.Release()
-			return nil, 0, err
-		}
-		if isRetryableStatus(resp.StatusCode) {
-			_ = resp.Body.Close()
-			lease.Release()
-			return nil, resp.StatusCode, nil
-		}
-		streamLease = lease
-		return resp, resp.StatusCode, nil
-	})
+	lineCh, err := c.getSessionStream(ctx, sessionID, []string{"threads"})
 	if err != nil {
 		return nil, fmt.Errorf("failed to stream session activity: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if streamLease != nil {
-			streamLease.Release()
-		}
-		return nil, fmt.Errorf("sandbox returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	activityCh := make(chan *sandboxapi.SessionActivityResponse, 16)
 	go func() {
 		defer close(activityCh)
-		defer func() { _ = resp.Body.Close() }()
-		defer func() {
-			if streamLease != nil {
-				streamLease.Release()
-			}
-		}()
-
-		lineCh := make(chan SSELine, 16)
-		errCh := make(chan error, 1)
-		go func() {
-			errCh <- streamSSELines(ctx, resp.Body, lineCh)
-			close(lineCh)
-		}()
-
 		for line := range lineCh {
-			if line.Event == "ping" || line.Data == "" {
+			if line.Event == "ping" || line.Event == "history-start" || line.Event == "history-end" || line.Data == "" {
 				continue
 			}
-			if line.Event != "" && line.Event != "activity" {
+			if line.Event != "threads_updated" {
 				continue
 			}
-			var snapshot sandboxapi.SessionActivityResponse
-			if err := json.Unmarshal([]byte(line.Data), &snapshot); err != nil {
-				log.Printf("[SandboxAgentClient] Failed to decode activity event for session %s: %v", sessionID, err)
+			var threads sandboxapi.ListThreadsResponse
+			if err := json.Unmarshal([]byte(line.Data), &threads); err != nil {
+				log.Printf("[SandboxAgentClient] Failed to decode threads event for activity stream session %s: %v", sessionID, err)
 				continue
 			}
+			snapshot := sessionActivitySnapshotFromThreads(threads.Threads)
 			select {
-			case activityCh <- &snapshot:
+			case activityCh <- snapshot:
 			case <-ctx.Done():
 				return
 			}
 		}
-
-		if err := <-errCh; err != nil && ctx.Err() == nil {
-			log.Printf("[SandboxAgentClient] Error reading activity stream for session %s: %v", sessionID, err)
-		}
 	}()
 
 	return activityCh, nil
+}
+
+func sessionActivitySnapshotFromThreads(threads []sandboxapi.Thread) *sandboxapi.SessionActivityResponse {
+	resp := &sandboxapi.SessionActivityResponse{Status: "idle"}
+	for _, thread := range threads {
+		if thread.ActivityStatus == nil {
+			continue
+		}
+		state := sandboxapi.SessionThreadActivityState{
+			ThreadID:     thread.ID,
+			Status:       thread.ActivityStatus.Status,
+			Reason:       thread.ActivityStatus.Reason,
+			CompletionID: thread.ActivityStatus.CompletionID,
+			QueueCount:   thread.ActivityStatus.QueueCount,
+			NextRunAfter: thread.ActivityStatus.NextRunAfter,
+			Message:      thread.ActivityStatus.Message,
+		}
+		resp.Threads = append(resp.Threads, state)
+		switch state.Status {
+		case "needs_attention":
+			resp.NeedsAttentionCount++
+		case "running":
+			resp.RunningCount++
+		case "queued":
+			resp.QueuedCount++
+		case "unknown":
+			resp.UnknownCount++
+		}
+		if sessionActivityPriority(state.Status) > sessionActivityPriority(resp.Status) {
+			resp.Status = state.Status
+			resp.Reason = state.Reason
+			resp.RepresentativeThreadID = state.ThreadID
+		}
+	}
+	return resp
+}
+
+func sessionActivityPriority(status string) int {
+	switch status {
+	case "needs_attention":
+		return 4
+	case "running":
+		return 3
+	case "queued":
+		return 2
+	case "unknown":
+		return 1
+	default:
+		return 0
+	}
 }
 
 // GetThread retrieves a specific thread from the sandbox agent.

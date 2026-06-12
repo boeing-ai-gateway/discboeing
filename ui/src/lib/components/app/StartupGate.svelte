@@ -13,11 +13,7 @@
 		type StartupScreenStep,
 		type StartupStatusVariant,
 	} from "$lib/components/app/parts/StartupScreen.svelte";
-	import {
-		connectProjectEvents,
-		refreshAppData,
-	} from "$lib/context/commands/session";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
 
 	type Props = {
 		children: Snippet;
@@ -336,7 +332,6 @@
 	onMount(() => {
 		const abortController = new AbortController();
 		const startupScreenShownAt = Date.now();
-		let stopProjectEvents = () => {};
 
 		async function waitForSuccessfulStartupRequest<T>(
 			request: () => Promise<T>,
@@ -386,9 +381,10 @@
 				}
 				startupPhase = "loading";
 				await initServerConfig();
-				await refreshAppData();
-				startupTasks = context.data.startupTasks.items;
-				stopProjectEvents = connectProjectEvents();
+				await context.commands.lifecycle.startup({ wait: true });
+				startupTasks = context.data.startupTasks.allIds
+					.map((id) => context.data.startupTasks.byId[id])
+					.filter((task): task is StartupTask => Boolean(task));
 
 				while (!abortController.signal.aborted) {
 					try {
@@ -433,7 +429,6 @@
 
 		return () => {
 			abortController.abort();
-			stopProjectEvents();
 		};
 	});
 </script>

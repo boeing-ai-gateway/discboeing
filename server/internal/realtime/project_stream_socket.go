@@ -14,7 +14,9 @@ import (
 	"github.com/coder/websocket/wsjson"
 
 	"github.com/obot-platform/discobot/server/internal/events"
+	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/obot-platform/discobot/server/internal/startup"
 )
 
 type projectStreamSubscriptionRequest struct {
@@ -35,10 +37,9 @@ type projectStreamSocketMessage struct {
 	ThreadID  string `json:"threadId,omitempty"`
 	ServiceID string `json:"serviceId,omitempty"`
 	Event     string `json:"event,omitempty"`
-	Data      string `json:"data,omitempty"`
+	Data      any    `json:"data,omitempty"`
 	ID        string `json:"id,omitempty"`
 	Error     string `json:"error,omitempty"`
-	Replay    bool   `json:"replay,omitempty"`
 }
 
 type projectStreamSubscriptionKey struct {
@@ -46,6 +47,10 @@ type projectStreamSubscriptionKey struct {
 	sessionID string
 	threadID  string
 	serviceID string
+}
+
+type StartupTaskProvider interface {
+	GetTasks() []*startup.Task
 }
 
 func subscriptionKey(req projectStreamSubscriptionRequest) projectStreamSubscriptionKey {
@@ -58,13 +63,15 @@ func subscriptionKey(req projectStreamSubscriptionRequest) projectStreamSubscrip
 }
 
 type ProjectStreamSocket struct {
-	chatService *service.ChatService
-	eventBroker *events.Broker
-	projectID   string
-	conn        *websocket.Conn
-	ctx         context.Context
-	cancel      context.CancelFunc
-	outgoing    chan projectStreamSocketMessage
+	chatService      *service.ChatService
+	workspaceService *service.WorkspaceService
+	eventBroker      *events.Broker
+	startupTasks     StartupTaskProvider
+	projectID        string
+	conn             *websocket.Conn
+	ctx              context.Context
+	cancel           context.CancelFunc
+	outgoing         chan projectStreamSocketMessage
 
 	subscriptionsMu sync.Mutex
 	subscriptions   map[projectStreamSubscriptionKey]context.CancelFunc
@@ -76,17 +83,21 @@ func NewProjectStreamSocket(
 	conn *websocket.Conn,
 	projectID string,
 	chatService *service.ChatService,
+	workspaceService *service.WorkspaceService,
 	eventBroker *events.Broker,
+	startupTasks StartupTaskProvider,
 ) *ProjectStreamSocket {
 	return &ProjectStreamSocket{
-		chatService:   chatService,
-		eventBroker:   eventBroker,
-		projectID:     projectID,
-		conn:          conn,
-		ctx:           ctx,
-		cancel:        cancel,
-		outgoing:      make(chan projectStreamSocketMessage, 128),
-		subscriptions: make(map[projectStreamSubscriptionKey]context.CancelFunc),
+		chatService:      chatService,
+		workspaceService: workspaceService,
+		eventBroker:      eventBroker,
+		startupTasks:     startupTasks,
+		projectID:        projectID,
+		conn:             conn,
+		ctx:              ctx,
+		cancel:           cancel,
+		outgoing:         make(chan projectStreamSocketMessage, 128),
+		subscriptions:    make(map[projectStreamSubscriptionKey]context.CancelFunc),
 	}
 }
 
@@ -169,6 +180,8 @@ func (s *ProjectStreamSocket) handleSubscribe(req projectStreamSubscriptionReque
 		s.startChatSubscription(req)
 	case "service":
 		s.startServiceSubscription(req)
+	case "session":
+		s.startSessionSubscription(req)
 	case "project-events":
 		s.startProjectEventsSubscription(req)
 	default:
@@ -276,7 +289,6 @@ func (s *ProjectStreamSocket) startChatSubscription(req projectStreamSubscriptio
 		Stream:    "chat",
 		SessionID: req.SessionID,
 		ThreadID:  req.ThreadID,
-		Replay:    req.Replay,
 	}) {
 		s.cancelSubscription(key)
 		return
@@ -423,6 +435,110 @@ func (s *ProjectStreamSocket) startServiceSubscription(req projectStreamSubscrip
 	}()
 }
 
+func (s *ProjectStreamSocket) startSessionSubscription(req projectStreamSubscriptionRequest) {
+	if req.SessionID == "" {
+		_ = s.writeMessage(projectStreamSocketMessage{Type: "error", Stream: "session", Error: "sessionId is required"})
+		return
+	}
+
+	if _, err := s.chatService.GetSession(s.ctx, s.projectID, req.SessionID); err != nil {
+		_ = s.writeMessage(projectStreamSocketMessage{
+			Type:      "error",
+			Stream:    "session",
+			SessionID: req.SessionID,
+			Error:     err.Error(),
+		})
+		return
+	}
+
+	key := subscriptionKey(req)
+	s.cancelSubscription(key)
+
+	streamCtx, streamCancel := context.WithCancel(s.ctx)
+	sseCh, err := s.chatService.GetSessionStream(streamCtx, s.projectID, req.SessionID)
+	if err != nil {
+		streamCancel()
+		_ = s.writeMessage(projectStreamSocketMessage{
+			Type:      "error",
+			Stream:    "session",
+			SessionID: req.SessionID,
+			Error:     err.Error(),
+		})
+		return
+	}
+
+	s.trackSubscription(key, streamCancel)
+
+	if !s.writeMessage(projectStreamSocketMessage{
+		Type:      "subscribed",
+		Stream:    "session",
+		SessionID: req.SessionID,
+	}) {
+		s.cancelSubscription(key)
+		return
+	}
+
+	go func() {
+		defer func() {
+			streamCancel()
+			s.removeSubscription(key)
+			_ = s.writeMessage(projectStreamSocketMessage{
+				Type:      "complete",
+				Stream:    "session",
+				SessionID: req.SessionID,
+			})
+		}()
+
+		for {
+			select {
+			case <-streamCtx.Done():
+				return
+			case line, ok := <-sseCh:
+				if !ok {
+					return
+				}
+				if line.Done {
+					continue
+				}
+				payload := decodeProjectStreamSSEData(line.Data)
+				if !s.writeMessage(projectStreamSocketMessage{
+					Type:      "event",
+					Stream:    "session",
+					SessionID: req.SessionID,
+					Event:     line.Event,
+					Data:      payload,
+					ID:        line.ID,
+				}) {
+					return
+				}
+				if line.Event == "history-start" && !s.writeSessionSnapshotEvent(streamCtx, req.SessionID) {
+					return
+				}
+			}
+		}
+	}()
+}
+
+func (s *ProjectStreamSocket) writeSessionSnapshotEvent(ctx context.Context, sessionID string) bool {
+	session, err := s.chatService.GetSessionSnapshot(ctx, s.projectID, sessionID)
+	if err != nil {
+		_ = s.writeMessage(projectStreamSocketMessage{
+			Type:      "error",
+			Stream:    "session",
+			SessionID: sessionID,
+			Error:     err.Error(),
+		})
+		return false
+	}
+	return s.writeMessage(projectStreamSocketMessage{
+		Type:      "event",
+		Stream:    "session",
+		SessionID: sessionID,
+		Event:     "session_updated",
+		Data:      session,
+	})
+}
+
 func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSubscriptionRequest) {
 	key := subscriptionKey(req)
 	s.cancelSubscription(key)
@@ -461,22 +577,8 @@ func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSu
 		s.cancelSubscription(key)
 		return
 	}
-	for _, event := range history {
-		data, err := json.Marshal(event)
-		if err != nil {
-			continue
-		}
-		sentEventIDs[event.ID] = true
-		if !s.writeMessage(projectStreamSocketMessage{
-			Type:   "event",
-			Stream: "project-events",
-			Event:  string(event.Type),
-			Data:   string(data),
-			ID:     event.ID,
-		}) {
-			s.cancelSubscription(key)
-			return
-		}
+	if !s.writeProjectEventHistory(streamCtx, key, history, sentEventIDs) {
+		return
 	}
 
 	go func() {
@@ -494,26 +596,64 @@ func (s *ProjectStreamSocket) startProjectEventsSubscription(req projectStreamSu
 				if !ok {
 					return
 				}
+				if event.Type == events.EventTypeThreadUpdated {
+					continue
+				}
 				if sentEventIDs[event.ID] {
 					delete(sentEventIDs, event.ID)
 					continue
 				}
-				data, err := json.Marshal(event)
-				if err != nil {
-					continue
-				}
-				if !s.writeMessage(projectStreamSocketMessage{
-					Type:   "event",
-					Stream: "project-events",
-					Event:  string(event.Type),
-					Data:   string(data),
-					ID:     event.ID,
-				}) {
+				if !s.writeProjectBrokerEvent(streamCtx, event) {
 					return
 				}
 			}
 		}
 	}()
+}
+
+func (s *ProjectStreamSocket) writeProjectEventHistory(ctx context.Context, key projectStreamSubscriptionKey, history []*events.Event, sentEventIDs map[string]bool) bool {
+	if !s.writeProjectEventControl(key, "history-start") {
+		return false
+	}
+	sessions, err := s.chatService.ListSessionsByProject(ctx, s.projectID)
+	if err != nil {
+		_ = s.writeMessage(projectStreamSocketMessage{Type: "error", Stream: "project-events", Error: err.Error()})
+		s.cancelSubscription(key)
+		return false
+	}
+	for _, session := range sessions {
+		if !s.writeProjectEventSnapshot(key, string(events.EventTypeSessionUpdated), session) {
+			return false
+		}
+	}
+
+	workspaces, err := s.workspaceService.ListWorkspaces(ctx, s.projectID)
+	if err != nil {
+		_ = s.writeMessage(projectStreamSocketMessage{Type: "error", Stream: "project-events", Error: err.Error()})
+		s.cancelSubscription(key)
+		return false
+	}
+	for _, workspace := range workspaces {
+		if !s.writeProjectEventSnapshot(key, string(events.EventTypeWorkspaceUpdated), workspace) {
+			return false
+		}
+	}
+
+	if s.startupTasks != nil {
+		for _, task := range s.startupTasks.GetTasks() {
+			if !s.writeProjectEventSnapshot(key, string(startup.EventTypeStartupTaskUpdated), task) {
+				return false
+			}
+		}
+	}
+
+	for _, event := range history {
+		sentEventIDs[event.ID] = true
+		if !s.writeProjectEvent(event) {
+			return false
+		}
+	}
+	return s.writeProjectEventControl(key, "history-end")
 }
 
 func (s *ProjectStreamSocket) projectEventHistory(ctx context.Context, afterID string, replay bool) ([]*events.Event, error) {
@@ -524,4 +664,113 @@ func (s *ProjectStreamSocket) projectEventHistory(ctx context.Context, afterID s
 		return nil, nil
 	}
 	return s.eventBroker.GetEventsSince(ctx, s.projectID, time.Time{})
+}
+
+func decodeProjectStreamSSEData(data string) any {
+	if data == "" {
+		return nil
+	}
+	var payload any
+	if err := json.Unmarshal([]byte(data), &payload); err == nil {
+		return payload
+	}
+	return data
+}
+
+func (s *ProjectStreamSocket) writeProjectEventControl(key projectStreamSubscriptionKey, event string) bool {
+	if !s.writeMessage(projectStreamSocketMessage{
+		Type:   "event",
+		Stream: "project-events",
+		Event:  event,
+	}) {
+		s.cancelSubscription(key)
+		return false
+	}
+	return true
+}
+
+func (s *ProjectStreamSocket) writeProjectEventSnapshot(key projectStreamSubscriptionKey, eventType string, payload any) bool {
+	event, err := marshalProjectEventEnvelope(eventType, "", payload)
+	if err != nil {
+		return true
+	}
+	if !s.writeMessage(projectStreamSocketMessage{
+		Type:   "event",
+		Stream: "project-events",
+		Event:  eventType,
+		Data:   event,
+	}) {
+		s.cancelSubscription(key)
+		return false
+	}
+	return true
+}
+
+func (s *ProjectStreamSocket) writeProjectBrokerEvent(ctx context.Context, event *events.Event) bool {
+	payload := any(event.Data)
+	switch event.Type {
+	case events.EventTypeSessionUpdated:
+		var data events.SessionUpdatedData
+		if err := json.Unmarshal(event.Data, &data); err == nil && data.SessionID != "" {
+			if session, err := s.chatService.GetSessionSnapshot(ctx, s.projectID, data.SessionID); err == nil {
+				payload = session
+			} else if data.SandboxStatus == model.SessionStatusRemoved {
+				payload = removedSessionSnapshot(s.projectID, data)
+			}
+		}
+	case events.EventTypeWorkspaceUpdated:
+		var data events.WorkspaceUpdatedData
+		if err := json.Unmarshal(event.Data, &data); err == nil && data.WorkspaceID != "" {
+			if workspace, err := s.workspaceService.GetWorkspace(ctx, data.WorkspaceID); err == nil {
+				payload = workspace
+			}
+		}
+	}
+
+	envelope, err := marshalProjectEventEnvelope(string(event.Type), event.ID, payload)
+	if err != nil {
+		return true
+	}
+	return s.writeMessage(projectStreamSocketMessage{
+		Type:   "event",
+		Stream: "project-events",
+		Event:  string(event.Type),
+		Data:   envelope,
+		ID:     event.ID,
+	})
+}
+
+func removedSessionSnapshot(projectID string, data events.SessionUpdatedData) *service.Session {
+	return &service.Session{
+		ID:                   data.SessionID,
+		ProjectID:            projectID,
+		Timestamp:            time.Now().Format(time.RFC3339),
+		SandboxStatus:        data.SandboxStatus,
+		SandboxStatusMessage: data.SandboxStatusMessage,
+		CommitStatus:         data.CommitStatus,
+		Files:                []service.FileNode{},
+	}
+}
+
+func (s *ProjectStreamSocket) writeProjectEvent(event *events.Event) bool {
+	return s.writeMessage(projectStreamSocketMessage{
+		Type:   "event",
+		Stream: "project-events",
+		Event:  string(event.Type),
+		Data:   event,
+		ID:     event.ID,
+	})
+}
+
+func marshalProjectEventEnvelope(eventType, id string, payload any) (events.Event, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return events.Event{}, err
+	}
+	return events.Event{
+		ID:        id,
+		Type:      events.EventType(eventType),
+		Timestamp: time.Now(),
+		Data:      data,
+	}, nil
 }

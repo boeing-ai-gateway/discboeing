@@ -136,7 +136,7 @@ func (m *mockAgent) FinalResponse(_ string) (string, error) {
 	return "", nil
 }
 
-func (m *mockAgent) ListCommands() ([]Command, error) {
+func (m *mockAgent) ListCommands() ([]api.Command, error) {
 	return nil, nil
 }
 

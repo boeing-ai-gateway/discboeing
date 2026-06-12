@@ -7,7 +7,6 @@
 	import ServerIcon from "@lucide/svelte/icons/server";
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
 	import Trash2Icon from "@lucide/svelte/icons/trash-2";
-	import { ApiError, api } from "$lib/api-client";
 	import type {
 		CredentialVisibility,
 		SessionCredentialAssignment,
@@ -31,21 +30,16 @@
 		DropdownMenuSeparator,
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
-	import { openCredentialsDialog } from "$lib/context/commands/dialog";
-	import { refreshCredentials } from "$lib/context/commands/workspace";
-	import { useContext } from "$lib/context/context.svelte";
-	import type { SessionContextValue } from "$lib/session/session-context.types";
+	import { useContext } from "$lib/context";
 
 	type Props = {
-		session: SessionContextValue;
+		sessionId: string;
 	};
 
-	let { session }: Props = $props();
+	let { sessionId }: Props = $props();
 	const context = useContext();
 	const componentId = `session-credentials-${Math.random().toString(36).slice(2)}`;
 
-	let assignments = $state<SessionCredentialAssignment[]>([]);
-	let loading = $state(false);
 	let loadedSessionId = $state<string | null>(null);
 	let dropdownOpen = $state(false);
 	let globalVisibilityDialogOpen = $state(false);
@@ -53,6 +47,12 @@
 		$state<SessionCredentialAssignment | null>(null);
 	let globalVisibilityDialogContexts = $state<string[]>([]);
 	let expandedUses = $state<Record<string, boolean>>({});
+	const sessionRecord = $derived(context.data.sessions.byId[sessionId] ?? null);
+	const assignments = $derived(sessionRecord?.credentials.assignments ?? []);
+	const loading = $derived(
+		sessionRecord?.credentials.status.state === "loading" ||
+			sessionRecord?.credentials.status.state === "refreshing",
+	);
 
 	const visibleCount = $derived.by(
 		() =>
@@ -64,27 +64,17 @@
 	);
 
 	async function loadAssignments() {
-		if (session.isPending) {
-			assignments = [];
-			return;
-		}
-		const sessionId = session.sessionId;
-		loading = true;
+		const targetSessionId = sessionId;
 		try {
-			const response = await api.getSessionCredentials(sessionId);
-			if (session.sessionId !== sessionId || session.isPending) {
+			if (sessionId !== targetSessionId) {
 				return;
 			}
-			assignments = response.credentials;
-			await refreshCredentials();
-		} catch (error) {
-			if (error instanceof ApiError && error.status === 404) {
-				assignments = [];
-				return;
-			}
-			assignments = [];
-		} finally {
-			loading = false;
+			await context.commands.sessionCredentials.refreshSessionCredentials(
+				targetSessionId,
+			);
+			await context.commands.credentials.refreshCredentials();
+		} catch {
+			// Keep the control usable if session credentials cannot be loaded.
 		}
 	}
 
@@ -94,7 +84,7 @@
 		}
 		window.dispatchEvent(
 			new CustomEvent("discobot:session-credentials-changed", {
-				detail: { sessionId: session.sessionId, source: componentId },
+				detail: { sessionId, source: componentId },
 			}),
 		);
 	}
@@ -102,35 +92,10 @@
 	async function saveAssignments(
 		nextAssignments: SessionCredentialAssignment[],
 	) {
-		const response = await api.setSessionCredentials(
-			session.sessionId,
-			nextAssignments
-				.filter(
-					(assignment) =>
-						Boolean(assignment.sessionCredentialId) ||
-						Boolean(assignment.envVar) ||
-						Boolean(assignment.sourceEnvVar) ||
-						(assignment.uses?.length ?? 0) > 0 ||
-						assignment.visibility.tools !==
-							assignment.credential.visibility.tools ||
-						assignment.visibility.console !==
-							assignment.credential.visibility.console ||
-						assignment.visibility.services !==
-							assignment.credential.visibility.services ||
-						assignment.visibility.hooks !==
-							assignment.credential.visibility.hooks,
-				)
-				.map((assignment) => ({
-					credentialId: assignment.credentialId,
-					sessionCredentialId: assignment.sessionCredentialId,
-					envVar: assignment.envVar,
-					sourceEnvVar: assignment.sourceEnvVar,
-					agentVisible: assignment.visibility.tools,
-					visibility: assignment.visibility,
-					uses: assignment.uses,
-				})),
+		await context.commands.sessionCredentials.setSessionCredentialAssignments(
+			sessionId,
+			nextAssignments,
 		);
-		assignments = response.credentials;
 		notifySessionCredentialsChanged();
 	}
 
@@ -331,7 +296,7 @@
 		if (!credentialId) {
 			return;
 		}
-		openCredentialsDialog(credentialId);
+		void context.commands.dialogs.openCredentialsDialog(credentialId);
 	}
 
 	function visibilityToggleClass(enabled: boolean, disabled: boolean) {
@@ -445,13 +410,6 @@
 	}
 
 	$effect(() => {
-		const sessionId = session.sessionId;
-		const isPending = session.isPending;
-		if (isPending) {
-			assignments = [];
-			loadedSessionId = null;
-			return;
-		}
 		if (loadedSessionId === sessionId) {
 			return;
 		}
@@ -470,7 +428,7 @@
 					source?: string;
 				}>
 			).detail;
-			if (!detail?.sessionId || detail.sessionId !== session.sessionId) {
+			if (!detail?.sessionId || detail.sessionId !== sessionId) {
 				return;
 			}
 			if (detail.source === componentId) {
@@ -682,7 +640,7 @@
 				class="w-full justify-start gap-2"
 				onclick={() => {
 					dropdownOpen = false;
-					openCredentialsDialog();
+					void context.commands.dialogs.openCredentialsDialog();
 				}}
 			>
 				<SettingsIcon class="size-3.5" />

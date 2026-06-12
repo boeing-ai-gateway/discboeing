@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { resolveSessionDisplayStatus } from "$lib/app/thread-status";
 	import SessionStatus from "$lib/components/app/parts/SessionStatus.svelte";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
+	import { resolveSessionDisplayStatus } from "$lib/session-status";
 
 	type Props = {
 		sessionId: string;
@@ -21,12 +21,8 @@
 
 	const context = useContext();
 	const status = $derived.by(() => {
-		const session = context.data.sessions.byId[sessionId];
-		if (!session) {
-			return "unknown";
-		}
-
-		return resolveSessionDisplayStatus(session);
+		const record = context.data.sessions.byId[sessionId];
+		return resolveSessionDisplayStatus(record);
 	});
 </script>
 

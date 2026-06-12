@@ -1,0 +1,156 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { test } from "vitest";
+
+const RIGHT_WINDOW_CONTROLS_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/parts/RightWindowControls.svelte",
+);
+const WORKSPACE_SELECTOR_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/ConversationWorkspaceSelector.svelte",
+);
+const UPDATES_DOMAIN_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../context/domains/updates.ts",
+);
+const API_CONFIG_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../api-config.ts",
+);
+const SHELL_MODULE = path.resolve(import.meta.dirname, "../../shell.ts");
+const LEGACY_TAURI_HELPERS_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../tauri.ts",
+);
+const LEGACY_ENVIRONMENT_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../environment.ts",
+);
+const REMOVED_TAURI_ADAPTER_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../desktop/tauri-adapter.ts",
+);
+const ELECTRON_ADAPTER_MODULE = path.resolve(
+	import.meta.dirname,
+	"../../desktop/electron-adapter.ts",
+);
+
+function readSource(filePath: string) {
+	return readFileSync(filePath, "utf-8");
+}
+
+test("right window controls use the shared desktop window bridge", () => {
+	const source = readSource(RIGHT_WINDOW_CONTROLS_COMPONENT);
+
+	assert.match(
+		source,
+		/import \{ withCurrentDesktopWindow \} from "\$lib\/shell";/,
+	);
+	assert.match(source, /void withCurrentDesktopWindow\(async \(window\) => \{/);
+});
+
+test("workspace selector uses desktop shell capability for the local directory picker", () => {
+	const source = readSource(WORKSPACE_SELECTOR_COMPONENT);
+
+	assert.match(
+		source,
+		/import \{ isDesktopShell, pickDirectory \} from "\$lib\/shell";/,
+	);
+	assert.match(
+		source,
+		/const showLocalDirectoryPicker = \$derived\.by\([\s\S]*isDesktopShell\(\) && workspaceSourceType === "local"/,
+	);
+});
+
+test("workspace selector reads pending workspace state from context", () => {
+	const source = readSource(WORKSPACE_SELECTOR_COMPONENT);
+	const composerSource = readSource(
+		path.resolve(import.meta.dirname, "../app/ConversationComposer.svelte"),
+	);
+
+	assert.match(source, /sessionId: string;/);
+	assert.match(source, /context\.view\.sessions\[mountedSessionId\]/);
+	assert.match(source, /pendingWorkspace\.option/);
+	assert.match(
+		composerSource,
+		/<ConversationWorkspaceSelector[\s\S]*\{sessionId\}/,
+	);
+	assert.doesNotMatch(source, /SessionRuntimeState/);
+	assert.doesNotMatch(source, /\$lib\/context\/runtime/);
+});
+
+test("app updates use the shared desktop runtime helpers", () => {
+	const source = readSource(UPDATES_DOMAIN_MODULE);
+
+	assert.match(
+		source,
+		/import \{[\s\S]*checkForAppUpdate,[\s\S]*downloadAppUpdate,[\s\S]*installAppUpdate,[\s\S]*relaunchApp,[\s\S]*\} from "\$lib\/shell";/,
+	);
+	assert.match(source, /await checkForAppUpdate\(null\)/);
+	assert.match(source, /await downloadAppUpdate\(/);
+	assert.match(source, /await installAppUpdate\(/);
+	assert.match(source, /await relaunchApp\(\)/);
+});
+
+test("api config reads desktop bootstrap state from the shared runtime", () => {
+	const source = readSource(API_CONFIG_MODULE);
+
+	assert.match(
+		source,
+		/import \{[\s\S]*getDesktopAuthToken,[\s\S]*getDesktopServerConfig,[\s\S]*isDesktopShell,[\s\S]*\} from "\$lib\/shell";/,
+	);
+	assert.match(
+		source,
+		/const desktopServerConfig = getDesktopServerConfig\(\);/,
+	);
+	assert.doesNotMatch(source, /get_server_port/);
+	assert.doesNotMatch(source, /get_server_secret/);
+});
+
+test("shell exports the shared runtime surface", () => {
+	const source = readSource(SHELL_MODULE);
+
+	assert.match(
+		source,
+		/export \{[\s\S]*downloadFile,[\s\S]*openUrl,[\s\S]*pickDirectory,[\s\S]*readClipboardText,[\s\S]*supportsAppUpdates,[\s\S]*supportsNativeWindowControls,[\s\S]*writeClipboardText,[\s\S]*\} from "\$lib\/desktop\/runtime";/,
+	);
+});
+
+test("runtime supports Electron and browser detection", () => {
+	const source = readSource(
+		path.resolve(import.meta.dirname, "../../desktop/runtime.ts"),
+	);
+
+	assert.match(source, /detectElectronRuntime/);
+	assert.match(source, /supportsNativeWindowControls\(\)/);
+	assert.match(source, /supportsAppUpdates\(\)/);
+	assert.match(source, /return "electron"/);
+	assert.match(source, /return "browser"/);
+});
+
+test("runtime keeps the download flow consistent in Electron", () => {
+	const source = readSource(
+		path.resolve(import.meta.dirname, "../../desktop/runtime.ts"),
+	);
+
+	assert.match(source, /await downloadElectronFile\(filename, bytes\)/);
+	assert.match(source, /toast\.success\(`\$\{filename\} saved to Downloads`\)/);
+});
+
+test("electron-specific bridge access is centralized in the electron adapter", () => {
+	const source = readSource(ELECTRON_ADAPTER_MODULE);
+
+	assert.match(source, /window\.__DISCOBOT_DESKTOP__/);
+	assert.match(source, /requireBridgeMethod/);
+	assert.match(source, /kind === "electron"/);
+	assert.match(source, /navigator\.userAgent/);
+	assert.match(source, /Electron\\\//);
+});
+
+test("legacy tauri, tauri adapter, and environment helper modules are removed", () => {
+	assert.equal(existsSync(LEGACY_TAURI_HELPERS_MODULE), false);
+	assert.equal(existsSync(REMOVED_TAURI_ADAPTER_MODULE), false);
+	assert.equal(existsSync(LEGACY_ENVIRONMENT_MODULE), false);
+});

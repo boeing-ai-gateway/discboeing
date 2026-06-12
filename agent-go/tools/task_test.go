@@ -109,7 +109,7 @@ func (m *mockSubAgent) SubmitAnswer(threadID, approvalID string, req api.AnswerQ
 	}
 	return nil
 }
-func (m *mockSubAgent) ListCommands() ([]agent.Command, error) { return nil, nil }
+func (m *mockSubAgent) ListCommands() ([]api.Command, error) { return nil, nil }
 func (m *mockSubAgent) ValidateSubagentType(subagentType string) error {
 	if m.validateSubagentTypeFn != nil {
 		return m.validateSubagentTypeFn(subagentType)
@@ -374,7 +374,7 @@ func (a *recursiveTaskAgent) SubmitAnswer(threadID, approvalID string, req api.A
 	state.pendingAnswer = &req
 	return nil
 }
-func (a *recursiveTaskAgent) ListCommands() ([]agent.Command, error) { return nil, nil }
+func (a *recursiveTaskAgent) ListCommands() ([]api.Command, error) { return nil, nil }
 func (a *recursiveTaskAgent) FinalResponse(threadID string) (string, error) {
 	return a.state(threadID).final, nil
 }

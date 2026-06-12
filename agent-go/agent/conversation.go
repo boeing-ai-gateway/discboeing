@@ -704,7 +704,7 @@ func (cm *ConversationManager) ListThreads() ([]string, error) {
 }
 
 // ListCommands returns all available slash commands.
-func (cm *ConversationManager) ListCommands() ([]Command, error) {
+func (cm *ConversationManager) ListCommands() ([]api.Command, error) {
 	return cm.agent.ListCommands()
 }
 

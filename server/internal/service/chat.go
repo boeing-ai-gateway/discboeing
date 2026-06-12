@@ -54,6 +54,27 @@ func NewChatService(s *store.Store, cfg *config.Config, sessionService *SessionS
 	}
 }
 
+func (c *ChatService) ListSessionsByProject(ctx context.Context, projectID string) ([]*Session, error) {
+	if c.sessionService == nil {
+		return nil, errors.New("session service is not configured")
+	}
+	return c.sessionService.ListSessionsByProject(ctx, projectID)
+}
+
+func (c *ChatService) GetSessionSnapshot(ctx context.Context, projectID, sessionID string) (*Session, error) {
+	if c.sessionService == nil {
+		return nil, errors.New("session service is not configured")
+	}
+	session, err := c.sessionService.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	if session.ProjectID != projectID {
+		return nil, errors.New("session does not belong to this project")
+	}
+	return session, nil
+}
+
 // NewSessionRequest contains the parameters for creating a new chat session.
 type NewSessionRequest struct {
 	// SessionID is the client-provided session ID (required)
@@ -239,6 +260,22 @@ func (c *ChatService) GetStream(ctx context.Context, projectID, sessionID, threa
 	}
 
 	return client.GetStream(ctx, threadID, &RequestOptions{LastEventID: lastEventID})
+}
+
+// GetSessionStream returns the agent-owned session-level resource SSE stream.
+func (c *ChatService) GetSessionStream(ctx context.Context, projectID, sessionID string) (<-chan SSELine, error) {
+	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {
+		return nil, err
+	}
+	if c.sandboxService == nil {
+		return nil, fmt.Errorf("sandbox provider not available")
+	}
+	client, err := c.sandboxService.GetClient(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	return client.GetSessionStream(ctx)
 }
 
 // ListThreads retrieves all threads for a session from the sandbox agent.

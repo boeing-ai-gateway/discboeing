@@ -16,7 +16,6 @@
 	import SquareTerminalIcon from "@lucide/svelte/icons/square-terminal";
 	import TerminalIcon from "@lucide/svelte/icons/terminal";
 	import type { Component } from "svelte";
-	import { untrack } from "svelte";
 	import { SvelteSet } from "svelte/reactivity";
 	import {
 		AlertDialog,
@@ -59,37 +58,13 @@
 	import SessionCommandCredentialsDialog from "$lib/components/app/parts/SessionCommandCredentialsDialog.svelte";
 	import type { SessionCommandCredentialsDialogActions } from "$lib/components/app/parts/SessionCommandCredentialsDialog.svelte";
 	import { getSSHPort } from "$lib/api-config";
-	import type { AgentCommand } from "$lib/api-types";
+	import type { AgentCommand, Service } from "$lib/api-types";
 	import { openUrl } from "$lib/shell";
-	import type { IdeOption, JetBrainsIdeOption } from "$lib/app/ide-options";
-	import {
-		DESKTOP_SERVICE_ID,
-		VSCODE_SERVICE_ID,
-	} from "$lib/session/service-ids";
-	import {
-		closeAgentCommandCredentialDialog,
-		confirmAgentCommandCredentialDialog,
-		launchAgentCommandCredentialOAuthWizard,
-		refreshAgentCommandCredentialDialogCredentials,
-		runAgentCommand,
-		selectAgentCommandCredentialOption,
-		setAgentCommandCredentialCreateName,
-		setAgentCommandCredentialCreateSecret,
-		setAgentCommandCredentialValidityPreset,
-		setAgentCommandCredentialValidityUnit,
-		setAgentCommandCredentialValidityValue,
-	} from "$lib/context/commands/agent-command";
-	import { openFile } from "$lib/context/commands/file";
-	import { setPreferredIde } from "$lib/context/commands/preference";
-	import {
-		startService as startSessionService,
-		stopService as stopSessionService,
-	} from "$lib/context/commands/service";
-	import { ensureSessionState } from "$lib/context/commands/session";
-	import { submitThread } from "$lib/context/commands/thread";
-	import { useContext } from "$lib/context/context.svelte";
-	import type { ServiceItem } from "$lib/context/context.types";
-	import { buildUserMessageParts } from "$lib/session/domains/session-domain.helpers";
+	import type { IdeOption, JetBrainsIdeOption } from "$lib/shell/ide-options";
+	import { DESKTOP_SERVICE_ID, VSCODE_SERVICE_ID } from "$lib/service-ids";
+	import { useContext } from "$lib/context";
+	import { buildUserMessageParts } from "$lib/conversation-helpers";
+	import { isUiAgentCommand } from "$lib/agent-command-helpers";
 
 	type Props = {
 		sessionId: string;
@@ -110,43 +85,78 @@
 	};
 	const attemptedCommandIcons = new SvelteSet<string>();
 	const preferences = $derived(context.view.app.preferences);
-	const session = ensureSessionState(untrack(() => sessionId));
-	const sessionView = session.ui;
-	const serviceData = $derived(context.data.services.bySessionId[sessionId]);
-	const fileData = $derived(context.data.files.bySessionId[sessionId]);
-	const commandData = $derived(context.data.commands.bySessionId[sessionId]);
-	const commandView = $derived(context.view.sessions[sessionId]?.commands);
+	const sessionRecord = $derived(context.data.sessions.byId[sessionId] ?? null);
+	const currentSession = $derived(sessionRecord?.value ?? null);
+	const sessionView = $derived(context.view.sessions[sessionId] ?? null);
+	const activeViewKind = $derived(sessionView?.workspace.activeView ?? "chat");
+	const selectedThreadId = $derived(
+		context.view.selection.sessionId === sessionId
+			? context.view.selection.threadId
+			: null,
+	);
+	const selectedThread = $derived(
+		selectedThreadId
+			? (sessionRecord?.threads.byId[selectedThreadId]?.value ?? null)
+			: null,
+	);
 	const commandCredentialDialog = $derived(
-		commandView?.credentialDialog ?? null,
+		sessionView?.commands.credentialDialog ?? null,
 	);
 	const commandCredentialDialogActions: SessionCommandCredentialsDialogActions =
 		{
-			close: () => closeAgentCommandCredentialDialog(session.sessionId),
-			confirm: () => confirmAgentCommandCredentialDialog(session.sessionId),
+			close: () =>
+				void context.commands.agentCommands.closeCommandCredentialDialog(
+					sessionId,
+				),
+			confirm: () =>
+				void context.commands.agentCommands.confirmCommandCredentialDialog(
+					sessionId,
+				),
 			selectOption: (envVar, value) =>
-				selectAgentCommandCredentialOption(session.sessionId, envVar, value),
+				void context.commands.agentCommands.selectCommandCredentialOption(
+					sessionId,
+					envVar,
+					value,
+				),
 			setCreateCredentialName: (envVar, value) =>
-				setAgentCommandCredentialCreateName(session.sessionId, envVar, value),
+				void context.commands.agentCommands.setCommandCredentialCreateName(
+					sessionId,
+					envVar,
+					value,
+				),
 			setCreateCredentialSecret: (envVar, value) =>
-				setAgentCommandCredentialCreateSecret(session.sessionId, envVar, value),
+				void context.commands.agentCommands.setCommandCredentialCreateSecret(
+					sessionId,
+					envVar,
+					value,
+				),
 			setValidityPreset: (envVar, value) =>
-				setAgentCommandCredentialValidityPreset(
-					session.sessionId,
+				void context.commands.agentCommands.setCommandCredentialValidityPreset(
+					sessionId,
 					envVar,
 					value,
 				),
 			setValidityValue: (envVar, value) =>
-				setAgentCommandCredentialValidityValue(
-					session.sessionId,
+				void context.commands.agentCommands.setCommandCredentialValidityValue(
+					sessionId,
 					envVar,
 					value,
 				),
 			setValidityUnit: (envVar, value) =>
-				setAgentCommandCredentialValidityUnit(session.sessionId, envVar, value),
+				void context.commands.agentCommands.setCommandCredentialValidityUnit(
+					sessionId,
+					envVar,
+					value,
+				),
 			launchOAuthWizard: (envVar) =>
-				launchAgentCommandCredentialOAuthWizard(session.sessionId, envVar),
+				void context.commands.agentCommands.launchCommandCredentialOAuthWizard(
+					sessionId,
+					envVar,
+				),
 			refreshCredentials: () =>
-				refreshAgentCommandCredentialDialogCredentials(session.sessionId),
+				void context.commands.agentCommands.refreshCommandCredentialDialogCredentials(
+					sessionId,
+				),
 		};
 	let loadedCommandIcons = $state<Record<string, LucideIcon>>({});
 	let servicesPopoverOpen = $state(false);
@@ -158,17 +168,20 @@
 	let submittingLearnMorePrompt = $state(false);
 	const toolbarButtonTextClass = "text-sidebar-foreground/70";
 	const sessionServices = $derived.by(() =>
-		(serviceData?.items ?? []).filter(
-			(service) =>
-				service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
-		),
+		(sessionRecord?.services.allIds ?? [])
+			.map((id) => sessionRecord?.services.byId[id])
+			.filter((service): service is Service => Boolean(service))
+			.filter(
+				(service) =>
+					service.id !== DESKTOP_SERVICE_ID && service.id !== VSCODE_SERVICE_ID,
+			),
 	);
 	const hasRunningServices = $derived.by(() =>
 		sessionServices.some((service) => service.status === "running"),
 	);
 	const vscodeAvailable = $derived.by(() =>
-		(serviceData?.items ?? []).some(
-			(service) => service.id === VSCODE_SERVICE_ID,
+		(sessionRecord?.services.allIds ?? []).some(
+			(id) => sessionRecord?.services.byId[id]?.id === VSCODE_SERVICE_ID,
 		),
 	);
 
@@ -243,7 +256,7 @@
 	const selectedIdeOption = $derived.by(() => preferredIdeOption());
 
 	const ideLaunchUrl = $derived.by(() => {
-		const activeSessionId = session.current?.id;
+		const activeSessionId = currentSession?.id;
 		if (!activeSessionId || !selectedIdeOption) {
 			return null;
 		}
@@ -261,81 +274,61 @@
 	}
 
 	function toggleTerminal() {
-		if (sessionView.activeView.kind === "terminal") {
-			sessionView.openChat();
-			return;
-		}
-
-		sessionView.openTerminal();
+		void context.commands.navigation.toggleSelectedSessionView("terminal");
 	}
 
 	function toggleDesktop() {
-		if (sessionView.activeView.kind === "desktop") {
-			sessionView.openChat();
-			return;
-		}
-
-		sessionView.openDesktop();
+		void context.commands.navigation.toggleSelectedSessionView("desktop");
 	}
 
 	function toggleVSCode() {
-		if (sessionView.activeView.kind === "vscode") {
-			sessionView.openChat();
-			return;
-		}
-
-		sessionView.openVSCode();
+		void context.commands.navigation.toggleSelectedSessionView("vscode");
 	}
 
 	function toggleFiles() {
-		if (sessionView.activeView.kind === "file") {
-			sessionView.openChat();
+		if (activeViewKind === "file") {
+			void context.commands.navigation.toggleSelectedSessionView("file");
 			return;
 		}
 
-		void openFile(session.sessionId);
+		void context.commands.files.openFilesPanel(sessionId);
 	}
 
 	function toggleDiffReview() {
-		if (sessionView.activeView.kind === "diff-review") {
-			sessionView.openChat();
-			return;
-		}
-
-		sessionView.openDiffReview();
+		void context.commands.navigation.toggleSelectedSessionView("diff-review");
 	}
 
-	function hasServiceWebPage(service: ServiceItem): boolean {
+	function hasServiceWebPage(service: Service): boolean {
 		return (
 			typeof service.http === "number" || typeof service.https === "number"
 		);
 	}
 
-	function hasServiceLogs(service: ServiceItem): boolean {
+	function hasServiceLogs(service: Service): boolean {
 		return !service.passive;
 	}
 
-	function serviceIsMutating(service: ServiceItem): boolean {
+	function serviceIsMutating(service: Service): boolean {
 		return mutatingServiceIds[service.id] === true;
 	}
 
-	function serviceTransitioning(service: ServiceItem): boolean {
+	function serviceTransitioning(service: Service): boolean {
 		return service.status === "starting" || service.status === "stopping";
 	}
 
-	function canStartService(service: ServiceItem): boolean {
+	function canStartService(service: Service): boolean {
 		return !service.passive && service.status === "stopped";
 	}
 
-	function canStopService(service: ServiceItem): boolean {
+	function canStopService(service: Service): boolean {
 		return !service.passive && service.status === "running";
 	}
 
-	function canRestartService(service: ServiceItem): boolean {
+	function canRestartService(service: Service): boolean {
 		return !service.passive && service.status === "running";
 	}
 
-	function serviceStatusLabel(service: ServiceItem): string {
+	function serviceStatusLabel(service: Service): string {
 		if (service.passive) {
 			return "External";
 		}
@@ -354,7 +347,7 @@
 		return "Stopped";
 	}
 
-	function serviceStatusClass(service: ServiceItem): string {
+	function serviceStatusClass(service: Service): string {
 		if (service.passive || service.status === "running") {
 			return "bg-green-500";
 		}
@@ -367,8 +360,12 @@
 		return "bg-muted-foreground/40";
 	}
 
+	function serviceLabel(service: Service): string {
+		return service.name || service.id;
+	}
+
 	async function openServicePanel(
-		service: ServiceItem,
+		service: Service,
 		viewMode: "preview" | "logs",
 	) {
 		if (viewMode === "logs" && !hasServiceLogs(service)) {
@@ -377,7 +374,11 @@
 		if (viewMode === "preview" && canStartService(service)) {
 			await startService(service);
 		}
-		sessionView.openService(service.id, viewMode);
+		await context.commands.services.openServicePanel(
+			sessionId,
+			service.id,
+			viewMode,
+		);
 		servicesPopoverOpen = false;
 	}
 
@@ -391,38 +392,38 @@
 		mutatingServiceIds = next;
 	}
 
-	async function startService(service: ServiceItem) {
+	async function startService(service: Service) {
 		if (!canStartService(service) || serviceIsMutating(service)) {
 			return;
 		}
 		setServiceMutating(service.id, true);
 		try {
-			await startSessionService(sessionId, service.id);
+			await context.commands.services.startService(sessionId, service.id);
 		} finally {
 			setServiceMutating(service.id, false);
 		}
 	}
 
-	async function stopService(service: ServiceItem) {
+	async function stopService(service: Service) {
 		if (!canStopService(service) || serviceIsMutating(service)) {
 			return;
 		}
 		setServiceMutating(service.id, true);
 		try {
-			await stopSessionService(sessionId, service.id);
+			await context.commands.services.stopService(sessionId, service.id);
 		} finally {
 			setServiceMutating(service.id, false);
 		}
 	}
 
-	async function restartService(service: ServiceItem) {
+	async function restartService(service: Service) {
 		if (!canRestartService(service) || serviceIsMutating(service)) {
 			return;
 		}
 		setServiceMutating(service.id, true);
 		try {
-			await stopSessionService(sessionId, service.id);
-			await startSessionService(sessionId, service.id);
+			await context.commands.services.stopService(sessionId, service.id);
+			await context.commands.services.startService(sessionId, service.id);
 		} finally {
 			setServiceMutating(service.id, false);
 		}
@@ -442,12 +443,16 @@
 
 		submittingAddServicePrompt = true;
 		try {
-			await submitThread(
-				session.sessionId,
-				session.threads.selectedId ?? session.sessionId,
+			await context.commands.threads.sendMessage(
+				sessionId,
+				selectedThreadId ?? sessionId,
 				{
-					parts: buildUserMessageParts(
-						`Create a Discobot service for this workspace based on the user's description below.
+					messages: [
+						{
+							id: crypto.randomUUID(),
+							role: "user",
+							parts: buildUserMessageParts(
+								`Create a Discobot service for this workspace based on the user's description below.
 
 User description:
 ${description}
@@ -464,7 +469,9 @@ When you are done, respond with:
 - the full contents of the service file
 - how to start, restart, or stop it from Discobot when applicable
 - what web page, preview URL/path, or logs will be available`,
-					),
+							),
+						},
+					],
 				},
 			);
 			requestedServiceDescription = "";
@@ -483,13 +490,19 @@ When you are done, respond with:
 
 		submittingLearnMorePrompt = true;
 		try {
-			await submitThread(
-				session.sessionId,
-				session.threads.selectedId ?? session.sessionId,
+			await context.commands.threads.sendMessage(
+				sessionId,
+				selectedThreadId ?? sessionId,
 				{
-					parts: buildUserMessageParts(
-						"Please explain Discobot services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discobot/services` or `.discobot/hooks`.",
-					),
+					messages: [
+						{
+							id: crypto.randomUUID(),
+							role: "user",
+							parts: buildUserMessageParts(
+								"Please explain Discobot services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discobot/services` or `.discobot/hooks`.",
+							),
+						},
+					],
 				},
 			);
 			learnMoreDialogOpen = false;
@@ -501,7 +514,7 @@ When you are done, respond with:
 	}
 
 	const diffStats = $derived.by(() => {
-		const stats = fileData?.diffStats ?? {
+		const stats = sessionRecord?.diff.files?.stats ?? {
 			additions: 0,
 			deletions: 0,
 			filesChanged: 0,
@@ -512,7 +525,11 @@ When you are done, respond with:
 		return { additions, deletions, filesChanged };
 	});
 
-	const uiCommands = $derived.by(() => commandData?.visibleItems ?? []);
+	const uiCommands = $derived.by(() =>
+		(sessionRecord?.commands.allIds ?? [])
+			.map((id) => sessionRecord?.commands.byId[id])
+			.filter(isUiAgentCommand),
+	);
 	const primaryCommand = $derived.by(() => uiCommands[0] ?? null);
 	const secondaryCommands = $derived.by(() => uiCommands.slice(1));
 	const commandGroups = $derived.by(() => {
@@ -571,9 +588,9 @@ When you are done, respond with:
 		}
 	});
 	const operationState = $derived.by(() => {
-		const isPending = session.current?.commitStatus === "pending";
+		const isPending = currentSession?.commitStatus === "pending";
 		const activeCommandName = normalizeActiveCommandName(
-			session.threads.selected?.activeCommand,
+			selectedThread?.activeCommand,
 		);
 		const showBusy = activeCommandName !== null || isPending;
 		const activeCommand =
@@ -597,11 +614,10 @@ When you are done, respond with:
 	});
 	const operationDisabled = $derived.by(
 		() =>
-			!session.current ||
+			!currentSession ||
 			!primaryCommand ||
 			operationState.showBusy ||
-			(commandData?.isSubmitting ?? false) ||
-			(commandView?.credentialDialog.open ?? false),
+			(commandCredentialDialog?.open ?? false),
 	);
 
 	function commandLabel(command: AgentCommand): string {
@@ -644,15 +660,19 @@ When you are done, respond with:
 		if (!primaryCommand) {
 			return;
 		}
-		void runAgentCommand(session.sessionId, primaryCommand).catch((error) => {
-			console.error(`Failed to start ${primaryCommand.name}:`, error);
-		});
+		void context.commands.agentCommands
+			.runAgentCommand(sessionId, primaryCommand)
+			.catch((error) => {
+				console.error(`Failed to start ${primaryCommand.name}:`, error);
+			});
 	}
 
 	function handleCommand(command: AgentCommand) {
-		void runAgentCommand(session.sessionId, command).catch((error) => {
-			console.error(`Failed to start ${command.name}:`, error);
-		});
+		void context.commands.agentCommands
+			.runAgentCommand(sessionId, command)
+			.catch((error) => {
+				console.error(`Failed to start ${command.name}:`, error);
+			});
 	}
 </script>
 
@@ -665,9 +685,7 @@ When you are done, respond with:
 			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md bg-background p-0.5 shadow-xs"
 		>
 			<Button
-				variant={sessionView.activeView.kind === "terminal"
-					? "secondary"
-					: "ghost"}
+				variant={activeViewKind === "terminal" ? "secondary" : "ghost"}
 				size="xs"
 				onclick={toggleTerminal}
 				class={toolbarButtonTextClass}
@@ -680,9 +698,7 @@ When you are done, respond with:
 				{/if}
 			</Button>
 			<Button
-				variant={sessionView.activeView.kind === "desktop"
-					? "secondary"
-					: "ghost"}
+				variant={activeViewKind === "desktop" ? "secondary" : "ghost"}
 				size="xs"
 				onclick={toggleDesktop}
 				class={toolbarButtonTextClass}
@@ -695,9 +711,7 @@ When you are done, respond with:
 				{/if}
 			</Button>
 			<Button
-				variant={sessionView.activeView.kind === "vscode"
-					? "secondary"
-					: "ghost"}
+				variant={activeViewKind === "vscode" ? "secondary" : "ghost"}
 				size="xs"
 				onclick={toggleVSCode}
 				disabled={!vscodeAvailable}
@@ -711,7 +725,7 @@ When you are done, respond with:
 				{/if}
 			</Button>
 			<Button
-				variant={sessionView.activeView.kind === "file" ? "secondary" : "ghost"}
+				variant={activeViewKind === "file" ? "secondary" : "ghost"}
 				size="xs"
 				onclick={toggleFiles}
 				class={toolbarButtonTextClass}
@@ -725,9 +739,7 @@ When you are done, respond with:
 			</Button>
 			{#if diffStats.filesChanged > 0}
 				<Button
-					variant={sessionView.activeView.kind === "diff-review"
-						? "secondary"
-						: "ghost"}
+					variant={activeViewKind === "diff-review" ? "secondary" : "ghost"}
 					size="xs"
 					onclick={toggleDiffReview}
 					class={`gap-1 ${toolbarButtonTextClass}`}
@@ -745,9 +757,7 @@ When you are done, respond with:
 					{#snippet child({ props })}
 						<Button
 							{...props}
-							variant={sessionView.activeView.kind === "services"
-								? "secondary"
-								: "ghost"}
+							variant={activeViewKind === "services" ? "secondary" : "ghost"}
 							size="xs"
 							class={`gap-1.5 ${toolbarButtonTextClass}`}
 							aria-label="Run services"
@@ -811,7 +821,7 @@ When you are done, respond with:
 									<div class="min-w-0 flex-1">
 										<div class="flex min-w-0 items-center gap-2">
 											<span class="truncate text-sm font-medium">
-												{service.label}
+												{serviceLabel(service)}
 											</span>
 											{#if !service.passive}
 												<span
@@ -836,7 +846,7 @@ When you are done, respond with:
 											variant="ghost"
 											size="icon-xs"
 											disabled={!hasServiceWebPage(service)}
-											aria-label={`Open ${service.label} web page`}
+											aria-label={`Open ${serviceLabel(service)} web page`}
 											title={hasServiceWebPage(service)
 												? "Open web page"
 												: "No web page"}
@@ -848,7 +858,7 @@ When you are done, respond with:
 											<Button
 												variant="ghost"
 												size="icon-xs"
-												aria-label={`Open ${service.label} logs`}
+												aria-label={`Open ${serviceLabel(service)} logs`}
 												title="Open logs"
 												onclick={() => void openServicePanel(service, "logs")}
 											>
@@ -860,7 +870,7 @@ When you are done, respond with:
 													size="icon-xs"
 													disabled={serviceIsMutating(service) ||
 														serviceTransitioning(service)}
-													aria-label={`Start ${service.label}`}
+													aria-label={`Start ${serviceLabel(service)}`}
 													title="Start"
 													onclick={() => void startService(service)}
 												>
@@ -883,7 +893,7 @@ When you are done, respond with:
 													size="icon-xs"
 													disabled={serviceIsMutating(service) ||
 														serviceTransitioning(service)}
-													aria-label={`Restart ${service.label}`}
+													aria-label={`Restart ${serviceLabel(service)}`}
 													title="Restart"
 													onclick={() => void restartService(service)}
 												>
@@ -898,7 +908,7 @@ When you are done, respond with:
 													size="icon-xs"
 													disabled={serviceIsMutating(service) ||
 														serviceTransitioning(service)}
-													aria-label={`Stop ${service.label}`}
+													aria-label={`Stop ${serviceLabel(service)}`}
 													title="Stop"
 													onclick={() => void stopService(service)}
 												>
@@ -923,9 +933,7 @@ When you are done, respond with:
 			class="desktop-no-drag inline-flex items-center overflow-hidden rounded-md bg-background p-0.5 shadow-xs"
 		>
 			<Button
-				variant={sessionView.activeView.kind === "diff-review"
-					? "secondary"
-					: "ghost"}
+				variant={activeViewKind === "diff-review" ? "secondary" : "ghost"}
 				size="xs"
 				onclick={toggleDiffReview}
 				class={`gap-1 ${toolbarButtonTextClass}`}
@@ -940,7 +948,7 @@ When you are done, respond with:
 		</div>
 	{/if}
 
-	{#if session.current && primaryCommand}
+	{#if currentSession && primaryCommand}
 		{#if operationState.showSplitButton}
 			<DropdownMenu>
 				<div
@@ -1082,7 +1090,8 @@ When you are done, respond with:
 			</DropdownMenuLabel>
 			{#each standardIdeOptions as option, __key2 (__key2)}
 				<DropdownMenuItem
-					onclick={() => setPreferredIde(option.id)}
+					onclick={() =>
+						void context.commands.preferences.setPreferredIde(option.id)}
 					class="justify-between gap-3"
 				>
 					<span class="flex items-center gap-2">
@@ -1121,7 +1130,8 @@ When you are done, respond with:
 				<DropdownMenuSubContent class="min-w-[13rem]">
 					{#each jetbrainsIdeOptions as option, __key3 (__key3)}
 						<DropdownMenuItem
-							onclick={() => setPreferredIde(option.id)}
+							onclick={() =>
+								void context.commands.preferences.setPreferredIde(option.id)}
 							class="justify-between gap-3"
 						>
 							<span class="flex items-center gap-2">

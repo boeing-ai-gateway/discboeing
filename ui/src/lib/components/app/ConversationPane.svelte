@@ -5,13 +5,17 @@
 	import ListTreeIcon from "@lucide/svelte/icons/list-tree";
 	import { tick } from "svelte";
 	import { api } from "$lib/api-client";
-	import { isSessionTransitioningStatus } from "$lib/api-constants";
+	import {
+		canLoadSessionThreads,
+		isSessionTransitioningStatus,
+	} from "$lib/api-constants";
 	import type {
 		BrowserEventChunkData,
 		BrowserEventFile,
 		ChatMessage,
+		SessionThreadStatus,
+		Thread,
 	} from "$lib/api-types";
-	import type { ChatWidthMode } from "$lib/app/app-context.types";
 	import type {
 		AssistantConversationPaneRenderablePart,
 		HookFailureMessageMetadata,
@@ -64,26 +68,21 @@
 		CollapsibleTrigger,
 	} from "$lib/components/ui/collapsible";
 	import { getErrorMessage } from "$lib/error-message";
-	import { useContext } from "$lib/context/context.svelte";
-	import { openFile } from "$lib/context/commands/file";
-	import {
-		refreshThread,
-		setConversationScrollTop,
-		addThreadPendingComment,
-		submitThread,
-	} from "$lib/context/commands/thread";
+	import { useContext } from "$lib/context";
 	import type {
-		SessionContextValue,
-		ThreadContextValue,
+		ChatWidthMode,
 		ConversationComment,
-	} from "$lib/session/session-context.types";
+	} from "$lib/context/context.types";
+	import type { ResourceStatus } from "$lib/context/cache";
+	import type { AsyncStatus } from "$lib/resource/types";
+	import { isThreadSnapshotRunning } from "$lib/session-status-helpers";
 	import {
 		buildUserMessageParts,
 		formatConversationComments,
 		getTodoWriteEntries,
-	} from "$lib/session/domains/session-domain.helpers";
+	} from "$lib/conversation-helpers";
 
-	type ConversationPaneStatus = ThreadContextValue["status"] | "streaming";
+	type ConversationPaneStatus = AsyncStatus | "streaming";
 	type ConversationPaneErrorBannerKey = "session" | "thread";
 	type BrowserActivityViewMode = "simple" | "details";
 	type BrowserTimelineStep = {
@@ -94,8 +93,8 @@
 	};
 
 	type Props = {
-		session?: SessionContextValue;
-		thread?: ThreadContextValue;
+		sessionId?: string;
+		threadId?: string;
 		contentTopPadding?: number;
 		messages?: ChatMessage[];
 		status?: ConversationPaneStatus;
@@ -113,8 +112,8 @@
 	const BROWSER_SCREENSHOT_RETRY_DELAY_MS = 200;
 
 	let {
-		session,
-		thread,
+		sessionId,
+		threadId,
 		contentTopPadding = 0,
 		messages,
 		status,
@@ -129,11 +128,26 @@
 
 	const context = useContext();
 	const activeSessionId = $derived.by(
-		() => session?.sessionId ?? context.view.app.selection.sessionId ?? null,
+		() => sessionId ?? context.view.selection.sessionId ?? null,
 	);
-	const activeThreadId = $derived.by(() => thread?.threadId ?? null);
+	const activeThreadId = $derived.by(
+		() => threadId ?? context.view.selection.threadId ?? null,
+	);
+	const sessionRecord = $derived.by(() =>
+		activeSessionId
+			? (context.data.sessions.byId[activeSessionId] ?? null)
+			: null,
+	);
+	const activeSession = $derived.by(() => sessionRecord?.value ?? null);
+	const threadRecord = $derived.by(() =>
+		activeThreadId
+			? (sessionRecord?.threads.byId[activeThreadId] ?? null)
+			: null,
+	);
+	const thread = $derived.by(() => threadRecord?.value ?? null);
+	const threadContent = $derived.by(() => threadRecord?.content ?? null);
 	const conversationMessages = $derived.by(
-		() => messages ?? thread?.messages ?? [],
+		() => messages ?? threadContent?.messages ?? [],
 	);
 	const visibleConversationMessages = $derived.by(() =>
 		conversationMessages.filter(
@@ -141,14 +155,15 @@
 		),
 	);
 	const conversationStatus = $derived.by(() => {
-		const nextStatus = status ?? thread?.status ?? "ready";
+		const nextStatus =
+			status ?? getThreadContentStatus(threadContent?.status) ?? "ready";
 		return nextStatus === "streaming" ? "ready" : nextStatus;
 	});
 	const conversationTurns = $derived.by(() =>
 		groupMessagesIntoTurns(visibleConversationMessages),
 	);
 	const browserEventsByTurnId = $derived.by(
-		() => thread?.browserEventsByTurnId ?? {},
+		() => threadContent?.browserEventsByTurnId ?? {},
 	);
 	const previousTodoEntriesByToolCallId = $derived.by(() => {
 		const entriesByToolCallId: Record<
@@ -190,22 +205,30 @@
 	const isStreaming = $derived.by(
 		() =>
 			isStreamingOverride ??
-			(status === "streaming" ? true : (thread?.isStreaming ?? false)),
+			(status === "streaming"
+				? true
+				: getThreadIsStreaming(
+						thread,
+						threadContent?.isStreaming ?? false,
+						activeSession?.threadStatus,
+					)),
 	);
 	const sessionError = $derived.by(() =>
-		getErrorMessage(sessionErrorOverride ?? session?.current?.errorMessage),
+		getErrorMessage(sessionErrorOverride ?? activeSession?.errorMessage),
 	);
 	const shouldShowSessionError = $derived.by(
-		() => !isSessionTransitioningStatus(session?.current?.sandboxStatus),
+		() => !isSessionTransitioningStatus(activeSession?.sandboxStatus),
 	);
 	const visibleSessionError = $derived.by(() =>
 		shouldShowSessionError ? sessionError : null,
 	);
 	const threadError = $derived.by(() =>
-		getErrorMessage(threadErrorOverride ?? thread?.error),
+		getErrorMessage(
+			threadErrorOverride ?? threadContent?.error ?? thread?.errorMessage,
+		),
 	);
 	const canShowComposer = $derived.by(
-		() => showComposer && Boolean(session) && Boolean(thread),
+		() => showComposer && Boolean(activeSessionId) && Boolean(activeThreadId),
 	);
 	const latestConversationMessageId = $derived.by(
 		() => visibleConversationMessages.at(-1)?.id ?? null,
@@ -255,6 +278,52 @@
 	>({});
 	let lastRestoredVisibleThreadId = $state<string | null>(null);
 
+	function getThreadContentStatus(
+		status: ResourceStatus | null | undefined,
+	): AsyncStatus | null {
+		switch (status?.state) {
+			case "loading":
+			case "refreshing":
+				return "loading";
+			case "ready":
+				return "ready";
+			case "error":
+				return "error";
+			case "idle":
+			case "missing":
+				return "idle";
+			default:
+				return null;
+		}
+	}
+
+	function isSessionThreadStatusRunningForThread(
+		status: SessionThreadStatus | null | undefined,
+		threadId: string | null,
+	): boolean {
+		return Boolean(
+			threadId && status?.status === "running" && status.threadId === threadId,
+		);
+	}
+
+	function getThreadIsStreaming(
+		thread: Thread | null,
+		isContentStreaming: boolean,
+		sessionThreadStatus: SessionThreadStatus | null | undefined,
+	): boolean {
+		return (
+			isContentStreaming ||
+			isThreadSnapshotRunning(thread) ||
+			isSessionThreadStatusRunningForThread(
+				sessionThreadStatus,
+				activeThreadId,
+			) ||
+			(!canLoadSessionThreads(activeSession?.sandboxStatus) &&
+				(isSessionTransitioningStatus(activeSession?.sandboxStatus) ||
+					conversationMessages.some((message) => message.provisional === true)))
+		);
+	}
+
 	async function openHookPreview(metadata: HookFailureMessageMetadata) {
 		hookPreviewMetadata = metadata;
 		hookPreviewContent = "";
@@ -286,7 +355,7 @@
 			return;
 		}
 		if (activeSessionId) {
-			await openFile(activeSessionId, hookPath);
+			await context.commands.files.openFile(activeSessionId, hookPath);
 		}
 		hookPreviewOpen = false;
 	}
@@ -924,16 +993,20 @@
 	async function submitSelectionComment(
 		comment: Omit<ConversationComment, "id">,
 	) {
-		if (!thread) {
+		if (!activeThreadId) {
 			return;
 		}
 		const text = formatConversationComments([comment]);
 		if (!activeSessionId) {
 			return;
 		}
-		await submitThread(activeSessionId, thread.threadId, {
-			parts: buildUserMessageParts(text),
-		});
+		await context.commands.threadComposer.submitThread(
+			activeSessionId,
+			activeThreadId,
+			{
+				parts: buildUserMessageParts(text),
+			},
+		);
 	}
 
 	function getErrorBannerToggleLabel(
@@ -949,7 +1022,7 @@
 	function getErrorBannerAction(
 		key: ConversationPaneErrorBannerKey,
 	): { label: string; run: () => void } | null {
-		if (key !== "thread" || !thread) {
+		if (key !== "thread" || !activeThreadId) {
 			return null;
 		}
 
@@ -957,7 +1030,10 @@
 			label: "Retry",
 			run: () => {
 				if (activeSessionId) {
-					void refreshThread(activeSessionId, thread.threadId);
+					void context.commands.threadComposer.refreshThread(
+						activeSessionId,
+						activeThreadId,
+					);
 				}
 			},
 		};
@@ -987,7 +1063,7 @@
 		if (!element || !activeThreadId || !activeSessionId) {
 			return;
 		}
-		setConversationScrollTop(
+		void context.commands.threadComposer.setConversationScrollTop(
 			activeSessionId,
 			activeThreadId,
 			element.scrollTop,
@@ -1501,7 +1577,14 @@
 				previousTodoEntries={part.toolName === "TodoWrite"
 					? (previousTodoEntriesByToolCallId[part.toolCallId] ?? [])
 					: undefined}
-				onToolApprovalResponse={thread?.addToolApprovalResponse}
+				onToolApprovalResponse={activeSessionId && activeThreadId
+					? (payload) =>
+							void context.commands.threadComposer.addToolApprovalResponse(
+								activeSessionId,
+								activeThreadId,
+								payload,
+							)
+					: undefined}
 				defaultOpen={toolDefaultOpen}
 			/>
 		{/if}
@@ -2072,7 +2155,11 @@
 					scrollContainer={viewport}
 					onQueueComment={(comment) => {
 						if (activeSessionId && activeThreadId) {
-							addThreadPendingComment(activeSessionId, activeThreadId, comment);
+							void context.commands.threadComposer.addThreadPendingComment(
+								activeSessionId,
+								activeThreadId,
+								comment,
+							);
 						}
 					}}
 					onSubmitComment={submitSelectionComment}
@@ -2127,10 +2214,10 @@
 			error={browserScreenshotPreviewError}
 		/>
 
-		{#if canShowComposer && session && thread}
+		{#if canShowComposer && activeSessionId && activeThreadId}
 			<ConversationComposer
-				{session}
-				{thread}
+				sessionId={activeSessionId}
+				threadId={activeThreadId}
 				onContainerChange={(element) => (composerContainer = element)}
 			/>
 		{/if}

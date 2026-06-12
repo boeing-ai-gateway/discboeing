@@ -8,8 +8,9 @@
 	import PanelLeftIcon from "@lucide/svelte/icons/panel-left";
 	import PinIcon from "@lucide/svelte/icons/pin";
 	import PlusIcon from "@lucide/svelte/icons/plus";
+	import { generateId } from "ai";
 	import { Switch } from "$lib/components/ui/switch";
-	import type { Thread, Workspace } from "$lib/api-types";
+	import type { Session, Thread, Workspace } from "$lib/api-types";
 	import AppSessionStatus from "$lib/components/app/AppSessionStatus.svelte";
 	import AppThreadStatus from "$lib/components/app/AppThreadStatus.svelte";
 	import AppSidebarDeleteDialog from "$lib/components/app/parts/AppSidebarDeleteDialog.svelte";
@@ -22,27 +23,7 @@
 		DropdownMenuItem,
 		DropdownMenuTrigger,
 	} from "$lib/components/ui/dropdown-menu";
-	import {
-		setSidebarAllGroupedByWorkspace,
-		setSidebarAllOpen,
-		setSidebarRecentOpen,
-	} from "$lib/context/commands/preference";
-	import {
-		createThread,
-		deleteSession,
-		deleteThread,
-		openThread,
-		renameSession,
-		renameThread,
-		selectSession,
-		createSession,
-		stopSession,
-	} from "$lib/context/commands/session";
-	import {
-		deleteWorkspace,
-		renameWorkspace,
-	} from "$lib/context/commands/workspace";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
 
 	type Props = {
 		onThreadSelect?: () => void;
@@ -65,20 +46,28 @@
 
 	const context = useContext();
 	const preferences = $derived(context.view.app.preferences);
-	const sessionItems = $derived(context.data.sessions.items);
-	const sessionsById = $derived(context.data.sessions.byId);
-	const workspacesById = $derived(context.data.workspaces.byId);
-	const selectedSessionId = $derived(context.view.app.selection.sessionId);
-	const selectedThreadId = $derived(context.view.app.selection.threadId);
-	const pendingSessionId = $derived(
-		context.view.app.selection.pendingSessionId,
+	const sessionItems = $derived(
+		context.data.sessions.allIds
+			.map((sessionId) => context.data.sessions.byId[sessionId]?.value ?? null)
+			.filter((session): session is Session => session !== null),
 	);
+	const sessionsById = $derived(
+		Object.fromEntries(
+			Object.entries(context.data.sessions.byId)
+				.map(([sessionId, record]) => [sessionId, record.value] as const)
+				.filter((entry): entry is [string, Session] => entry[1] !== null),
+		),
+	);
+	const workspacesById = $derived(context.data.workspaces.byId);
+	const selectedSessionId = $derived(context.view.selection.sessionId);
+	const selectedThreadId = $derived(context.view.selection.threadId);
+	const pendingSessionId = $derived(context.view.selection.pendingSessionId);
 	type SidebarSession = (typeof sessionItems)[number];
 	type SessionGroup = {
 		key: string;
 		workspaceId: string | null;
 		label: string;
-		sourceType: "local" | "git" | "managed";
+		sourceType: string;
 		sessions: SidebarSession[];
 	};
 	type TaskThreadMetadata = {
@@ -186,14 +175,25 @@
 	}
 
 	function visibleThreadsForSession(sessionId: string): Thread[] {
-		return context.data.threads.bySessionId[sessionId]?.items ?? [];
+		const threads = context.data.sessions.byId[sessionId]?.threads;
+		if (!threads) {
+			return [];
+		}
+		return threads.allIds
+			.map((threadId) => threads.byId[threadId]?.value)
+			.filter(
+				(thread): thread is Thread => thread !== null && thread !== undefined,
+			);
 	}
 
 	function threadById(sessionId: string | null, threadId: string) {
 		if (!sessionId) {
 			return null;
 		}
-		return context.data.threads.bySessionId[sessionId]?.byId[threadId] ?? null;
+		return (
+			context.data.sessions.byId[sessionId]?.threads.byId[threadId]?.value ??
+			null
+		);
 	}
 
 	function sessionHasNestedThreads(sessionId: string) {
@@ -245,19 +245,19 @@
 	}
 
 	function handleSelectSession(sessionId: string) {
-		selectSession(sessionId);
+		void context.commands.navigation.selectSession(sessionId);
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
 
 	function handleSelectRecentThread(sessionId: string, threadId: string) {
-		openThread(sessionId, threadId);
+		void context.commands.navigation.openThread(sessionId, threadId);
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
 
 	function handleStartNewSession() {
-		createSession();
+		void context.commands.navigation.startNewSession();
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
@@ -267,17 +267,20 @@
 			return;
 		}
 
-		selectSession(sessionId);
-		const createdThreadId = await createThread(sessionId);
-		if (!createdThreadId) {
-			return;
-		}
+		await context.commands.navigation.selectSession(sessionId);
+		const createdThreadId = generateId();
+		await context.commands.threads.createThread(
+			sessionId,
+			{ id: createdThreadId },
+			{ wait: true },
+		);
+		await context.commands.navigation.openThread(sessionId, createdThreadId);
 		closeFloatingSidebar();
 		onThreadSelect?.();
 	}
 
 	async function handleStopSession(sessionId: string) {
-		await stopSession(sessionId);
+		await context.commands.sessions.stopSession(sessionId);
 	}
 
 	function openRenameDialog(sessionId: string) {
@@ -319,11 +322,15 @@
 			return;
 		}
 		renamingSession = true;
-		const renamed = await renameSession(renameSessionId, renameDraft);
+		await context.commands.sessions.renameSession(
+			renameSessionId,
+			renameDraft,
+			{
+				wait: true,
+			},
+		);
 		renamingSession = false;
-		if (renamed) {
-			closeRenameDialog();
-		}
+		closeRenameDialog();
 	}
 
 	async function handleRenameThread() {
@@ -331,15 +338,14 @@
 			return;
 		}
 		renamingThread = true;
-		const renamed = await renameThread(
+		await context.commands.threads.renameThread(
 			selectedSessionId,
 			renameThreadId,
 			renameThreadDraft,
+			{ wait: true },
 		);
 		renamingThread = false;
-		if (renamed) {
-			closeRenameThreadDialog();
-		}
+		closeRenameThreadDialog();
 	}
 
 	function openDeleteDialog(sessionId: string) {
@@ -375,11 +381,11 @@
 			return;
 		}
 		deletingSession = true;
-		const deleted = await deleteSession(deleteSessionId);
+		await context.commands.sessions.deleteSession(deleteSessionId, {
+			wait: true,
+		});
 		deletingSession = false;
-		if (deleted) {
-			closeDeleteDialog();
-		}
+		closeDeleteDialog();
 	}
 
 	async function handleDeleteThread() {
@@ -387,11 +393,15 @@
 			return;
 		}
 		deletingThread = true;
-		const deleted = await deleteThread(selectedSessionId, deleteThreadId);
+		await context.commands.threads.deleteThread(
+			selectedSessionId,
+			deleteThreadId,
+			{
+				wait: true,
+			},
+		);
 		deletingThread = false;
-		if (deleted) {
-			closeDeleteThreadDialog();
-		}
+		closeDeleteThreadDialog();
 	}
 
 	function deleteDialogSessionName() {
@@ -472,7 +482,10 @@
 			return;
 		}
 		renamingWorkspace = true;
-		await renameWorkspace(renameWorkspaceId, renameWorkspaceDraft);
+		await context.commands.workspaces.renameWorkspace(
+			renameWorkspaceId,
+			renameWorkspaceDraft,
+		);
 		renamingWorkspace = false;
 		closeRenameWorkspaceDialog();
 	}
@@ -496,7 +509,7 @@
 			return;
 		}
 		deletingWorkspace = true;
-		await deleteWorkspace(deleteWorkspaceId);
+		await context.commands.workspaces.deleteWorkspace(deleteWorkspaceId);
 		deletingWorkspace = false;
 		closeDeleteWorkspaceDialog();
 	}
@@ -794,7 +807,9 @@
 						checked={preferences.sidebarAllGroupedByWorkspace}
 						class="data-[state=checked]:bg-muted data-[state=unchecked]:bg-muted/70 [&_[data-slot=switch-thumb]]:bg-foreground dark:[&_[data-slot=switch-thumb]]:bg-foreground focus-visible:ring-muted-foreground/20"
 						onCheckedChange={(checked) =>
-							setSidebarAllGroupedByWorkspace(checked === true)}
+							void context.commands.preferences.setSidebarAllGroupedByWorkspace(
+								checked === true,
+							)}
 					/>
 				</label>
 			{/if}
@@ -832,7 +847,8 @@
 					{#if showRecentThreads}
 						<Collapsible.Root
 							open={preferences.sidebarRecentOpen}
-							onOpenChange={setSidebarRecentOpen}
+							onOpenChange={(open) =>
+								void context.commands.preferences.setSidebarRecentOpen(open)}
 						>
 							<Collapsible.Trigger
 								class="flex w-full items-center gap-1 px-2 pb-1 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground"
@@ -862,7 +878,8 @@
 						{#if showAllSessionsHeader}
 							<Collapsible.Root
 								open={preferences.sidebarAllOpen}
-								onOpenChange={setSidebarAllOpen}
+								onOpenChange={(open) =>
+									void context.commands.preferences.setSidebarAllOpen(open)}
 							>
 								<Collapsible.Trigger
 									class="flex w-full items-center gap-1 px-2 pb-1 pt-2 text-xs font-medium uppercase tracking-[0.16em] text-sidebar-foreground/70 transition-colors hover:text-sidebar-accent-foreground"

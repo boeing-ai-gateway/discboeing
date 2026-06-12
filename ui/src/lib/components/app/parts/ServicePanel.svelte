@@ -15,7 +15,7 @@
 	import XCircleIcon from "@lucide/svelte/icons/x-circle";
 	import { tick, untrack } from "svelte";
 	import { getApiRootBase } from "$lib/api-config";
-	import type { ServiceOutputEvent } from "$lib/api-types";
+	import type { Service, ServiceOutputEvent } from "$lib/api-types";
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
 	import { Button } from "$lib/components/ui/button";
 	import { Input } from "$lib/components/ui/input";
@@ -23,9 +23,25 @@
 		ToggleGroup,
 		ToggleGroupItem,
 	} from "$lib/components/ui/toggle-group";
-	import type { ServiceItem } from "$lib/session/session-context.types";
 	import { openUrl } from "$lib/shell";
 	import { cn } from "$lib/utils";
+
+	type ServicePanelService = Pick<
+		Service,
+		| "id"
+		| "description"
+		| "order"
+		| "http"
+		| "https"
+		| "urlPath"
+		| "status"
+		| "passive"
+		| "exitCode"
+		| "localhost"
+	> & {
+		label: string;
+		target: string;
+	};
 
 	type Props = {
 		activeServiceId: string | null;
@@ -37,7 +53,7 @@
 		onBindLocalhost: (serviceId: string, port: number) => Promise<void>;
 		onUnbindLocalhost: (serviceId: string) => Promise<void>;
 		onToggleDockMaximized: () => void;
-		services: ServiceItem[];
+		services: ServicePanelService[];
 		sessionId: string;
 		requestedViewMode?: ViewMode;
 		logEvents: RenderedServiceOutputEvent[];
@@ -96,7 +112,7 @@
 	let isMutatingLocalhost = $state(false);
 	let localhostPortInput = $state("");
 	let localhostError = $state<string | null>(null);
-	let previousStatus = $state<ServiceItem["status"]>("stopped");
+	let previousStatus = $state<ServicePanelService["status"]>("stopped");
 
 	const service = $derived.by(
 		() =>
@@ -179,11 +195,11 @@
 		dockMaximized ? "Restore split view" : "Maximize service panel",
 	);
 
-	function hasHttpService(value: ServiceItem): boolean {
+	function hasHttpService(value: ServicePanelService): boolean {
 		return typeof value.http === "number" || typeof value.https === "number";
 	}
 
-	function getServiceTargetPort(value: ServiceItem): number | null {
+	function getServiceTargetPort(value: ServicePanelService): number | null {
 		if (typeof value.https === "number") {
 			return value.https;
 		}
@@ -203,7 +219,7 @@
 
 	function buildServiceBaseUrl(
 		nextSessionId: string,
-		nextService: ServiceItem,
+		nextService: ServicePanelService,
 	): string {
 		if (!hasHttpService(nextService) || typeof window === "undefined") {
 			return "";

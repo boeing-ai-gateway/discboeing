@@ -70,17 +70,5 @@ func (h *Handler) ListWorkspaceChangeCommits(w http.ResponseWriter, _ *http.Requ
 		return
 	}
 
-	commits := make([]api.WorkspaceChangeCommit, 0, len(result.Commits))
-	for _, commit := range result.Commits {
-		commits = append(commits, api.WorkspaceChangeCommit{
-			CreatedAt: commit.CreatedAt,
-			Hash:      commit.Hash,
-			DiffStat: api.DiffStats{
-				FilesChanged: commit.DiffStat.FilesChanged,
-				Additions:    commit.DiffStat.Additions,
-				Deletions:    commit.DiffStat.Deletions,
-			},
-		})
-	}
-	h.JSON(w, http.StatusOK, api.WorkspaceChangeCommitsResponse{Commits: commits})
+	h.JSON(w, http.StatusOK, api.WorkspaceChangeCommitsResponse(*result))
 }

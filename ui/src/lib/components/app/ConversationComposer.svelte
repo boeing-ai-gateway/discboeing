@@ -28,10 +28,6 @@
 		PopoverContent,
 		PopoverTrigger,
 	} from "$lib/components/ui/popover";
-	import {
-		moveComposerDraft,
-		resolveComposerDraftStorageKey,
-	} from "$lib/composer-draft-storage";
 	import type {
 		ComposerAttachment,
 		ConversationComposerTextareaHandle,
@@ -39,60 +35,39 @@
 		WorkspaceSelectorHandle,
 	} from "$lib/components/app/conversation-composer.types";
 	import type {
+		ChatMessage,
+		AgentCommand,
 		ModelInfo,
 		SandboxProviderInstance,
+		Thread,
 		UpdateQueuedPromptRequest,
 	} from "$lib/api-types";
-	import type {
-		ConversationComment,
-		SessionContextValue,
-		ThreadContextValue,
-	} from "$lib/session/session-context.types";
+	import type { ConversationComment } from "$lib/context/context.types";
 	import {
 		normalizeThreadComposerReasoning,
 		normalizeThreadComposerServiceTier,
 		parseComposerModelSelection,
-	} from "$lib/thread/thread-composer.helpers";
+	} from "$lib/thread-composer-helpers";
 	import {
 		buildUserMessageParts,
 		createUserMessageAttachment,
 		formatConversationComments,
-	} from "$lib/session/domains/session-domain.helpers";
+		getPendingQuestionApprovalId,
+	} from "$lib/conversation-helpers";
+	import { useContext } from "$lib/context";
 	import {
-		openCredentialsDialog,
-		openSettingsDialog,
-	} from "$lib/context/commands/dialog";
+		canLoadSessionThreads,
+		isSessionTransitioningStatus,
+	} from "$lib/api-constants";
+	import { isThreadSnapshotRunning } from "$lib/session-status-helpers";
 	import {
-		rerunHook,
-		setHookPaused,
-		setHooksPaused,
-	} from "$lib/context/commands/hook";
-	import {
-		addPromptToHistory,
-		pinPrompt,
-		removePromptFromHistory,
-		unpinPrompt,
-	} from "$lib/context/commands/preference";
-	import { openThread } from "$lib/context/commands/session";
-	import {
-		cancelThread,
-		clearComposerDraft,
-		clearThreadNextComposerValues,
-		clearThreadPendingComments,
-		deleteQueuedPrompt,
-		removeThreadPendingComment,
-		setComposerDraft,
-		setThreadNextModelId,
-		setThreadNextReasoning,
-		setThreadNextServiceTier,
-		submitThread,
-		updateQueuedPrompt,
-	} from "$lib/context/commands/thread";
-	import { useContext } from "$lib/context/context.svelte";
+		getPendingWorkspaceRequiresSourceInput,
+		getPendingWorkspaceSourceIsValid,
+	} from "$lib/pending-workspace-helpers";
 
 	type Props = {
-		session: SessionContextValue;
-		thread: ThreadContextValue;
+		sessionId: string;
+		threadId: string;
 		onContainerChange?: (element: HTMLDivElement | null) => void;
 	};
 
@@ -101,32 +76,37 @@
 		type: "file" | "directory";
 	};
 
-	let { session, thread, onContainerChange }: Props = $props();
+	let { sessionId, threadId, onContainerChange }: Props = $props();
 
 	const context = useContext();
 	const models = $derived(context.data.models);
 	const preferences = $derived(context.view.app.preferences);
-	const sessionView = $derived(session.ui);
-	const composerDraft = $derived.by(
-		() =>
-			context.view.sessions[session.sessionId]?.composer.draft ??
-			sessionView.composerDraft,
+	const sessionRecord = $derived(context.data.sessions.byId[sessionId] ?? null);
+	const session = $derived(sessionRecord?.value ?? null);
+	const sessionView = $derived(context.view.sessions[sessionId] ?? null);
+	const threadRecord = $derived(sessionRecord?.threads.byId[threadId] ?? null);
+	const thread = $derived(threadRecord?.value ?? null);
+	const threadContent = $derived(threadRecord?.content ?? null);
+	const threadView = $derived(sessionView?.threads[threadId] ?? null);
+	const isPending = $derived(
+		context.view.selection.pendingSessionId === sessionId,
 	);
-	const sessionHooks = $derived(
-		context.data.hooks.bySessionId[session.sessionId],
+	const composerDraft = $derived.by(() => sessionView?.composer.draft ?? "");
+	const sessionHooks = $derived(sessionRecord?.hooks ?? null);
+	const sessionCommands = $derived(sessionRecord?.commands ?? null);
+	const modelItems = $derived.by(() =>
+		models.allIds
+			.map((id) => models.byId[id])
+			.filter((model): model is ModelInfo => Boolean(model)),
 	);
-	const sessionCommands = $derived(
-		context.data.commands.bySessionId[session.sessionId],
-	);
-	const hooksStatus = $derived.by(
-		() =>
-			sessionHooks?.status ?? {
-				hooks: [],
-				pendingHookIds: [],
-				executionPaused: false,
-			},
-	);
-	const hookOutputById = $derived.by(() => sessionHooks?.outputById ?? {});
+	const hooksStatus = $derived.by(() => ({
+		hooks: (sessionHooks?.allIds ?? [])
+			.map((id) => sessionHooks?.byId[id])
+			.filter((hook) => Boolean(hook)),
+		pendingHookIds: sessionHooks?.pendingHookIds ?? [],
+		executionPaused: sessionHooks?.executionPaused ?? false,
+	}));
+	const hookOutputById = $derived.by(() => sessionHooks?.outputsById ?? {});
 	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
@@ -161,7 +141,7 @@
 	}
 
 	$effect(() => {
-		if (!fileMentionOpen || session.isPending) {
+		if (!fileMentionOpen || isPending) {
 			fileMentionSuggestions = [];
 			fileMentionLoading = false;
 			return;
@@ -176,7 +156,7 @@
 				fileMentionLoading = true;
 				try {
 					const response = await api.searchSessionFiles(
-						session.sessionId,
+						sessionId,
 						currentQuery,
 						50,
 						{ signal: controller.signal },
@@ -308,52 +288,190 @@
 		return (left ?? "") === (right ?? "");
 	}
 
+	type ThreadContentStatus = "idle" | "loading" | "ready" | "error";
+
+	function getThreadContentStatus(
+		status: NonNullable<typeof threadContent>["status"] | undefined,
+	): ThreadContentStatus {
+		switch (status?.state) {
+			case "loading":
+			case "refreshing":
+				return "loading";
+			case "ready":
+				return "ready";
+			case "error":
+				return "error";
+			default:
+				return "idle";
+		}
+	}
+
+	function getThreadComposerValues(
+		currentThread: Thread | null,
+		defaultModel: string | null,
+		defaultReasoning?: string | null,
+		defaultServiceTier?: string | null,
+	): {
+		modelId: string | null;
+		reasoning: string | undefined;
+		serviceTier: string | undefined;
+	} {
+		const modelId = currentThread?.model ?? defaultModel;
+		if (!modelId) {
+			return {
+				modelId,
+				reasoning: undefined,
+				serviceTier: undefined,
+			};
+		}
+
+		const useDefaultComposerPreferences = currentThread?.model === undefined;
+		return {
+			modelId,
+			reasoning: useDefaultComposerPreferences
+				? (normalizeThreadComposerReasoning(currentThread?.reasoning) ??
+					normalizeThreadComposerReasoning(defaultReasoning))
+				: normalizeThreadComposerReasoning(currentThread?.reasoning),
+			serviceTier: useDefaultComposerPreferences
+				? (normalizeThreadComposerServiceTier(currentThread?.serviceTier) ??
+					normalizeThreadComposerServiceTier(defaultServiceTier))
+				: normalizeThreadComposerServiceTier(currentThread?.serviceTier),
+		};
+	}
+
+	function isSessionThreadStatusRunningForThread(
+		threadStatus:
+			| NonNullable<typeof session>["threadStatus"]
+			| null
+			| undefined,
+		currentThreadId: string,
+	): boolean {
+		return (
+			threadStatus?.status === "running" &&
+			threadStatus.threadId === currentThreadId
+		);
+	}
+
+	function hasPendingQuestion(
+		messages: ChatMessage[],
+		pendingQuestionId: string | null | undefined,
+	): boolean {
+		return (
+			(getPendingQuestionApprovalId(messages) ?? pendingQuestionId ?? null) !==
+			null
+		);
+	}
+
+	const threadComposerState = $derived.by(() => {
+		const composerValues = getThreadComposerValues(
+			thread,
+			preferences.defaultModel,
+			preferences.defaultReasoning,
+			preferences.defaultServiceTier,
+		);
+		const messages = threadContent?.messages ?? [];
+		return {
+			thread,
+			modelId: composerValues.modelId,
+			reasoning: composerValues.reasoning,
+			serviceTier: composerValues.serviceTier,
+			nextModelId: threadView?.composer.nextModelId,
+			nextReasoning: threadView?.composer.nextReasoning,
+			nextServiceTier: threadView?.composer.nextServiceTier,
+			promptQueue: thread?.promptQueue ?? [],
+			status: getThreadContentStatus(threadContent?.status),
+			isStreaming:
+				isThreadSnapshotRunning(thread) ||
+				threadContent?.isStreaming === true ||
+				isSessionThreadStatusRunningForThread(
+					session?.threadStatus,
+					threadId,
+				) ||
+				(!canLoadSessionThreads(session?.sandboxStatus) &&
+					(isSessionTransitioningStatus(session?.sandboxStatus) ||
+						messages.some((message) => message.provisional === true))),
+			hasPendingQuestion: hasPendingQuestion(
+				messages,
+				threadContent?.pendingQuestionId,
+			),
+			pendingComments: threadView?.composer.pendingComments ?? [],
+		};
+	});
+
+	const hooksExpanded = $derived(sessionView?.hooks.expanded ?? false);
 	const hasAttachedComposerPanel = $derived(
-		!session.isPending &&
-			(thread.promptQueue.length > 0 ||
-				(sessionView.hooksExpanded && sessionHooks.status.hooks.length > 0)),
+		!isPending &&
+			(threadComposerState.promptQueue.length > 0 ||
+				(hooksExpanded && hooksStatus.hooks.length > 0)),
 	);
+	const pendingWorkspaceRequiresSourceInput = $derived.by(() =>
+		getPendingWorkspaceRequiresSourceInput(sessionView?.pendingWorkspace),
+	);
+	const pendingWorkspaceSourceIsValid = $derived.by(() =>
+		getPendingWorkspaceSourceIsValid(sessionView?.pendingWorkspace),
+	);
+	const pendingSandboxProviderId = $derived(
+		sessionView?.pendingWorkspace.sandboxProviderId ?? "",
+	);
+	function setHooksExpanded(expanded: boolean) {
+		void context.commands.view.setSessionHooksExpanded(sessionId, expanded);
+	}
+	function setPendingSandboxProviderId(providerId: string) {
+		void context.commands.view.setPendingWorkspaceSandboxProviderId(
+			sessionId,
+			providerId,
+		);
+	}
+	function resetPendingWorkspaceSetup() {
+		void context.commands.view.resetPendingWorkspaceSetup(sessionId);
+	}
 
 	const effectiveModelId = $derived.by(
-		() => thread.nextModelId ?? thread.modelId,
+		() => threadComposerState.nextModelId ?? threadComposerState.modelId,
 	);
 	const selectedModelId = $derived.by(() =>
-		thread.nextModelId !== undefined
-			? (thread.nextModelId ?? preferences.defaultModel) || null
+		threadComposerState.nextModelId !== undefined
+			? (threadComposerState.nextModelId ?? preferences.defaultModel) || null
 			: effectiveModelId,
 	);
 	const selectedModel = $derived.by(() => findModelById(selectedModelId));
 	const effectiveReasoning = $derived.by(() =>
-		getReasoningForModel(selectedModel, thread.nextReasoning, thread.reasoning),
+		getReasoningForModel(
+			selectedModel,
+			threadComposerState.nextReasoning,
+			threadComposerState.reasoning,
+		),
 	);
 	const effectiveServiceTier = $derived.by(() =>
 		getServiceTierForModel(
 			selectedModel,
-			thread.nextServiceTier,
-			thread.serviceTier,
+			threadComposerState.nextServiceTier,
+			threadComposerState.serviceTier,
 		),
 	);
 	const reasoningLevels = $derived.by(
 		() => selectedModel?.reasoningLevels ?? [],
 	);
 	const serviceTiers = $derived.by(() => selectedModel?.serviceTiers ?? []);
-	const hasAvailableModels = $derived.by(() => models.items.length > 0);
+	const hasAvailableModels = $derived.by(() => modelItems.length > 0);
 	const sessionSetupDisabled = $derived.by(
-		() =>
-			sessionView.pendingWorkspaceRequiresSourceInput &&
-			!sessionView.pendingWorkspaceSourceIsValid,
+		() => pendingWorkspaceRequiresSourceInput && !pendingWorkspaceSourceIsValid,
 	);
 	const showPendingWorkspaceSelector = $derived.by(
-		() => session.isPending && !thread.isStreaming,
+		() => isPending && !threadComposerState.isStreaming,
 	);
 	const availableCommands = $derived.by(() =>
-		session.isPending ? [] : (sessionCommands?.items ?? []),
+		isPending
+			? []
+			: (sessionCommands?.allIds ?? [])
+					.map((id) => sessionCommands?.byId[id])
+					.filter((command): command is AgentCommand => Boolean(command)),
 	);
 	const commandsLoading = $derived.by(
 		() =>
-			!session.isPending &&
-			(sessionCommands?.fetchedAt ?? null) === null &&
-			(sessionCommands?.status ?? "idle") !== "error",
+			!isPending &&
+			(sessionCommands?.status.state ?? "idle") !== "ready" &&
+			(sessionCommands?.status.state ?? "idle") !== "error",
 	);
 	const selectableSandboxProviders = $derived.by(() =>
 		sandboxProviders.filter((provider) => provider.available),
@@ -361,24 +479,23 @@
 	const selectedSandboxProvider = $derived.by(() =>
 		selectableSandboxProviders.find(
 			(provider) =>
-				provider.id ===
-				(sessionView.pendingSandboxProviderId || sandboxDefaultProviderId),
+				provider.id === (pendingSandboxProviderId || sandboxDefaultProviderId),
 		),
 	);
 	const selectedSandboxProviderTitle = $derived.by(() => {
 		if (!selectedSandboxProvider) {
 			return "Sandbox provider";
 		}
-		return sessionView.pendingSandboxProviderId
+		return pendingSandboxProviderId
 			? selectedSandboxProvider.name
 			: `Default provider: ${selectedSandboxProvider.name}`;
 	});
 	const sandboxProviderSelectValue = $derived(
-		sessionView.pendingSandboxProviderId || sandboxDefaultProviderId,
+		pendingSandboxProviderId || sandboxDefaultProviderId,
 	);
 
 	function handleSandboxProviderSelect(value: string) {
-		sessionView.setPendingSandboxProviderId(
+		setPendingSandboxProviderId(
 			value === sandboxDefaultProviderId ? "" : value,
 		);
 	}
@@ -387,7 +504,7 @@
 		sandboxProviderMobileSelectOpen = false;
 		sandboxProviderDesktopSelectOpen = false;
 		await tick();
-		openSettingsDialog("providers");
+		void context.commands.dialogs.openSettingsDialog("providers");
 	}
 
 	function handleModelSelect(nextSelection: string | null) {
@@ -397,43 +514,54 @@
 		);
 		const nextReasoning = getNextReasoningForModel(
 			nextModel,
-			thread.nextReasoning,
-			thread.reasoning,
+			threadComposerState.nextReasoning,
+			threadComposerState.reasoning,
 		);
 		const nextServiceTier = getServiceTierForModel(
 			nextModel,
-			thread.nextServiceTier,
-			thread.serviceTier,
+			threadComposerState.nextServiceTier,
+			threadComposerState.serviceTier,
 		);
 
-		if (parsedSelection.modelId === thread.modelId) {
-			setThreadNextModelId(session.sessionId, thread.threadId, undefined);
-			setThreadNextReasoning(
-				session.sessionId,
-				thread.threadId,
-				isSameReasoningSelection(nextReasoning, thread.reasoning)
+		if (parsedSelection.modelId === threadComposerState.modelId) {
+			void context.commands.threadComposer.setThreadNextModelId(
+				sessionId,
+				threadId,
+				undefined,
+			);
+			void context.commands.threadComposer.setThreadNextReasoning(
+				sessionId,
+				threadId,
+				isSameReasoningSelection(nextReasoning, threadComposerState.reasoning)
 					? undefined
 					: nextReasoning,
 			);
-			setThreadNextServiceTier(
-				session.sessionId,
-				thread.threadId,
-				isSameServiceTierSelection(nextServiceTier, thread.serviceTier)
+			void context.commands.threadComposer.setThreadNextServiceTier(
+				sessionId,
+				threadId,
+				isSameServiceTierSelection(
+					nextServiceTier,
+					threadComposerState.serviceTier,
+				)
 					? undefined
 					: nextServiceTier,
 			);
 			return;
 		}
 
-		setThreadNextModelId(
-			session.sessionId,
-			thread.threadId,
+		void context.commands.threadComposer.setThreadNextModelId(
+			sessionId,
+			threadId,
 			parsedSelection.modelId,
 		);
-		setThreadNextReasoning(session.sessionId, thread.threadId, nextReasoning);
-		setThreadNextServiceTier(
-			session.sessionId,
-			thread.threadId,
+		void context.commands.threadComposer.setThreadNextReasoning(
+			sessionId,
+			threadId,
+			nextReasoning,
+		);
+		void context.commands.threadComposer.setThreadNextServiceTier(
+			sessionId,
+			threadId,
 			nextServiceTier,
 		);
 	}
@@ -442,57 +570,61 @@
 		if (nextReasoning === "default") {
 			const modelDefaultReasoning = selectedModel?.defaultReasoning;
 			if (effectiveReasoning === undefined) {
-				setThreadNextReasoning(
-					session.sessionId,
-					thread.threadId,
-					thread.nextModelId === undefined &&
-						(thread.reasoning === undefined || thread.reasoning === "default")
+				void context.commands.threadComposer.setThreadNextReasoning(
+					sessionId,
+					threadId,
+					threadComposerState.nextModelId === undefined &&
+						(threadComposerState.reasoning === undefined ||
+							threadComposerState.reasoning === "default")
 						? undefined
 						: "default",
 				);
 				return;
 			}
-			setThreadNextReasoning(
-				session.sessionId,
-				thread.threadId,
+			void context.commands.threadComposer.setThreadNextReasoning(
+				sessionId,
+				threadId,
 				modelDefaultReasoning ?? "default",
 			);
 			return;
 		}
 
-		setThreadNextReasoning(
-			session.sessionId,
-			thread.threadId,
-			thread.nextModelId === undefined &&
-				isSameReasoningSelection(nextReasoning, thread.reasoning)
+		void context.commands.threadComposer.setThreadNextReasoning(
+			sessionId,
+			threadId,
+			threadComposerState.nextModelId === undefined &&
+				isSameReasoningSelection(nextReasoning, threadComposerState.reasoning)
 				? undefined
 				: nextReasoning,
 		);
 	}
 
 	function handleServiceTierSelect(nextServiceTier: string | undefined) {
-		setThreadNextServiceTier(
-			session.sessionId,
-			thread.threadId,
-			thread.nextModelId === undefined &&
-				isSameServiceTierSelection(nextServiceTier, thread.serviceTier)
+		void context.commands.threadComposer.setThreadNextServiceTier(
+			sessionId,
+			threadId,
+			threadComposerState.nextModelId === undefined &&
+				isSameServiceTierSelection(
+					nextServiceTier,
+					threadComposerState.serviceTier,
+				)
 				? undefined
 				: (nextServiceTier ?? null),
 		);
 	}
 
 	const submitStatus = $derived.by(() => {
-		if (session.isPending) return "ready" as const;
-		if (thread.status === "loading") return "submitted" as const;
-		if (thread.isStreaming) return "streaming" as const;
-		if (thread.status === "error") return "error" as const;
+		if (isPending) return "ready" as const;
+		if (threadComposerState.status === "loading") return "submitted" as const;
+		if (threadComposerState.isStreaming) return "streaming" as const;
+		if (threadComposerState.status === "error") return "error" as const;
 		return "ready" as const;
 	});
 	const composerDisabledMessage = $derived.by(() => {
 		if (!hasAvailableModels) {
 			return "Please add a valid LLM provider credential";
 		}
-		if (thread.hasPendingQuestion) {
+		if (threadComposerState.hasPendingQuestion) {
 			return "Answer the agent's pending question before sending a new message.";
 		}
 		return null;
@@ -501,13 +633,16 @@
 
 	function isGenerating() {
 		return (
-			!session.isPending && (thread.status === "loading" || thread.isStreaming)
+			!isPending &&
+			(threadComposerState.status === "loading" ||
+				threadComposerState.isStreaming)
 		);
 	}
 
 	function inputEmpty() {
 		return (
-			composerDraft.trim().length === 0 && thread.pendingComments.length === 0
+			composerDraft.trim().length === 0 &&
+			threadComposerState.pendingComments.length === 0
 		);
 	}
 
@@ -571,7 +706,7 @@
 	}
 
 	function handleDocumentPointerDown(event: PointerEvent) {
-		if (!sessionView.hooksExpanded) {
+		if (!hooksExpanded) {
 			return;
 		}
 
@@ -587,7 +722,7 @@
 			return;
 		}
 
-		sessionView.hooksExpanded = false;
+		setHooksExpanded(false);
 	}
 
 	async function toggleComposerExpanded() {
@@ -646,8 +781,8 @@
 		}
 
 		return {
-			...(sessionView.pendingSandboxProviderId
-				? { providerId: sessionView.pendingSandboxProviderId }
+			...(pendingSandboxProviderId
+				? { providerId: pendingSandboxProviderId }
 				: {}),
 			...(workspaceSelection.workspaceId
 				? { workspaceId: workspaceSelection.workspaceId }
@@ -668,14 +803,13 @@
 			sandboxDefaultProviderId = response.default;
 			sandboxProvidersError = null;
 			if (
-				sessionView.pendingSandboxProviderId &&
+				pendingSandboxProviderId &&
 				!response.providers.some(
 					(provider) =>
-						provider.id === sessionView.pendingSandboxProviderId &&
-						provider.available,
+						provider.id === pendingSandboxProviderId && provider.available,
 				)
 			) {
-				sessionView.setPendingSandboxProviderId("");
+				setPendingSandboxProviderId("");
 			}
 		} catch (error) {
 			sandboxProvidersError =
@@ -683,22 +817,19 @@
 		}
 	}
 
-	function movePendingDraftToThread(threadId: string, draft: string) {
-		moveComposerDraft({
-			fromStorageKey: resolveComposerDraftStorageKey({
-				isPending: true,
-				threadId: thread.threadId,
-			}),
-			toStorageKey: resolveComposerDraftStorageKey({
-				isPending: false,
-				threadId,
-			}),
-			value: draft,
-		});
+	function movePendingDraftToThread(nextThreadId: string, draft: string) {
+		void context.commands.threadComposer.movePendingComposerDraftToThread(
+			threadId,
+			nextThreadId,
+			draft,
+		);
 	}
 
 	function clearCurrentDraft() {
-		clearComposerDraft(session.sessionId, thread.threadId);
+		void context.commands.threadComposer.clearComposerDraft(
+			sessionId,
+			threadId,
+		);
 	}
 
 	function parseRunAfter(value?: string | null): Date | null {
@@ -731,11 +862,15 @@
 	});
 
 	async function handleDeleteQueuedPrompt(queueId: string) {
-		await deleteQueuedPrompt(session.sessionId, thread.threadId, queueId);
+		await context.commands.threadComposer.deleteQueuedPrompt(
+			sessionId,
+			threadId,
+			queueId,
+		);
 	}
 
 	async function createSessionForComposerAutocomplete(): Promise<boolean> {
-		if (!session.isPending) {
+		if (!isPending) {
 			return true;
 		}
 
@@ -759,9 +894,9 @@
 		queueId: string,
 		payload: UpdateQueuedPromptRequest,
 	) {
-		await updateQueuedPrompt(
-			session.sessionId,
-			thread.threadId,
+		await context.commands.threadComposer.updateQueuedPrompt(
+			sessionId,
+			threadId,
 			queueId,
 			payload,
 		);
@@ -779,22 +914,22 @@
 		}
 		const submitComments = forceEmptyPendingMessage
 			? []
-			: thread.pendingComments;
+			: threadComposerState.pendingComments;
 		const emptyWithoutAttachments =
 			inputEmpty() && attachmentFiles.length === 0;
 		if (isGenerating() && emptyWithoutAttachments) {
-			await cancelThread(session.sessionId, thread.threadId);
+			await context.commands.threadComposer.cancelThread(sessionId, threadId);
 			composerTextareaRef?.closeMentionDropdown();
 			composerTextareaRef?.closeSlashCommandDropdown();
 			composerTextareaRef?.closePromptHistoryDropdown();
 			return false;
 		}
-		if (!session.isPending && emptyWithoutAttachments) {
+		if (!isPending && emptyWithoutAttachments) {
 			return false;
 		}
 
 		pendingSubmitError = null;
-		const wasPending = session.isPending;
+		const wasPending = isPending;
 		const currentDraft = composerDraft;
 		const nextMessageText = forceEmptyPendingMessage
 			? ""
@@ -821,29 +956,45 @@
 
 		if (!preserveDraft) {
 			if (nextMessageText) {
-				addPromptToHistory(nextMessageText);
+				void context.commands.preferences.addPromptToHistory(nextMessageText);
 			}
 			clearCurrentDraft();
 		}
 
 		try {
-			const result = await submitThread(session.sessionId, thread.threadId, {
-				parts: nextMessageParts,
-				allowEmptyPendingMessage: shouldAllowEmptyPendingMessage,
-				...(nextRunAfter ? { runAfter: nextRunAfter } : {}),
-				...pendingSubmitOptions,
-			});
+			const result = await context.commands.threadComposer.submitThread(
+				sessionId,
+				threadId,
+				{
+					parts: nextMessageParts,
+					allowEmptyPendingMessage: shouldAllowEmptyPendingMessage,
+					...(nextRunAfter ? { runAfter: nextRunAfter } : {}),
+					...pendingSubmitOptions,
+				},
+			);
 			if (wasPending && result) {
-				openThread(result.sessionId, result.threadId);
+				await context.commands.navigation.openThread(
+					result.sessionId,
+					result.threadId,
+				);
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);
 				}
-				clearThreadNextComposerValues(session.sessionId, thread.threadId);
-				sessionView.resetPendingWorkspaceSetup();
+				void context.commands.threadComposer.clearThreadNextComposerValues(
+					sessionId,
+					threadId,
+				);
+				resetPendingWorkspaceSetup();
 			}
 			if (!preserveDraft) {
-				clearThreadNextComposerValues(session.sessionId, thread.threadId);
-				clearThreadPendingComments(session.sessionId, thread.threadId);
+				void context.commands.threadComposer.clearThreadNextComposerValues(
+					sessionId,
+					threadId,
+				);
+				void context.commands.threadComposer.clearThreadPendingComments(
+					sessionId,
+					threadId,
+				);
 				scheduledRunAfter = null;
 				schedulePopoverOpen = false;
 				composerTextareaRef?.closeMentionDropdown();
@@ -873,7 +1024,7 @@
 	}
 
 	async function loadTokenUsageDetails() {
-		return api.getThreadTokenUsage(session.sessionId, thread.threadId);
+		return api.getThreadTokenUsage(sessionId, threadId);
 	}
 </script>
 
@@ -886,37 +1037,39 @@
 	<div
 		class={`w-full ${composerExpanded ? "flex min-h-0 flex-1 flex-col" : preferences.chatWidthMode === "constrained" ? "md:mx-auto md:max-w-3xl" : ""}`}
 	>
-		{#if !session.isPending}
+		{#if !isPending}
 			<ConversationPromptQueuePanel
-				entries={thread.promptQueue}
+				entries={threadComposerState.promptQueue}
 				onDelete={handleDeleteQueuedPrompt}
 				onUpdate={handleUpdateQueuedPrompt}
 			/>
 
 			<div bind:this={hooksPanelContainer}>
 				<ConversationHooksPanel
-					{session}
-					expanded={sessionView.hooksExpanded}
+					{sessionId}
+					{threadId}
+					expanded={hooksExpanded}
 					{hooksStatus}
 					outputById={hookOutputById}
-					onRerunHook={(hookId) => rerunHook(session.sessionId, hookId)}
+					onRerunHook={(hookId) =>
+						void context.commands.hooks.rerunHook(sessionId, hookId)}
 					onSetExecutionPaused={(paused) => {
-						void setHooksPaused(session.sessionId, paused);
-						sessionView.hooksExpanded = false;
+						void context.commands.hooks.pauseHooks(sessionId, paused);
+						setHooksExpanded(false);
 					}}
 					onSetHookExecutionPaused={(hookId, paused) => {
-						void setHookPaused(session.sessionId, hookId, paused);
+						void context.commands.hooks.pauseHook(sessionId, hookId, paused);
 					}}
 				/>
 			</div>
 		{/if}
 
-		{#if session.isPending || session.current?.sandboxStatus !== "ready"}
-			<ConversationComposerSessionSetupStatus {session} {thread} />
+		{#if isPending || session?.sandboxStatus !== "ready"}
+			<ConversationComposerSessionSetupStatus {sessionId} {threadId} />
 			{#if showPendingWorkspaceSelector}
 				<div class="mb-2 flex w-full flex-col gap-2 px-1 md:hidden">
 					<ConversationWorkspaceSelector
-						{session}
+						{sessionId}
 						bind:this={sessionSetupRef}
 						fullWidth={true}
 					/>
@@ -945,17 +1098,18 @@
 		{#if pendingSubmitError}
 			<div class="mb-2 text-sm text-destructive">{pendingSubmitError}</div>
 		{/if}
-		{#if thread.pendingComments.length > 0}
+		{#if threadComposerState.pendingComments.length > 0}
 			<div
 				class="mb-2 rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm shadow-sm dark:border-amber-400/30 dark:bg-amber-950/20"
 			>
 				<div class="mb-2 font-medium text-foreground">
-					{thread.pendingComments.length}
-					{thread.pendingComments.length === 1 ? "comment" : "comments"} ready to
-					submit
+					{threadComposerState.pendingComments.length}
+					{threadComposerState.pendingComments.length === 1
+						? "comment"
+						: "comments"} ready to submit
 				</div>
 				<div class="space-y-2">
-					{#each thread.pendingComments as comment (comment.id)}
+					{#each threadComposerState.pendingComments as comment (comment.id)}
 						<div
 							class="rounded-lg border border-border/70 bg-background/80 p-2 text-xs"
 						>
@@ -974,9 +1128,9 @@
 									aria-label="Remove comment"
 									class="size-6 shrink-0"
 									onclick={() =>
-										removeThreadPendingComment(
-											session.sessionId,
-											thread.threadId,
+										void context.commands.threadComposer.removeThreadPendingComment(
+											sessionId,
+											threadId,
 											comment.id,
 										)}
 									size="icon-xs"
@@ -991,7 +1145,7 @@
 				</div>
 			</div>
 		{/if}
-		{#if session.isPending && sandboxProvidersError}
+		{#if isPending && sandboxProvidersError}
 			<div class="mb-2 text-sm text-destructive">{sandboxProvidersError}</div>
 		{/if}
 		{#if composerDisabledMessage}
@@ -1004,7 +1158,8 @@
 						variant="link"
 						size="xs"
 						class="h-auto px-0"
-						onclick={() => openCredentialsDialog()}
+						onclick={() =>
+							void context.commands.dialogs.openCredentialsDialog()}
 					>
 						Open credentials
 					</Button>
@@ -1062,8 +1217,12 @@
 						draft={composerDraft}
 						disabled={composerDisabled}
 						expanded={composerExpanded}
-						onDraftChange={(v) => setComposerDraft(session.sessionId, v)}
-						sessionId={session.isPending ? null : session.sessionId}
+						onDraftChange={(v) =>
+							void context.commands.threadComposer.setComposerDraft(
+								sessionId,
+								v,
+							)}
+						sessionId={isPending ? null : sessionId}
 						commands={availableCommands}
 						{commandsLoading}
 						{fileMentionSuggestions}
@@ -1073,9 +1232,12 @@
 						attachmentCount={attachmentFiles.length}
 						onAddFiles={addFiles}
 						onRemoveLastAttachment={removeLastAttachment}
-						onPinPrompt={pinPrompt}
-						onUnpinPrompt={unpinPrompt}
-						onRemovePromptFromHistory={removePromptFromHistory}
+						onPinPrompt={(prompt) =>
+							void context.commands.preferences.pinPrompt(prompt)}
+						onUnpinPrompt={(prompt) =>
+							void context.commands.preferences.unpinPrompt(prompt)}
+						onRemovePromptFromHistory={(prompt) =>
+							void context.commands.preferences.removePromptFromHistory(prompt)}
 						isPromptPinned={(prompt) =>
 							preferences.pinnedPrompts.includes(prompt)}
 						onFileMentionQueryChange={handleFileMentionQueryChange}
@@ -1092,16 +1254,16 @@
 									onFilesAdd={addFiles}
 									disabled={composerDisabled}
 								/>
-								{#if !session.isPending}
-									<ConversationCredentialsControl {session} />
+								{#if !isPending}
+									<ConversationCredentialsControl {sessionId} />
 								{/if}
 								<div class="flex min-w-0 items-center gap-0">
 									<ConversationComposerModelControl
-										value={thread.nextModelId !== undefined
-											? thread.nextModelId
-											: thread.modelId}
+										value={threadComposerState.nextModelId !== undefined
+											? threadComposerState.nextModelId
+											: threadComposerState.modelId}
 										onSelect={handleModelSelect}
-										models={models.items}
+										models={modelItems}
 									/>
 									{#if selectedModel?.reasoning}
 										<ConversationComposerReasoningControl
@@ -1119,7 +1281,7 @@
 										/>
 									{/if}
 									<ConversationComposerTokenUsage
-										usage={thread.thread?.tokenUsage}
+										usage={threadComposerState.thread?.tokenUsage}
 										onLoadDetails={loadTokenUsageDetails}
 									/>
 								</div>
@@ -1144,16 +1306,17 @@
 											/>
 										{/if}
 										<ConversationWorkspaceSelector
-											{session}
+											{sessionId}
 											bind:this={sessionSetupRef}
 										/>
 									</div>
-								{:else if !session.isPending}
+								{:else if !isPending}
 									<div bind:this={hooksControlContainer}>
 										<ConversationComposerHooksControl
-											bind:expanded={sessionView.hooksExpanded}
+											expanded={hooksExpanded}
+											onExpandedChange={setHooksExpanded}
 											{hooksStatus}
-											threadPhase={session.threads.selected?.phase ?? ""}
+											threadPhase={thread?.phase ?? ""}
 										/>
 									</div>
 								{/if}
@@ -1165,7 +1328,7 @@
 											title={scheduledSubmitLabel ?? "Schedule prompt"}
 											aria-label={scheduledSubmitLabel ?? "Schedule prompt"}
 											disabled={composerDisabled ||
-												(session.isPending ? sessionSetupDisabled : false)}
+												(isPending ? sessionSetupDisabled : false)}
 										>
 											<ClockIcon class="size-4" />
 										</Button>
@@ -1180,9 +1343,9 @@
 								<ConversationComposerSubmitButton
 									status={submitStatus}
 									inputEmpty={inputEmpty()}
-									isPending={session.isPending}
+									{isPending}
 									disabled={composerDisabled ||
-										(session.isPending ? sessionSetupDisabled : false)}
+										(isPending ? sessionSetupDisabled : false)}
 									onPress={handleComposerSubmit}
 								/>
 							</div>

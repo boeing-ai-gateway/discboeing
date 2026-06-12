@@ -5,9 +5,11 @@
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import LogInIcon from "@lucide/svelte/icons/log-in";
 	import PlusIcon from "@lucide/svelte/icons/plus";
+	import { onMount, untrack } from "svelte";
 	import type {
 		CredentialAuthType,
 		CredentialEnvVar,
+		CredentialInfo,
 		CredentialOAuthKind,
 		CredentialVisibility,
 		Icon,
@@ -33,13 +35,7 @@
 		ItemTitle,
 	} from "$lib/components/ui/item";
 	import { Label } from "$lib/components/ui/label";
-	import { api } from "$lib/api-client";
-	import {
-		clearCredentialFlowIntent,
-		clearCredentialsDialogTarget,
-	} from "$lib/context/commands/dialog";
-	import { refreshCredentials } from "$lib/context/commands/workspace";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
 	import { openUrl, writeClipboardText } from "$lib/shell";
 
 	type EditorMode = "list" | "create" | "edit";
@@ -80,7 +76,11 @@
 	const context = useContext();
 	const credentialsApi = {
 		get list() {
-			return context.data.credentials.items;
+			return context.data.credentials.allIds
+				.map(
+					(credentialId) => context.data.credentials.byId[credentialId] ?? null,
+				)
+				.filter((credential): credential is CredentialInfo => !!credential);
 		},
 		get credentialTypes() {
 			return context.data.credentials.types;
@@ -88,21 +88,22 @@
 		peek(id: string) {
 			return context.data.credentials.byId[id] ?? null;
 		},
-		refresh: refreshCredentials,
-		create: api.createCredential.bind(api),
-		remove: api.deleteCredential.bind(api),
-		codexAuthorize: api.codexAuthorize.bind(api),
-		codexDeviceCode: api.codexDeviceCode.bind(api),
-		codexCallbackStatus: api.codexCallbackStatus.bind(api),
-		codexPoll: api.codexPoll.bind(api),
-		codexExchange: api.codexExchange.bind(api),
-		githubAuthorize: api.githubAuthorize.bind(api),
-		githubDeviceCode: api.githubDeviceCode.bind(api),
-		githubCallbackStatus: api.githubCallbackStatus.bind(api),
-		githubPoll: api.githubPoll.bind(api),
-		githubExchange: api.githubExchange.bind(api),
-		anthropicAuthorize: api.anthropicAuthorize.bind(api),
-		anthropicExchange: api.anthropicExchange.bind(api),
+		refresh: context.commands.credentials.refreshCredentials,
+		create: context.commands.credentials.createCredential,
+		remove: context.commands.credentials.deleteCredential,
+		toggleInactive: context.commands.credentials.toggleCredentialInactive,
+		codexAuthorize: context.commands.credentials.codexAuthorize,
+		codexDeviceCode: context.commands.credentials.codexDeviceCode,
+		codexCallbackStatus: context.commands.credentials.codexCallbackStatus,
+		codexPoll: context.commands.credentials.codexPoll,
+		codexExchange: context.commands.credentials.codexExchange,
+		githubAuthorize: context.commands.credentials.githubAuthorize,
+		githubDeviceCode: context.commands.credentials.githubDeviceCode,
+		githubCallbackStatus: context.commands.credentials.githubCallbackStatus,
+		githubPoll: context.commands.credentials.githubPoll,
+		githubExchange: context.commands.credentials.githubExchange,
+		anthropicAuthorize: context.commands.credentials.anthropicAuthorize,
+		anthropicExchange: context.commands.credentials.anthropicExchange,
 	};
 
 	let loading = $state(false);
@@ -137,6 +138,8 @@
 	let copiedOAuthAuthUrl = $state(false);
 	let inactiveDraft = $state(false);
 	let replaceSecretDraft = $state(false);
+	let handledCredentialFlowIntent = $state<string | null>(null);
+	let handledCredentialsDialogTargetId = $state<string | null>(null);
 	let visibilityDraft = $state<CredentialVisibility>({
 		tools: false,
 		console: false,
@@ -704,7 +707,7 @@
 		}
 	}
 
-	type ConfiguredCredential = (typeof credentialsApi.list)[number];
+	type ConfiguredCredential = CredentialInfo;
 	const credentialListEntries = $derived.by(() =>
 		credentialsApi.list
 			.map((credential) => {
@@ -1253,18 +1256,7 @@
 		togglingInactiveId = credential.id;
 		errorMessage = null;
 		try {
-			await credentialsApi.create({
-				provider: credential.provider.startsWith("custom:")
-					? "custom"
-					: credential.provider,
-				credentialId: credential.id,
-				name: credential.name,
-				description: credential.description,
-				authType: credential.authType,
-				visibility: credential.visibility,
-				inactive: !credential.inactive,
-			});
-			notifyCredentialsChanged();
+			await credentialsApi.toggleInactive(credential);
 		} catch (error) {
 			errorMessage =
 				error instanceof Error
@@ -1286,15 +1278,30 @@
 		}
 	}
 
-	$effect(() => {
+	function clearHandledCredentialFlowIntent() {
+		void context.commands.dialogs.clearCredentialFlowIntent();
+		handledCredentialFlowIntent = null;
+	}
+
+	function clearHandledCredentialsDialogTarget() {
+		void context.commands.dialogs.clearCredentialsDialogTarget();
+		handledCredentialsDialogTargetId = null;
+	}
+
+	onMount(() => {
 		void load();
 	});
 
 	$effect(() => {
 		const flowIntent = context.view.app.dialogs.credentials.flowIntent;
-		if (loading || !flowIntent) {
+		if (
+			loading ||
+			!flowIntent ||
+			untrack(() => handledCredentialFlowIntent) === flowIntent
+		) {
 			return;
 		}
+		handledCredentialFlowIntent = flowIntent;
 		startCreate();
 		const oauthOption =
 			providerOptions.find(
@@ -1309,20 +1316,25 @@
 				openAIOAuthWizardOpen = true;
 			}
 		}
-		clearCredentialFlowIntent();
+		clearHandledCredentialFlowIntent();
 	});
 
 	$effect(() => {
 		const targetId = context.view.app.dialogs.credentials.targetId;
-		if (!targetId || loading) {
+		if (
+			!targetId ||
+			loading ||
+			untrack(() => handledCredentialsDialogTargetId) === targetId
+		) {
 			return;
 		}
 		const credential = credentialsApi.peek(targetId);
 		if (!credential) {
 			return;
 		}
+		handledCredentialsDialogTargetId = targetId;
 		startEdit(credential);
-		clearCredentialsDialogTarget();
+		clearHandledCredentialsDialogTarget();
 	});
 
 	$effect(() => {

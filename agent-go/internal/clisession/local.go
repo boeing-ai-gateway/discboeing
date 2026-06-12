@@ -26,7 +26,7 @@ func NewLocal(a *agentimpl.DefaultAgent, store *thread.Store, cwd string) *Local
 func (s *Local) WorkspaceRoot() string { return s.cwd }
 func (s *Local) Close()                { s.agent.Close() }
 
-func (s *Local) ListCommands(_ context.Context) ([]agent.Command, error) {
+func (s *Local) ListCommands(_ context.Context) ([]api.Command, error) {
 	return s.agent.ListCommands()
 }
 

@@ -136,7 +136,7 @@ func (m *streamTestAgent) SubmitAnswer(threadID, approvalID string, req api.Answ
 	return nil
 }
 func (m *streamTestAgent) FinalResponse(_ string) (string, error) { return "", nil }
-func (m *streamTestAgent) ListCommands() ([]agent.Command, error) { return nil, nil }
+func (m *streamTestAgent) ListCommands() ([]api.Command, error)   { return nil, nil }
 
 func TestListMessages_ReturnsProjectedHistory(t *testing.T) {
 	ma := &streamTestAgent{

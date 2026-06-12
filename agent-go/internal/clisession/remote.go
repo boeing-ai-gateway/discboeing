@@ -44,40 +44,12 @@ func NewRemote(baseURL, token, workspace string) *Remote {
 func (s *Remote) WorkspaceRoot() string { return s.workspace }
 func (s *Remote) Close()                {}
 
-func (s *Remote) ListCommands(ctx context.Context) ([]agent.Command, error) {
+func (s *Remote) ListCommands(ctx context.Context) ([]api.Command, error) {
 	var resp api.ListCommandsResponse
 	if err := s.doJSON(ctx, http.MethodGet, "/commands", nil, &resp); err != nil {
 		return nil, err
 	}
-	commands := make([]agent.Command, 0, len(resp.Commands))
-	for _, cmd := range resp.Commands {
-		converted := agent.Command{
-			Name:        cmd.Name,
-			Description: cmd.Description,
-			Kind:        agent.CommandKind(cmd.Kind),
-			Discobot: agent.DiscobotCommandMetadata{
-				UI:          cmd.Discobot.UI,
-				Label:       cmd.Discobot.Label,
-				ActiveLabel: cmd.Discobot.ActiveLabel,
-				Icon:        cmd.Discobot.Icon,
-				Group:       cmd.Discobot.Group,
-				Order:       cmd.Discobot.Order,
-			},
-		}
-		for _, cred := range cmd.Discobot.CredentialRequest {
-			request := agent.DiscobotCredentialRequest{
-				EnvVar:        cred.EnvVar,
-				Name:          cred.Name,
-				Justification: cred.Justification,
-			}
-			for _, use := range cred.ApprovedUses {
-				request.ApprovedUses = append(request.ApprovedUses, agent.DiscobotCredentialApprovedUse{Description: use.Description})
-			}
-			converted.Discobot.CredentialRequest = append(converted.Discobot.CredentialRequest, request)
-		}
-		commands = append(commands, converted)
-	}
-	return commands, nil
+	return resp.Commands, nil
 }
 
 func (s *Remote) ListThreads(ctx context.Context) ([]api.Thread, error) {

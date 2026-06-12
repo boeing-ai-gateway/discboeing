@@ -35,8 +35,8 @@ type Handler struct {
 	sudoAuthorizer sudoauth.Authorizer
 	controlSocket  *controlsocket.Client
 	chatPingEvery  time.Duration
-	activityEvery  time.Duration
 	activity       *activityNotifier
+	workspaceFiles *workspaceFileNotifier
 
 	answeredMu        sync.Mutex
 	answeredQuestions map[string]bool // toolCallID → true (tracks answered questions for status polling)
@@ -86,8 +86,8 @@ func New(agentCwd string, conversations *agent.ConversationManager, hookManager 
 		browserManager:    bm,
 		controlSocket:     controlSocket,
 		chatPingEvery:     defaultChatStreamPingInterval,
-		activityEvery:     defaultActivityStreamSnapshotInterval,
 		activity:          newActivityNotifier(),
+		workspaceFiles:    newWorkspaceFileNotifier(agentCwd),
 		answeredQuestions: make(map[string]bool),
 	}
 	for _, option := range options {
@@ -170,6 +170,8 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Commands", Description: "List available slash commands"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/ports", Handler: h.ListPorts,
 		Meta: routes.Meta{Group: "Ports", Description: "List visible TCP listening ports"}})
+	reg.Register(r, routes.Route{Method: "GET", Pattern: "/session/stream", Handler: h.StreamSession,
+		Meta: routes.Meta{Group: "Session", Description: "Stream session-level resource events (SSE)"}})
 	if h.controlSocket != nil {
 		reg.Register(r, routes.Route{Method: "GET", Pattern: "/control/ws", Handler: h.ControlSocket,
 			Meta: routes.Meta{Group: "Control", Description: "Server-initiated sandbox control WebSocket"}})
@@ -186,8 +188,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Threads", Description: "List all threads"}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads/activity", Handler: h.GetSessionActivity,
 		Meta: routes.Meta{Group: "Threads", Description: "Get session-level thread activity"}})
-	reg.Register(r, routes.Route{Method: "GET", Pattern: "/threads/activity/stream", Handler: h.StreamSessionActivity,
-		Meta: routes.Meta{Group: "Threads", Description: "Stream session-level thread activity"}})
 	reg.Register(r, routes.Route{Method: "POST", Pattern: "/threads", Handler: h.CreateThread,
 		Meta: routes.Meta{
 			Group:       "Threads",

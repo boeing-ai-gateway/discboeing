@@ -82,6 +82,7 @@ func (h *Handler) UpdateHooksExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.notifyActivityChanged()
 	h.JSON(w, http.StatusOK, h.hooksStatusResponse())
 }
 
@@ -114,6 +115,7 @@ func (h *Handler) UpdateHookExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.notifyActivityChanged()
 	h.JSON(w, http.StatusOK, h.hooksStatusResponse())
 }
 
@@ -232,6 +234,7 @@ func (h *Handler) RerunHook(w http.ResponseWriter, r *http.Request) {
 				log.Printf("hooks: failed to start re-prompt for manual rerun: %v", err)
 			}
 		}
+		h.notifyActivityChanged()
 	})
 
 	h.JSON(w, http.StatusOK, api.HookRerunResponse{

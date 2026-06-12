@@ -12,7 +12,7 @@ import (
 type Session interface {
 	WorkspaceRoot() string
 	Close()
-	ListCommands(context.Context) ([]agent.Command, error)
+	ListCommands(context.Context) ([]api.Command, error)
 	ListThreads(context.Context) ([]api.Thread, error)
 	GetThread(context.Context, string) (api.Thread, error)
 	UpdateThread(context.Context, string, api.UpdateThreadRequest) (api.Thread, error)

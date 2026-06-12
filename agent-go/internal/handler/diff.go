@@ -76,35 +76,10 @@ func (h *Handler) GetDiff(w http.ResponseWriter, r *http.Request) {
 
 		h.JSON(w, http.StatusOK, api.DiffFilesResponse{
 			Files: fileEntries,
-			Stats: api.DiffStats{
-				FilesChanged: diff.Stats.FilesChanged,
-				Additions:    diff.Stats.Additions,
-				Deletions:    diff.Stats.Deletions,
-			},
+			Stats: diff.Stats,
 		})
 		return
 	}
 
-	// Full diff response
-	fileEntries := make([]api.FileDiffEntry, len(diff.Files))
-	for i, f := range diff.Files {
-		fileEntries[i] = api.FileDiffEntry{
-			Path:      f.Path,
-			Status:    f.Status,
-			OldPath:   f.OldPath,
-			Additions: f.Additions,
-			Deletions: f.Deletions,
-			Binary:    f.Binary,
-			Patch:     f.Patch,
-		}
-	}
-
-	h.JSON(w, http.StatusOK, api.DiffResponse{
-		Files: fileEntries,
-		Stats: api.DiffStats{
-			FilesChanged: diff.Stats.FilesChanged,
-			Additions:    diff.Stats.Additions,
-			Deletions:    diff.Stats.Deletions,
-		},
-	})
+	h.JSON(w, http.StatusOK, api.DiffResponse(diff))
 }

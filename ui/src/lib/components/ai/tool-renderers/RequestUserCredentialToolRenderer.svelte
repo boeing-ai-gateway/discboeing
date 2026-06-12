@@ -557,7 +557,7 @@
 		approvalError = null;
 		if (!threadId || !pendingCredentialRequest || !sessionId) {
 			approvalStatus = "pending";
-			approvalError = "Missing thread context";
+			approvalError = "Missing thread";
 			return;
 		}
 		const payload = buildGrantedCredentialPayload(
@@ -594,7 +594,7 @@
 			reason.trim() || "User denied the credential request.";
 		if (!threadId || !pendingCredentialRequest || !sessionId) {
 			approvalStatus = "pending";
-			approvalError = "Missing thread context";
+			approvalError = "Missing thread";
 			return;
 		}
 		isSubmittingRejection = true;

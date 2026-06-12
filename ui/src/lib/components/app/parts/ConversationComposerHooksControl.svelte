@@ -3,21 +3,36 @@
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import PauseCircleIcon from "@lucide/svelte/icons/pause-circle";
 	import ZapIcon from "@lucide/svelte/icons/zap";
-	import type { ThreadPhase } from "$lib/api-types";
+	import type {
+		HookRunStatus as ApiHookRunStatus,
+		ThreadPhase,
+	} from "$lib/api-types";
 	import { Button } from "$lib/components/ui/button";
-	import { getHookDisplayState } from "$lib/session/domains/session-domain.helpers";
-	import type { HooksStatus } from "$lib/session/session-context.types";
+	import { getHookDisplayState } from "$lib/conversation-helpers";
+
+	type ComposerHookRunStatus = Pick<
+		ApiHookRunStatus,
+		"hookId" | "lastResult" | "phase" | "executionPaused"
+	>;
+
+	type ComposerHooksStatus = {
+		hooks: ComposerHookRunStatus[];
+		pendingHookIds: string[];
+		executionPaused: boolean;
+	};
 
 	type Props = {
 		expanded?: boolean;
-		hooksStatus: HooksStatus;
+		hooksStatus: ComposerHooksStatus;
 		threadPhase?: ThreadPhase | "";
+		onExpandedChange?: (expanded: boolean) => void;
 	};
 
 	let {
 		expanded = $bindable(false),
 		hooksStatus,
 		threadPhase = "",
+		onExpandedChange,
 	}: Props = $props();
 
 	let hooks = $derived(hooksStatus.hooks);
@@ -49,6 +64,7 @@
 		class="h-8 gap-1.5 px-2"
 		onclick={() => {
 			expanded = !expanded;
+			onExpandedChange?.(expanded);
 		}}
 	>
 		{#if hooksStatus.executionPaused || hookHasPausedExecution}

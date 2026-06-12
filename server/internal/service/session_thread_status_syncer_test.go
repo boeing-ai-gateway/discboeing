@@ -195,11 +195,15 @@ func TestSessionThreadStatusSyncerSyncsRunningSandboxEvent(t *testing.T) {
 		secret: "test-secret",
 		handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
-			case "/threads/activity/stream":
+			case "/session/stream":
+				if r.URL.Query().Get("resources") != "threads" {
+					http.NotFound(w, r)
+					return
+				}
 				requests.Add(1)
 				w.Header().Set("Content-Type", "text/event-stream")
-				fmt.Fprint(w, "event: activity\n")
-				fmt.Fprint(w, "data: {\"status\":\"running\",\"runningCount\":1}\n\n")
+				fmt.Fprint(w, "event: threads_updated\n")
+				fmt.Fprint(w, "data: {\"threads\":[{\"id\":\"thread-1\",\"activityStatus\":{\"status\":\"running\"}}]}\n\n")
 			case "/threads/activity":
 				requests.Add(1)
 				w.Header().Set("Content-Type", "application/json")

@@ -2,7 +2,7 @@
 	import MessageSquarePlusIcon from "@lucide/svelte/icons/message-square-plus";
 	import { tick } from "svelte";
 	import { Button } from "$lib/components/ui/button";
-	import type { ConversationComment } from "$lib/session/session-context.types";
+	import type { ConversationComment } from "$lib/context/context.types";
 
 	type PendingSelectionComment = {
 		snippet: string;

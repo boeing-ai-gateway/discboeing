@@ -4,11 +4,10 @@
 	import GitCommitIcon from "@lucide/svelte/icons/git-commit";
 	import Loader2Icon from "@lucide/svelte/icons/loader-2";
 	import MessageCircleQuestionMarkIcon from "@lucide/svelte/icons/message-circle-question-mark";
-	import type { SessionDisplayStatus } from "$lib/api-types";
 	import { cn } from "$lib/utils";
 
 	type Props = {
-		status: SessionDisplayStatus;
+		status: string;
 		class?: string;
 		iconClass?: string;
 		labelClass?: string;
@@ -23,7 +22,7 @@
 		showLabel = true,
 	}: Props = $props();
 
-	const SPINNING_STATUSES = new Set<SessionDisplayStatus>([
+	const SPINNING_STATUSES = new Set<string>([
 		"running",
 		"queued",
 		"pending",
@@ -36,13 +35,11 @@
 		"removing",
 	]);
 
-	function normalizedStatus(
-		status: SessionDisplayStatus,
-	): SessionDisplayStatus {
+	function normalizedStatus(status: string): string {
 		return status;
 	}
 
-	function statusTone(status: SessionDisplayStatus): string {
+	function statusTone(status: string): string {
 		switch (status) {
 			case "error":
 			case "create_failed":

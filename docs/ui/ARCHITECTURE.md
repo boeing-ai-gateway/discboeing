@@ -77,7 +77,33 @@ The application uses SvelteKit's adapter-static for a fully client-side SPA. Pan
 
 ### 2. Data Fetching and Realtime Streams
 
-All server data is fetched via `ui/src/lib/api-client.ts`. App-level project events, multiplexed chat streams, and service log streams now share one project-scoped WebSocket (`/api/projects/{projectId}/ws`). The app uses targeted reloads for affected sessions and workspaces, with full refreshes on reconnect. The store layer coalesces concurrent reloads into at most one active request plus one queued follow-up per resource key to avoid duplicate fetches during reconnect bursts. Queued thread prompts can carry a `runAfter` time; the UI treats far-future values as paused, shows live relative countdowns for scheduled prompts, and the agent now arms an idle timer so the next eligible queued prompt starts automatically when its scheduled time arrives. The composer mirrors that scheduling UI with a clock button next to submit, and a scheduled composer submit queues the prompt with `runAfter` instead of starting it immediately. Shared SWR-style store primitives now live under `ui/src/lib/resource/` and `ui/src/lib/store/`: `createResource(...)` models one async resource, `createIndexedResource(...)` wraps keyed list/item caching, and `createEntityStore(...)` adds a conditional CRUD-oriented store surface with collection state, optional indexed item state, and cache reconciliation policies for create/update/remove operations. UI testing now uses Vitest for Svelte component tests and rune-backed `.svelte.ts` runtime tests, while plain source-shape and helper tests can stay on `node:test`.
+The UI data layer is being rewritten around two explicit patterns:
+component-level state and global application state. Component-local data may call
+the API client directly and live only for the component lifecycle. Shared backend
+or runtime data belongs in the root context as explicit global state and is
+changed only by page-load initialization, user-driven commands, backend events,
+or watch recovery flows.
+
+Global state should not load data reactively. The context layer should remain
+thin: one root `$state` context value plus command entry points, with no hidden
+`$effect`-driven fetching, derived loading, generic request cache, or nested
+frontend subscription channels. Project data should flow through a single
+project-level event stream for `local` and list-watch activation flows for
+sessions, threads, file subtrees, hooks, services, and other shared resources.
+
+Local browser persistence follows the same boundary as API-backed state. Storage
+modules under `ui/src/lib/context/stores/` are the persistence layer: they read,
+validate, mutate, and serialize local-storage-backed values. Ng context
+initialization reads those stores once to hydrate `context.view`, and Ng commands
+write to the stores before reflecting the stored value back into context.
+Components read the reflected values from context and request changes through
+commands; they must not call `localStorage`, `readStorage`, `writeStorage`, or
+store modules directly.
+
+The detailed target design, file/API shape, and migration plan live in
+`docs/ui/DATA_LAYER_DESIGN.md`. UI testing uses Vitest for Svelte component tests
+and rune-backed `.svelte.ts` runtime tests, while plain source-shape and helper
+tests can stay on `node:test`.
 
 ### 3. API Configuration
 

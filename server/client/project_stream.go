@@ -13,15 +13,17 @@ import (
 // ProjectStreamEvent is a typed event received from the project websocket.
 type ProjectStreamEvent any
 
+type ProjectHistoryEvent struct {
+	Event string
+	Data  any
+}
+
 type projectStreamSocketRequest struct {
-	Type        string              `json:"type"`
-	Stream      string              `json:"stream"`
-	SessionID   serverapi.SessionID `json:"sessionId,omitempty"`
-	ThreadID    serverapi.ThreadID  `json:"threadId,omitempty"`
-	ServiceID   serverapi.ServiceID `json:"serviceId,omitempty"`
-	Replay      bool                `json:"replay,omitempty"`
-	LastEventID string              `json:"lastEventId,omitempty"`
-	AfterID     string              `json:"afterId,omitempty"`
+	Type      string              `json:"type"`
+	Stream    string              `json:"stream"`
+	SessionID serverapi.SessionID `json:"sessionId,omitempty"`
+	ThreadID  serverapi.ThreadID  `json:"threadId,omitempty"`
+	ServiceID serverapi.ServiceID `json:"serviceId,omitempty"`
 }
 
 // WebSocketURL resolves a server websocket path against the client's base URL.
@@ -64,13 +66,13 @@ func projectStreamEvents(msg any) []ProjectStreamEvent {
 	case serverapi.ChatStreamMessage:
 		event := serverapi.ChatStreamEvent{SessionID: m.SessionID, ThreadID: m.ThreadID, Event: m.Event, ID: m.ID}
 		switch m.Event {
-		case serverapi.HistoryMessage:
+		case serverapi.ChatStreamEventNameHistoryMessage:
 			var message serverapi.Message
 			if err := json.Unmarshal([]byte(m.Data), &message); err != nil {
 				return []ProjectStreamEvent{serverapi.ProjectStreamErrorEvent{Stream: serverapi.ProjectStreamTypeChat, Error: fmt.Sprintf("decode history message: %v", err)}}
 			}
 			event.Data = message
-		case serverapi.Chunk:
+		case serverapi.ChatStreamEventNameChunk:
 			chunk, err := serverapi.UnmarshalMessageChunk([]byte(m.Data))
 			if err != nil {
 				return []ProjectStreamEvent{serverapi.ProjectStreamErrorEvent{Stream: serverapi.ProjectStreamTypeChat, Error: fmt.Sprintf("decode chat chunk: %v", err)}}
@@ -80,16 +82,23 @@ func projectStreamEvents(msg any) []ProjectStreamEvent {
 		return []ProjectStreamEvent{event}
 	case serverapi.ServiceOutputEvent:
 		return []ProjectStreamEvent{m}
+	case UnknownProjectStreamSocketMessage:
+		return []ProjectStreamEvent{m}
 	}
 	return nil
 }
 
-func parseProjectEventMessage(eventName serverapi.ProjectEventName, data string) (ProjectStreamEvent, error) {
-	if eventName == serverapi.Connected {
+func parseProjectEventMessage(eventName serverapi.ProjectEventName, data json.RawMessage) (ProjectStreamEvent, error) {
+	switch string(eventName) {
+	case "history-start", "history-end":
+		return ProjectHistoryEvent{Event: string(eventName)}, nil
+	}
+
+	if eventName == serverapi.ProjectEventNameConnected {
 		var connected struct {
 			ProjectID string `json:"projectId"`
 		}
-		if err := json.Unmarshal([]byte(data), &connected); err != nil {
+		if err := json.Unmarshal(data, &connected); err != nil {
 			return nil, fmt.Errorf("decode connected event: %w", err)
 		}
 		return serverapi.ProjectConnectedEvent{ProjectID: connected.ProjectID}, nil
@@ -102,36 +111,35 @@ func parseProjectEventMessage(eventName serverapi.ProjectEventName, data string)
 		Timestamp time.Time                  `json:"timestamp"`
 		Data      json.RawMessage            `json:"data"`
 	}
-	if err := json.Unmarshal([]byte(data), &envelope); err != nil {
+	if err := json.Unmarshal(data, &envelope); err != nil {
 		return nil, fmt.Errorf("decode project event %q: %w", eventName, err)
 	}
-	base := serverapi.ProjectEventBase{ID: envelope.ID, Seq: envelope.Seq, Type: envelope.Type, Timestamp: envelope.Timestamp, RawData: envelope.Data}
 	switch envelope.Type {
-	case serverapi.SessionUpdated:
-		var payload serverapi.SessionUpdatedData
+	case serverapi.ProjectEventNameSessionUpdated:
+		var payload serverapi.Session
 		if err := json.Unmarshal(envelope.Data, &payload); err != nil {
 			return nil, fmt.Errorf("decode session_updated data: %w", err)
 		}
-		return serverapi.SessionUpdatedEvent{ProjectEventBase: base, Data: payload}, nil
-	case serverapi.ThreadUpdated:
+		return serverapi.SessionUpdatedEvent{ID: envelope.ID, Seq: envelope.Seq, Type: envelope.Type, Timestamp: envelope.Timestamp, Data: payload}, nil
+	case serverapi.ProjectEventNameThreadUpdated:
 		var payload serverapi.ThreadUpdatedData
 		if err := json.Unmarshal(envelope.Data, &payload); err != nil {
 			return nil, fmt.Errorf("decode thread_updated data: %w", err)
 		}
-		return serverapi.ThreadUpdatedEvent{ProjectEventBase: base, Data: payload}, nil
-	case serverapi.WorkspaceUpdated:
-		var payload serverapi.WorkspaceUpdatedData
+		return serverapi.ThreadUpdatedEvent{ID: envelope.ID, Seq: envelope.Seq, Type: envelope.Type, Timestamp: envelope.Timestamp, Data: payload}, nil
+	case serverapi.ProjectEventNameWorkspaceUpdated:
+		var payload serverapi.Workspace
 		if err := json.Unmarshal(envelope.Data, &payload); err != nil {
 			return nil, fmt.Errorf("decode workspace_updated data: %w", err)
 		}
-		return serverapi.WorkspaceUpdatedEvent{ProjectEventBase: base, Data: payload}, nil
-	case serverapi.StartupTaskUpdated:
+		return serverapi.WorkspaceUpdatedEvent{ID: envelope.ID, Seq: envelope.Seq, Type: envelope.Type, Timestamp: envelope.Timestamp, Data: payload}, nil
+	case serverapi.ProjectEventNameStartupTaskUpdated:
 		var payload serverapi.StartupTask
 		if err := json.Unmarshal(envelope.Data, &payload); err != nil {
 			return nil, fmt.Errorf("decode startup_task_updated data: %w", err)
 		}
-		return serverapi.StartupTaskUpdatedEvent{ProjectEventBase: base, Data: payload}, nil
+		return serverapi.StartupTaskUpdatedEvent{ID: envelope.ID, Seq: envelope.Seq, Type: envelope.Type, Timestamp: envelope.Timestamp, Data: payload}, nil
 	default:
-		return serverapi.UnknownProjectEvent{ProjectEventBase: base, Data: envelope.Data}, nil
+		return serverapi.UnknownProjectEvent{ID: envelope.ID, Seq: envelope.Seq, Type: envelope.Type, Timestamp: envelope.Timestamp, Data: envelope.Data}, nil
 	}
 }

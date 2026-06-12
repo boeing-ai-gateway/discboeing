@@ -1,20 +1,39 @@
-export function readStorage(key: string): string | null {
+function getLocalStorage(): Storage | null {
 	if (typeof window === "undefined") {
 		return null;
 	}
 
-	return window.localStorage.getItem(key);
+	const storage = window.localStorage;
+	if (
+		typeof storage?.getItem !== "function" ||
+		typeof storage?.setItem !== "function" ||
+		typeof storage?.removeItem !== "function"
+	) {
+		return null;
+	}
+
+	return storage;
+}
+
+export function readStorage(key: string): string | null {
+	const storage = getLocalStorage();
+	if (!storage) {
+		return null;
+	}
+
+	return storage.getItem(key);
 }
 
 export function writeStorage(key: string, value: string | null): void {
-	if (typeof window === "undefined") {
+	const storage = getLocalStorage();
+	if (!storage) {
 		return;
 	}
 
 	if (value === null) {
-		window.localStorage.removeItem(key);
+		storage.removeItem(key);
 		return;
 	}
 
-	window.localStorage.setItem(key, value);
+	storage.setItem(key, value);
 }

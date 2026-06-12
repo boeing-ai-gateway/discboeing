@@ -1,78 +1,146 @@
 import type {
 	AgentCommand,
 	AgentCommandCredentialRequest,
-	BrowserEventChunkData,
-	ChatMessage,
+	CodexAuthorizeResponse,
+	CodexCallbackStatusRequest,
+	CodexCallbackStatusResponse,
+	CodexDeviceCodeResponse,
+	CodexExchangeRequest,
+	CodexExchangeResponse,
+	CodexPollRequest,
+	CodexPollResponse,
+	CreateCredentialRequest,
+	CreateThreadRequest,
 	CredentialInfo,
 	CredentialType,
-	FileStatus,
-	HookRunStatus as ApiHookRunStatus,
-	ModelInfo,
-	QueuedPrompt,
-	ServiceLocalhostBind,
-	ServiceStatus,
-	Session,
+	GitHubAuthorizeRequest,
+	GitHubAuthorizeResponse,
+	GitHubCallbackStatusRequest,
+	GitHubCallbackStatusResponse,
+	GitHubDeviceCodeRequest,
+	GitHubDeviceCodeResponse,
+	GitHubExchangeRequest,
+	GitHubExchangeResponse,
+	GitHubPollRequest,
+	GitHubPollResponse,
+	OAuthAuthorizeResponse,
+	OAuthExchangeRequest,
+	OAuthExchangeResponse,
+	StartChatRequest,
 	SessionCredentialAssignment,
-	SessionDiffFileEntry,
-	SessionDiffStats,
-	StartupTask,
-	SupportInfoResponse,
+	SessionDiffFilesResponse,
 	ThemeColorScheme,
-	Thread,
+	ChatMessage,
+	UpdateThreadRequest,
+	UpdateQueuedPromptRequest,
 	Workspace,
 	WorkspaceValidationResult,
 } from "$lib/api-types";
-import type {
-	ChatWidthMode,
-	SettingsDialogTab,
-	UpdateStatus,
-} from "$lib/app/app-context.types";
-import type { SwitcherCommitModifier } from "$lib/app/global-shortcuts";
-import type { IdeOption, PreferredIde } from "$lib/app/ide-options";
-import type { RecentThreadEntry } from "$lib/app/thread-switcher";
+import type { ConversationComment } from "$lib/conversation-helpers";
+import type { SwitcherCommitModifier } from "$lib/shortcuts/global-shortcuts";
+import type { IdeOption, PreferredIde } from "$lib/shell/ide-options";
+import type { RecentThreadEntry } from "$lib/context/view/thread-switcher";
+
+export type { ConversationComment } from "$lib/conversation-helpers";
 import type {
 	DesktopRuntimeKind,
 	WindowControlsSide,
 } from "$lib/desktop/types";
-import type { AsyncStatus } from "$lib/resource/types";
-import type { SessionActiveView } from "$lib/session/session-view.types";
-import type { ThemeMetadata, ThemeMode, ResolvedTheme } from "$lib/theme";
+import type { ResourceStatus } from "$lib/context/cache";
+import type { ResolvedTheme, ThemeMetadata, ThemeMode } from "$lib/theme";
+import type { DiffStyle } from "$lib/pierre-diff";
+import type { CredentialsState } from "$lib/context/domains/credentials";
+import type { ModelsState } from "$lib/context/domains/models";
+import type {
+	CreateSandboxProviderInput,
+	SandboxProviderMutationInput,
+	SandboxProvidersState,
+} from "$lib/context/domains/sandbox-providers";
+import type { SessionsState } from "$lib/context/domains/sessions";
+import type { StartupTasksState } from "$lib/context/domains/startup-tasks";
+import type { SupportInfoState } from "$lib/context/domains/support-info";
+import type { WorkspacesState } from "$lib/context/domains/workspaces";
+import type { DebugState } from "$lib/context/debug";
+
+export type CommandOptions = {
+	wait?: boolean;
+};
 
 export type Context = {
-	view: ContextView;
-	data: ContextData;
-	actions: ContextActions;
+	data: DataState;
+	view: ViewState;
+	commands: Commands;
 };
 
-export type ContextBootstrap = {
-	ideOptions: IdeOption[];
-	selectedSessionId?: string;
-	selectedThreadId?: string;
-	windowControls: string[];
-};
+export type ChatWidthMode = "full" | "constrained";
 
-export type ContextActions = Record<string, never>;
+export type SettingsDialogTab =
+	| "appearance"
+	| "chat"
+	| "providers"
+	| "update"
+	| "credentials";
 
-export type ContextView = {
-	app: AppView;
-	sessions: Record<string, SessionView>;
-};
+export type SessionDockViewKind =
+	| "terminal"
+	| "desktop"
+	| "vscode"
+	| "file"
+	| "diff-review"
+	| "services";
 
-export type AppView = {
+export type UpdateStatus =
+	| "idle"
+	| "checking"
+	| "downloading"
+	| "ready"
+	| "installing"
+	| "error";
+
+export type DataState = {
 	environment: {
-		isMobile: boolean;
-		isMacPlatform: boolean;
+		apiBase: string;
+		runtime: DesktopRuntimeKind;
+		isDesktop: boolean;
+		supportsNativeWindowControls: boolean;
+		supportsAppUpdates: boolean;
+		windowControlsSide: WindowControlsSide;
+		windowControls: string[];
 	};
-	navigation: {
-		desktopSidebarOpen: boolean;
-		mobileSidebarOpen: boolean;
-		mountedSessionIds: string[];
+	project: {
+		id: string;
+		status: ResourceStatus;
 	};
+	sessions: SessionsState;
+	workspaces: WorkspacesState;
+	startupTasks: StartupTasksState;
+	models: ModelsState;
+	credentials: CredentialsState;
+	sandboxProviders: SandboxProvidersState;
+	supportInfo: SupportInfoState;
+};
+
+export type ViewState = {
+	app: AppViewState;
 	selection: {
 		sessionId: string | null;
 		threadId: string | null;
 		pendingSessionId: string;
 		requestedThreadIdBySessionId: Record<string, string>;
+	};
+	navigation: {
+		desktopSidebarOpen: boolean;
+		mobileSidebarOpen: boolean;
+		hasSavedDesktopSidebarLayout: boolean;
+		mountedSessionIds: string[];
+	};
+	sessions: Record<string, SessionViewState | undefined>;
+};
+
+export type AppViewState = {
+	environment: {
+		isMobile: boolean;
+		isMacPlatform: boolean;
 	};
 	dialogs: {
 		settings: {
@@ -97,7 +165,7 @@ export type AppView = {
 		};
 	};
 	preferences: {
-		theme: ThemeMode;
+		theme: string;
 		resolvedTheme: ResolvedTheme;
 		colorScheme: ThemeColorScheme;
 		availableThemes: ThemeMetadata[];
@@ -122,22 +190,34 @@ export type AppView = {
 	recentThreads: {
 		visibleItems: RecentThreadEntry[];
 	};
+	diffReview: {
+		approvals: Record<string, Record<string, string>>;
+		style: DiffStyle;
+	};
 	startupTasks: {
 		visibleIds: string[];
 		hasActiveTasks: boolean;
 	};
 	updates: {
 		showBadge: boolean;
+		status: UpdateStatus;
+		availableVersion: string | null;
+		error: string | null;
+		downloadedBytes: number;
+		totalBytes: number | null;
+		isIgnored: boolean;
+		canTrackPrereleases: boolean;
 	};
 	projectEvents: {
 		connected: boolean;
 	};
+	debug: DebugState;
 };
 
-export type SessionView = {
+export type SessionViewState = {
 	sessionId: string;
 	workspace: {
-		activeView: SessionActiveView;
+		activeView: string;
 		selectedFile: string;
 		activeServiceId: string | null;
 		terminalRootEnabled: boolean;
@@ -156,6 +236,8 @@ export type SessionView = {
 		buffers: Record<string, SessionFileBufferState>;
 		editorModels: Record<string, unknown>;
 		editorViewStates: Record<string, unknown>;
+		diffTarget: string;
+		diffFilesByTarget: Record<string, SessionDiffFilesResponse>;
 	};
 	hooks: {
 		expanded: boolean;
@@ -166,6 +248,7 @@ export type SessionView = {
 	};
 	services: {
 		activeServiceId: string | null;
+		activeViewMode: "preview" | "logs";
 	};
 	commands: {
 		credentialDialog: SessionCommandCredentialDialogView;
@@ -182,10 +265,10 @@ export type SessionView = {
 		setupMessage: string | null;
 		sandboxProviderId: string;
 	};
-	threads: Record<string, ThreadView>;
+	threads: Record<string, ThreadViewState>;
 };
 
-export type ThreadView = {
+export type ThreadViewState = {
 	sessionId: string;
 	threadId: string;
 	composer: {
@@ -197,12 +280,6 @@ export type ThreadView = {
 	conversation: {
 		scrollTop: number;
 	};
-};
-
-export type ConversationComment = {
-	id: string;
-	snippet: string;
-	comment: string;
 };
 
 export type SessionFileBufferState = {
@@ -242,225 +319,437 @@ export type CredentialValidityPreset =
 
 export type CredentialValidityUnit = "hours" | "days" | "weeks" | "never";
 
-export type ContextData = {
-	environment: EnvironmentData;
-	sessions: SessionsData;
-	threads: ThreadsData;
-	conversations: ConversationsData;
-	workspaces: WorkspacesData;
-	models: ModelsData;
-	credentials: CredentialsData;
-	startupTasks: StartupTasksData;
-	files: FilesData;
-	hooks: HooksData;
-	services: ServicesData;
-	commands: CommandsData;
-	supportInfo: SupportInfoData;
-	updates: UpdatesData;
-};
-
-export type EnvironmentData = {
-	apiBase: string;
-	runtime: DesktopRuntimeKind;
-	isDesktop: boolean;
-	supportsNativeWindowControls: boolean;
-	supportsAppUpdates: boolean;
-	windowControlsSide: WindowControlsSide;
-	windowControls: string[];
-};
-
-export type SessionsData = {
-	items: Session[];
-	byId: Record<string, Session>;
-	status: AsyncStatus;
-	error: string | null;
-	recentThreads: RecentThreadEntry[];
-};
-
-export type ThreadsData = {
-	bySessionId: Record<string, SessionThreadsData>;
-};
-
-export type SessionThreadsData = {
-	items: Thread[];
-	byId: Record<string, Thread>;
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type ConversationsData = {
-	byThreadId: Record<string, ConversationData>;
-};
-
-export type ConversationData = {
-	sessionId: string;
-	threadId: string;
-	messages: ChatMessage[];
-	browserEventsByTurnId: Record<string, BrowserEventChunkData[]>;
-	status: AsyncStatus;
-	error: string | null;
-	isStreaming: boolean;
-	hasPendingQuestion: boolean;
-	pendingQuestionId: string | null;
-	promptQueue: QueuedPrompt[];
-};
-
-export type WorkspacesData = {
-	items: Workspace[];
-	byId: Record<string, Workspace>;
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type ModelsData = {
-	items: ModelInfo[];
-	byId: Record<string, ModelInfo>;
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type CredentialsData = {
-	items: CredentialInfo[];
-	byId: Record<string, CredentialInfo>;
-	types: CredentialType[];
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type StartupTasksData = {
-	items: StartupTask[];
-	byId: Record<string, StartupTask>;
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type FilesData = {
-	bySessionId: Record<string, SessionFilesData>;
-};
-
-export type SessionFilesData = {
-	list: string[];
-	searchable: string[];
-	diff: SessionDiffFileEntry[];
-	diffStats: SessionDiffStats;
-	diffTarget: string;
-	contents: Record<string, SessionFileRecord>;
-	tree: SessionFileTreeNode[];
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type SessionFileTreeNode = {
-	name: string;
-	path: string;
-	type: "file" | "directory";
-	size?: number;
-	changed?: boolean;
-	status?: FileStatus;
-	children?: SessionFileTreeNode[];
-};
-
-export type SessionFileRecord = {
-	path: string;
-	content: string;
-	encoding: "utf8" | "base64";
-	size: number;
-	fromBase: boolean;
-};
-
-export type HooksData = {
-	bySessionId: Record<string, SessionHooksData>;
-};
-
-export type SessionHooksData = {
-	status: HooksStatus;
-	outputById: Record<string, HookOutputState>;
-	resourceStatus: AsyncStatus;
-	error: string | null;
-	isRefreshing: boolean;
-	isStale: boolean;
-	fetchedAt: number | null;
-};
-
-export type HooksStatus = {
-	hooks: HookRunStatus[];
-	pendingHookIds: string[];
-	executionPaused: boolean;
-};
-
-export type HookRunStatus = Pick<
-	ApiHookRunStatus,
-	"hookId" | "hookName" | "type" | "lastResult" | "runCount" | "failCount"
-> & {
-	command?: string;
-	lastRunAt?: string;
-	lastExitCode?: number;
-	executionPaused: boolean;
-};
-
-export type HookOutputState = {
-	output: string;
-	sizeBytes: number;
-	displayedBytes: number;
-	tooLarge: boolean;
-};
-
-export type ServicesData = {
-	bySessionId: Record<string, SessionServicesData>;
-};
-
-export type SessionServicesData = {
-	items: ServiceItem[];
-	byId: Record<string, ServiceItem>;
-	status: AsyncStatus;
-	error: string | null;
-	isRefreshing: boolean;
-	isStale: boolean;
-	fetchedAt: number | null;
-};
-
-export type ServiceItem = {
+export type CreateSessionInput = {
 	id: string;
-	label: string;
-	target: string;
-	description?: string;
-	order?: number;
-	http?: number;
-	https?: number;
-	urlPath?: string;
-	status: ServiceStatus;
-	passive?: boolean;
-	exitCode?: number;
-	localhost?: ServiceLocalhostBind;
+	workspaceId?: string;
+	providerId?: string;
+	model?: string;
+	reasoning?: string;
 };
 
-export type CommandsData = {
-	bySessionId: Record<string, SessionCommandsData>;
+export type SendMessageInput = Pick<
+	StartChatRequest,
+	"messages" | "model" | "reasoning" | "serviceTier" | "runAfter" | "trigger"
+>;
+
+export type Commands = {
+	lifecycle: {
+		startup(options?: CommandOptions): Promise<void>;
+		shutdown(): void;
+	};
+	projects: {
+		activateProject(projectId: string, options?: CommandOptions): Promise<void>;
+	};
+	sessions: {
+		activateSession(sessionId: string, options?: CommandOptions): Promise<void>;
+		deactivateSession(sessionId: string): Promise<void>;
+		refreshSession(sessionId: string, options?: CommandOptions): Promise<void>;
+		createSession(
+			input: CreateSessionInput,
+			options?: CommandOptions,
+		): Promise<void>;
+		renameSession(
+			sessionId: string,
+			name: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		stopSession(sessionId: string, options?: CommandOptions): Promise<void>;
+		deleteSession(sessionId: string, options?: CommandOptions): Promise<void>;
+	};
+	threads: {
+		activateThread(
+			sessionId: string,
+			threadId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		deactivateThread(sessionId: string, threadId: string): Promise<void>;
+		createThread(
+			sessionId: string,
+			input: CreateThreadRequest,
+			options?: CommandOptions,
+		): Promise<void>;
+		renameThread(
+			sessionId: string,
+			threadId: string,
+			name: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		updateThread(
+			sessionId: string,
+			threadId: string,
+			input: UpdateThreadRequest,
+			options?: CommandOptions,
+		): Promise<void>;
+		deleteThread(
+			sessionId: string,
+			threadId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		sendMessage(
+			sessionId: string,
+			threadId: string,
+			input: SendMessageInput,
+			options?: CommandOptions,
+		): Promise<void>;
+	};
+	view: {
+		mountSessionView(sessionId: string): Promise<void>;
+		mountThreadView(sessionId: string, threadId: string): Promise<void>;
+		setSessionHooksExpanded(
+			sessionId: string,
+			expanded: boolean,
+		): Promise<void>;
+		setPendingWorkspaceSandboxProviderId(
+			sessionId: string,
+			providerId: string,
+		): Promise<void>;
+		resetPendingWorkspaceSetup(sessionId: string): Promise<void>;
+	};
+	navigation: {
+		setDesktopSidebarOpen(open: boolean): Promise<void>;
+		setMobileSidebarOpen(open: boolean): Promise<void>;
+		toggleMobileSidebarOpen(): Promise<void>;
+		startNewSession(): Promise<void>;
+		selectSession(sessionId: string): Promise<void>;
+		openThread(sessionId: string, threadId: string): Promise<void>;
+		toggleSelectedSessionView(viewKind: SessionDockViewKind): Promise<void>;
+	};
+	dialogs: {
+		setSettingsDialogOpen(open: boolean): Promise<void>;
+		setSettingsDialogTab(tab: SettingsDialogTab): Promise<void>;
+		openSettingsDialog(tab?: SettingsDialogTab): Promise<void>;
+		closeSettingsDialog(): Promise<void>;
+		openCredentialsDialog(credentialId?: string): Promise<void>;
+		openGitHubCredentialFlow(): Promise<void>;
+		clearCredentialsDialogTarget(): Promise<void>;
+		clearCredentialFlowIntent(): Promise<void>;
+		openSupportInfoDialog(): Promise<void>;
+		closeSupportInfoDialog(): Promise<void>;
+		setKeyboardShortcutsOpen(open: boolean): Promise<void>;
+		toggleKeyboardShortcutsOpen(): Promise<void>;
+		setRecentThreadSwitcherOpen(open: boolean): Promise<void>;
+		setRecentThreadSwitcherSelectedKey(key: string | null): Promise<void>;
+		setRecentThreadSwitcherCommitModifier(
+			modifier: SwitcherCommitModifier | null,
+		): Promise<void>;
+		closeKeyboardShortcutOverlays(): Promise<void>;
+	};
+	supportInfo: {
+		fetchSupportInfo(): Promise<void>;
+	};
+	preferences: {
+		setPreferredIde(preferredIde: PreferredIde): Promise<void>;
+		setTheme(theme: ThemeMode): Promise<void>;
+		setColorScheme(colorScheme: ThemeColorScheme): Promise<void>;
+		setRecentThreadsVisibleLimit(value: number): Promise<void>;
+		setShowRefreshButton(show: boolean): Promise<void>;
+		setTopBarIconOnly(iconOnly: boolean): Promise<void>;
+		setDefaultModel(modelId: string): Promise<void>;
+		setDefaultReasoning(reasoning: string): Promise<void>;
+		setDefaultServiceTier(serviceTier: string): Promise<void>;
+		setChatWidthMode(mode: ChatWidthMode): Promise<void>;
+		setAutoScrollOnStream(enabled: boolean): Promise<void>;
+		setSidebarRecentOpen(open: boolean): Promise<void>;
+		setSidebarAllOpen(open: boolean): Promise<void>;
+		setSidebarAllGroupedByWorkspace(grouped: boolean): Promise<void>;
+		setDiffReviewApprovals(
+			approvals: Record<string, Record<string, string>>,
+		): Promise<void>;
+		setDiffReviewStyle(style: DiffStyle): Promise<void>;
+		addPromptToHistory(prompt: string): Promise<void>;
+		removePromptFromHistory(prompt: string): Promise<void>;
+		pinPrompt(prompt: string): Promise<void>;
+		unpinPrompt(prompt: string): Promise<void>;
+	};
+	threadComposer: {
+		setComposerDraft(sessionId: string, value: string): Promise<void>;
+		clearComposerDraft(
+			sessionId: string,
+			threadId: string,
+			storageKey?: string,
+		): Promise<void>;
+		movePendingComposerDraftToThread(
+			threadId: string,
+			nextThreadId: string,
+			value: string,
+		): Promise<void>;
+		setThreadNextModelId(
+			sessionId: string,
+			threadId: string,
+			modelId: string | null | undefined,
+		): Promise<void>;
+		setThreadNextReasoning(
+			sessionId: string,
+			threadId: string,
+			reasoning: string | undefined,
+		): Promise<void>;
+		setThreadNextServiceTier(
+			sessionId: string,
+			threadId: string,
+			serviceTier: string | null | undefined,
+		): Promise<void>;
+		clearThreadNextComposerValues(
+			sessionId: string,
+			threadId: string,
+		): Promise<void>;
+		addThreadPendingComment(
+			sessionId: string,
+			threadId: string,
+			comment: Omit<ConversationComment, "id">,
+		): Promise<void>;
+		removeThreadPendingComment(
+			sessionId: string,
+			threadId: string,
+			commentId: string,
+		): Promise<void>;
+		clearThreadPendingComments(
+			sessionId: string,
+			threadId: string,
+		): Promise<void>;
+		setConversationScrollTop(
+			sessionId: string,
+			threadId: string,
+			scrollTop: number,
+		): Promise<void>;
+		addToolApprovalResponse(
+			sessionId: string,
+			threadId: string,
+			payload: { id: string; approved: boolean; reason?: string },
+		): Promise<void>;
+		refreshThread(
+			sessionId: string,
+			threadId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		submitThread(
+			sessionId: string,
+			threadId: string,
+			payload: {
+				parts: ChatMessage["parts"];
+				workspaceId?: string;
+				providerId?: string;
+				workspaceType?: "local" | "git" | null;
+				workspacePath?: string | null;
+				allowEmptyPendingMessage?: boolean;
+				runAfter?: string;
+			},
+		): Promise<{ sessionId: string; threadId: string } | void>;
+		cancelThread(sessionId: string, threadId: string): Promise<void>;
+		deleteQueuedPrompt(
+			sessionId: string,
+			threadId: string,
+			queueId: string,
+		): Promise<void>;
+		updateQueuedPrompt(
+			sessionId: string,
+			threadId: string,
+			queueId: string,
+			payload: UpdateQueuedPromptRequest,
+		): Promise<void>;
+	};
+	agentCommands: {
+		runAgentCommand(sessionId: string, command: AgentCommand): Promise<void>;
+		closeCommandCredentialDialog(sessionId: string): Promise<void>;
+		confirmCommandCredentialDialog(sessionId: string): Promise<void>;
+		selectCommandCredentialOption(
+			sessionId: string,
+			envVar: string,
+			value: string,
+		): Promise<void>;
+		setCommandCredentialCreateName(
+			sessionId: string,
+			envVar: string,
+			value: string,
+		): Promise<void>;
+		setCommandCredentialCreateSecret(
+			sessionId: string,
+			envVar: string,
+			value: string,
+		): Promise<void>;
+		setCommandCredentialValidityPreset(
+			sessionId: string,
+			envVar: string,
+			value: CredentialValidityPreset,
+		): Promise<void>;
+		setCommandCredentialValidityValue(
+			sessionId: string,
+			envVar: string,
+			value: string,
+		): Promise<void>;
+		setCommandCredentialValidityUnit(
+			sessionId: string,
+			envVar: string,
+			value: CredentialValidityUnit,
+		): Promise<void>;
+		launchCommandCredentialOAuthWizard(
+			sessionId: string,
+			envVar: string,
+		): Promise<void>;
+		refreshCommandCredentialDialogCredentials(sessionId: string): Promise<void>;
+	};
+	credentials: {
+		refreshCredentials(options?: CommandOptions): Promise<void>;
+		createCredential(input: CreateCredentialRequest): Promise<CredentialInfo>;
+		deleteCredential(credentialId: string): Promise<void>;
+		toggleCredentialInactive(credential: CredentialInfo): Promise<void>;
+		codexAuthorize(): Promise<CodexAuthorizeResponse>;
+		codexDeviceCode(): Promise<CodexDeviceCodeResponse>;
+		codexCallbackStatus(
+			input: CodexCallbackStatusRequest,
+		): Promise<CodexCallbackStatusResponse>;
+		codexPoll(input: CodexPollRequest): Promise<CodexPollResponse>;
+		codexExchange(input: CodexExchangeRequest): Promise<CodexExchangeResponse>;
+		githubAuthorize(
+			input: GitHubAuthorizeRequest,
+		): Promise<GitHubAuthorizeResponse>;
+		githubDeviceCode(
+			input: GitHubDeviceCodeRequest,
+		): Promise<GitHubDeviceCodeResponse>;
+		githubCallbackStatus(
+			input: GitHubCallbackStatusRequest,
+		): Promise<GitHubCallbackStatusResponse>;
+		githubPoll(input: GitHubPollRequest): Promise<GitHubPollResponse>;
+		githubExchange(
+			input: GitHubExchangeRequest,
+		): Promise<GitHubExchangeResponse>;
+		anthropicAuthorize(): Promise<OAuthAuthorizeResponse>;
+		anthropicExchange(
+			input: OAuthExchangeRequest,
+		): Promise<OAuthExchangeResponse>;
+	};
+	sessionCredentials: {
+		refreshSessionCredentials(
+			sessionId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		setSessionCredentialAssignments(
+			sessionId: string,
+			assignments: SessionCredentialAssignment[],
+			options?: CommandOptions,
+		): Promise<void>;
+	};
+	sandboxProviders: {
+		refreshSandboxProviders(options?: CommandOptions): Promise<void>;
+		createSandboxProvider(
+			input: CreateSandboxProviderInput,
+			options?: CommandOptions,
+		): Promise<void>;
+		updateSandboxProvider(
+			id: string,
+			input: SandboxProviderMutationInput,
+			options?: CommandOptions,
+		): Promise<void>;
+		deleteSandboxProvider(id: string, options?: CommandOptions): Promise<void>;
+		updateDefaultSandboxProvider(
+			providerId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+	};
+	workspaces: {
+		renameWorkspace(workspaceId: string, displayName: string): Promise<void>;
+		deleteWorkspace(workspaceId: string): Promise<void>;
+	};
+	files: {
+		refreshFileSubtree(
+			sessionId: string,
+			path: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		openFile(
+			sessionId: string,
+			path?: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		openFilesPanel(sessionId: string): Promise<void>;
+		setDiffTarget(sessionId: string, target: string): Promise<void>;
+		saveFile(
+			sessionId: string,
+			path: string,
+			content: string,
+			options?: CommandOptions & {
+				encoding?: "utf8" | "base64";
+				originalContent?: string;
+			},
+		): Promise<void>;
+		renameFile(
+			sessionId: string,
+			from: string,
+			to: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		deleteFile(
+			sessionId: string,
+			path: string,
+			options?: CommandOptions,
+		): Promise<void>;
+	};
+	hooks: {
+		rerunHook(
+			sessionId: string,
+			hookId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		pauseHooks(
+			sessionId: string,
+			paused: boolean,
+			options?: CommandOptions,
+		): Promise<void>;
+		pauseHook(
+			sessionId: string,
+			hookId: string,
+			paused: boolean,
+			options?: CommandOptions,
+		): Promise<void>;
+	};
+	services: {
+		openServicePanel(
+			sessionId: string,
+			serviceId: string,
+			viewMode?: "preview" | "logs",
+		): Promise<void>;
+		startService(
+			sessionId: string,
+			serviceId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		stopService(
+			sessionId: string,
+			serviceId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+		bindServiceLocalhost(
+			sessionId: string,
+			serviceId: string,
+			port: number,
+			options?: CommandOptions,
+		): Promise<void>;
+		unbindServiceLocalhost(
+			sessionId: string,
+			serviceId: string,
+			options?: CommandOptions,
+		): Promise<void>;
+	};
+	updates: {
+		checkForUpdates(): Promise<void>;
+		setTrackPrereleases(track: boolean): Promise<void>;
+		installUpdateAndRelaunch(): Promise<void>;
+		ignoreUpdate(): Promise<void>;
+	};
 };
 
-export type SessionCommandsData = {
-	items: AgentCommand[];
-	visibleItems: AgentCommand[];
-	status: AsyncStatus;
-	error: string | null;
-	isRefreshing: boolean;
-	isStale: boolean;
-	fetchedAt: number | null;
-	isSubmitting: boolean;
-};
-
-export type SupportInfoData = {
-	value: SupportInfoResponse | null;
-	status: AsyncStatus;
-	error: string | null;
-};
-
-export type UpdatesData = {
-	status: UpdateStatus;
-	availableVersion: string | null;
-	error: string | null;
-	downloadedBytes: number;
-	totalBytes: number | null;
-	isIgnored: boolean;
-	canTrackPrereleases: boolean;
+export type Bootstrap = {
+	projectId?: string;
+	selectedSessionId?: string;
+	selectedThreadId?: string;
+	workspaces?: Workspace[];
+	ideOptions?: IdeOption[];
+	windowControls?: string[];
+	environment?: {
+		apiBase?: string;
+		runtime?: DesktopRuntimeKind;
+		isDesktop?: boolean;
+		supportsNativeWindowControls?: boolean;
+		supportsAppUpdates?: boolean;
+		windowControlsSide?: WindowControlsSide;
+	};
 };

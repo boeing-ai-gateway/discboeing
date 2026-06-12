@@ -107,7 +107,7 @@ type threadHistorySession struct {
 
 func (s *threadHistorySession) WorkspaceRoot() string { return "" }
 func (s *threadHistorySession) Close()                {}
-func (s *threadHistorySession) ListCommands(context.Context) ([]agent.Command, error) {
+func (s *threadHistorySession) ListCommands(context.Context) ([]api.Command, error) {
 	return nil, nil
 }
 func (s *threadHistorySession) ListThreads(context.Context) ([]api.Thread, error) {

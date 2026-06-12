@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { withCurrentDesktopWindow } from "$lib/shell";
 	import { onMount } from "svelte";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
 
 	const context = useContext();
 	const environment = context.data.environment;

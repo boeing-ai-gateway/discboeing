@@ -67,6 +67,11 @@ func (m ProjectStreamSocketMessageJSON) MarshalJSON() ([]byte, error) {
 			Type string `json:"type"`
 			serverapi.ServiceOutputEvent
 		}{Type: "event", ServiceOutputEvent: msg})
+	case serverapi.SessionStreamMessage:
+		return json.Marshal(struct {
+			Type string `json:"type"`
+			serverapi.SessionStreamMessage
+		}{Type: "event", SessionStreamMessage: msg})
 	case UnknownProjectStreamSocketMessage:
 		if len(msg.Raw) > 0 {
 			return msg.Raw, nil
@@ -130,6 +135,12 @@ func (m *ProjectStreamSocketMessageJSON) UnmarshalJSON(data []byte) error {
 			m.Message = msg
 		case serverapi.ProjectStreamType("service"):
 			var msg serverapi.ServiceOutputEvent
+			if err := json.Unmarshal(data, &msg); err != nil {
+				return err
+			}
+			m.Message = msg
+		case "session":
+			var msg serverapi.SessionStreamMessage
 			if err := json.Unmarshal(data, &msg); err != nil {
 				return err
 			}

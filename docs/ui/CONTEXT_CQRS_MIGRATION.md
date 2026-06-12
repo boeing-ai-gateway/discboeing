@@ -79,9 +79,9 @@ splitting left for a later pass. Old context entry points include
 | `ConversationHooksPanel.svelte`                 | No                | Partial       | Yes                 | No old context entry points; hook pause/rerun behavior is provided by root-command callbacks, while dialog/download view state remains explicit props.                                                                                                                     |
 | `ConversationPane.svelte`                       | Yes               | Partial       | Yes                 | Reads selected session/chat preferences and conversation scroll projection from root context; comment queue and scroll writes use root commands. Session/thread remain explicit props.                                                                                     |
 | `ConversationWorkspaceSelector.svelte`          | Yes               | Partial       | Yes                 | Reads workspace data from root context and calls workspace validation/refresh commands; session is an explicit prop.                                                                                                                                                       |
-| `CredentialsManager.svelte`                     | Yes               | Partial       | Yes                 | Reads credential data/dialog flow from root context and uses API/credential commands; no direct app-state accessor.                                                                                                                                                        |
+| `CredentialsManager.svelte`                     | No                | Partial       | Yes                 | Uses `NgContext` credential cache/dialog flow and credential/OAuth commands; no legacy context/store imports.                                                                                                                                                               |
 | `DockPanel.svelte`                              | Yes               | Partial       | Yes                 | Reads theme/sidebar/files/services projections from root context, receives `sessionId`/`threadId` plus the workspace view controller, passes pure file data/view props to `FilesPanel`, and uses command-backed callbacks; no explicit session/thread domain props remain. |
-| `SandboxProvidersManager.svelte`                | Yes               | Partial       | Yes                 | Reads credential data from root context and refreshes credentials through commands.                                                                                                                                                                                        |
+| `SandboxProvidersManager.svelte`                | No                | Partial       | Yes                 | Uses `NgContext` sandbox provider cache/commands and credential commands; no legacy context/store imports.                                                                                                                                                                  |
 | `SessionToolbar.svelte`                         | Yes               | Partial       | Yes                 | Reads IDE preferences and command credential dialog view from root context; agent command run and credential dialog actions use root commands.                                                                                                                             |
 | `SessionToolbarStack.svelte`                    | Yes               | Partial       | Yes                 | Reads mounted session toolbar projections from root context.                                                                                                                                                                                                               |
 | `SessionWorkspace.svelte`                       | Yes               | Partial       | Yes                 | Uses command-backed session ensure/release; no direct app-state accessor.                                                                                                                                                                                                  |
@@ -143,14 +143,12 @@ splitting left for a later pass. Old context entry points include
   `thread.removePendingComment(...)`, `thread.clearPendingComments(...)`,
   `thread.deleteQueuedPrompt(...)`, or `thread.updateQueuedPrompt(...)`; source-level coverage now enforces this for app root
   components.
-- `DockPanel.svelte` no longer receives explicit `SessionContextValue` or
-  `ThreadContextValue` props; `ThreadWorkspaceActive.svelte` passes only
+- `DockPanel.svelte` no longer receives explicit session runtime or thread
+  snapshot objects; `ThreadWorkspaceActive.svelte` passes only
   `sessionId`, `threadId`, and the existing workspace view controller for dock
-  open/close/maximize behavior. `ThreadWorkspaceActive.svelte`,
-  `ConversationPane.svelte`, and `ConversationComposer.svelte` still keep
-  explicit session/thread domain objects where they drive runtime lifecycle,
-  pending-session setup, or broad composer/conversation reads that are not yet
-  safely split into root projections.
+  open/close/maximize behavior. `ConversationPane.svelte` and
+  `ConversationComposer.svelte` read conversation/composer data through
+  thread snapshots and route mutations through root commands.
 - The files compatibility adapter has been removed: `FilesPanel` is pure and
   receives root file data/view plus callbacks from `DockPanel`. The command
   credential dialog compatibility getter has also been removed:
@@ -164,5 +162,5 @@ splitting left for a later pass. Old context entry points include
 - Legacy-shaped `app-context.types.ts` remains temporarily as a type-alias home for shared view/data enums and shapes while remaining domain modules are split.
 - All app root components have migration coverage for old context/app-state removal: no direct old context imports, old context entry point calls, temporary bridge imports, `context.actions.app` reads, or direct `getAppState()` imports remain in app components.
 - `pnpm --dir ./ui typecheck` passes with `svelte-check found 0 errors and 0 warnings`.
-- Focused component migration tests pass with `node --test ui/src/lib/components/test/component-conventions.test.ts ui/src/lib/components/test/conversation-composer.test.ts ui/src/lib/components/test/conversation-pane.test.ts ui/src/lib/components/test/dock-panel.test.ts ui/src/lib/components/test/thread-workspace-active.test.ts` (`11` tests, `0` failures).
-- Focused `node --test ui/src/lib/app-runtime.test.ts` passes with `5` tests and `0` failures.
+- Focused component migration tests pass with `cd ui && pnpm vitest run src/lib/components/test/component-conventions.vitest.ts src/lib/components/test/conversation-composer.vitest.ts src/lib/components/test/conversation-pane.vitest.ts src/lib/components/test/dock-panel.vitest.ts src/lib/components/test/thread-workspace-active.vitest.ts` (`11` tests, `0` failures).
+- Focused `cd ui && pnpm vitest run src/lib/test/app-runtime.vitest.ts` passes with `5` tests and `0` failures.

@@ -535,13 +535,13 @@ func TestSandboxAgentClient_GetStream_PreservesEventAndID(t *testing.T) {
 
 func TestSandboxAgentClient_StreamSessionActivity(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/threads/activity/stream" {
+		if r.Method == http.MethodGet && r.URL.Path == "/session/stream" && r.URL.Query().Get("resources") == "threads" {
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprint(w, "event: ping\n")
 			fmt.Fprint(w, "data: {}\n\n")
-			fmt.Fprint(w, "event: activity\n")
-			fmt.Fprint(w, "data: {\"status\":\"running\",\"runningCount\":1}\n\n")
+			fmt.Fprint(w, "event: threads_updated\n")
+			fmt.Fprint(w, "data: {\"threads\":[{\"id\":\"thread-1\",\"activityStatus\":{\"status\":\"running\",\"reason\":\"completion\"}}]}\n\n")
 			return
 		}
 		http.NotFound(w, r)
@@ -565,7 +565,7 @@ func TestSandboxAgentClient_StreamSessionActivity(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("expected 1 activity event, got %d", len(events))
 	}
-	if events[0].Status != "running" || events[0].RunningCount != 1 {
+	if events[0].Status != "running" || events[0].RunningCount != 1 || events[0].RepresentativeThreadID != "thread-1" {
 		t.Fatalf("unexpected activity event: %+v", events[0])
 	}
 }

@@ -3,20 +3,16 @@
 	import AppHeader from "$lib/components/app/AppHeader.svelte";
 	import AppKeyboardShortcuts from "$lib/components/app/AppKeyboardShortcuts.svelte";
 	import AppSidebar from "$lib/components/app/AppSidebar.svelte";
+	import DebugOverlay from "$lib/components/app/DebugOverlay.svelte";
 	import SessionWorkspace from "$lib/components/app/SessionWorkspace.svelte";
 	import StartupTasksBanner from "$lib/components/app/parts/StartupTasksBanner.svelte";
 	import * as Resizable from "$lib/components/ui/resizable";
 	import * as Sheet from "$lib/components/ui/sheet";
-	import { useContext } from "$lib/context/context.svelte";
-	import {
-		setDesktopSidebarOpen,
-		setMobileSidebarOpen,
-	} from "$lib/context/commands/navigation";
-	import { shouldLoadSessionWorkspace } from "$lib/context/commands/session";
+	import { useContext } from "$lib/context";
+	import { shouldLoadSessionWorkspace } from "$lib/shell-selectors";
 
 	const context = useContext();
 	const appEnvironment = $derived(context.view.app.environment);
-	const SIDEBAR_LAYOUT_STORAGE_KEY = "paneforge:discobot-ui-sidebar-layout";
 	const SIDEBAR_MIN_WIDTH_PX = 300;
 	const SIDEBAR_MIN_SIZE_FALLBACK = 10;
 	let desktopPaneGroupElement = $state<HTMLDivElement | null>(null);
@@ -25,12 +21,12 @@
 	let desktopSidebarInitialized = $state(false);
 	const currentSelectedSessionId = $derived.by(
 		() =>
-			context.view.app.selection.sessionId ??
-			context.view.app.selection.pendingSessionId,
+			context.view.selection.sessionId ??
+			context.view.selection.pendingSessionId,
 	);
 	const showSessionToolbar = $derived.by(() => !!currentSelectedSessionId);
 	const mountedSessionIds = $derived.by(
-		() => context.view.app.navigation.mountedSessionIds,
+		() => context.view.navigation.mountedSessionIds,
 	);
 	const visibleStartupTasks = $derived.by(() =>
 		context.view.app.startupTasks.visibleIds
@@ -40,36 +36,40 @@
 
 	function toggleSidebar() {
 		if (appEnvironment.isMobile) {
-			setMobileSidebarOpen(!context.view.app.navigation.mobileSidebarOpen);
+			void context.commands.navigation.setMobileSidebarOpen(
+				!context.view.navigation.mobileSidebarOpen,
+			);
 			return;
 		}
 
 		if (!desktopSidebarPane) {
-			setDesktopSidebarOpen(!context.view.app.navigation.desktopSidebarOpen);
+			void context.commands.navigation.setDesktopSidebarOpen(
+				!context.view.navigation.desktopSidebarOpen,
+			);
 			return;
 		}
 
 		if (desktopSidebarPane.isCollapsed()) {
 			desktopSidebarPane.expand();
-			setDesktopSidebarOpen(true);
+			void context.commands.navigation.setDesktopSidebarOpen(true);
 			return;
 		}
 
 		desktopSidebarPane.collapse();
-		setDesktopSidebarOpen(false);
+		void context.commands.navigation.setDesktopSidebarOpen(false);
 	}
 
 	function handleSessionSelect() {
 		if (appEnvironment.isMobile) {
-			setMobileSidebarOpen(false);
+			void context.commands.navigation.setMobileSidebarOpen(false);
 		}
 	}
 
-	function hasSavedSidebarLayout() {
-		return (
-			typeof window !== "undefined" &&
-			window.localStorage.getItem(SIDEBAR_LAYOUT_STORAGE_KEY)
-		);
+	function syncDesktopSidebarOpen(open: boolean) {
+		if (context.view.navigation.desktopSidebarOpen === open) {
+			return;
+		}
+		void context.commands.navigation.setDesktopSidebarOpen(open);
 	}
 
 	function updateDesktopSidebarMinSize(width: number) {
@@ -111,7 +111,7 @@
 			return;
 		}
 
-		setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
+		syncDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
 	});
 
 	$effect(() => {
@@ -125,13 +125,13 @@
 
 		desktopSidebarInitialized = true;
 
-		if (hasSavedSidebarLayout()) {
-			setDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
+		if (context.view.navigation.hasSavedDesktopSidebarLayout) {
+			syncDesktopSidebarOpen(!desktopSidebarPane.isCollapsed());
 			return;
 		}
 
 		desktopSidebarPane.expand();
-		setDesktopSidebarOpen(true);
+		syncDesktopSidebarOpen(true);
 	});
 
 	$effect(() => {
@@ -144,12 +144,12 @@
 		}
 
 		const paneCollapsed = desktopSidebarPane.isCollapsed();
-		if (context.view.app.navigation.desktopSidebarOpen && paneCollapsed) {
+		if (context.view.navigation.desktopSidebarOpen && paneCollapsed) {
 			desktopSidebarPane.expand();
 			return;
 		}
 
-		if (!context.view.app.navigation.desktopSidebarOpen && !paneCollapsed) {
+		if (!context.view.navigation.desktopSidebarOpen && !paneCollapsed) {
 			desktopSidebarPane.collapse();
 		}
 	});
@@ -157,7 +157,7 @@
 
 {#snippet mountedSessions(mainClass: string)}
 	{#each mountedSessionIds as sessionId (sessionId)}
-		{#if shouldLoadSessionWorkspace(sessionId, { includePending: true })}
+		{#if shouldLoadSessionWorkspace( context, sessionId, { includePending: true }, )}
 			<SessionWorkspace
 				{sessionId}
 				visible={sessionId === currentSelectedSessionId}
@@ -168,6 +168,7 @@
 {/snippet}
 
 <div class="h-[100dvh] flex flex-col bg-background text-foreground">
+	<DebugOverlay />
 	<AppKeyboardShortcuts />
 	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
 	<StartupTasksBanner
@@ -177,7 +178,7 @@
 
 	<div class="flex min-h-0 flex-1 overflow-hidden">
 		{#if appEnvironment.isMobile}
-			<Sheet.Root bind:open={context.view.app.navigation.mobileSidebarOpen}>
+			<Sheet.Root bind:open={context.view.navigation.mobileSidebarOpen}>
 				<Sheet.Content
 					side="left"
 					overlayClass="bg-transparent"
@@ -213,10 +214,10 @@
 						collapsible
 						collapsedSize={0}
 						onCollapse={() => {
-							setDesktopSidebarOpen(false);
+							void context.commands.navigation.setDesktopSidebarOpen(false);
 						}}
 						onExpand={() => {
-							setDesktopSidebarOpen(true);
+							void context.commands.navigation.setDesktopSidebarOpen(true);
 						}}
 					>
 						<div class="box-border h-full min-h-0 pb-3 pl-3 pr-2 pt-1">

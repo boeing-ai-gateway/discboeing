@@ -12,9 +12,11 @@
 		"lint:fix": "eslint . --fix",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck",
 		"check:fix": "pnpm format && pnpm lint:fix && pnpm typecheck",
+		"generate:api-types": "openapi-typescript ../server/api/openapi.json -o src/lib/api-types.generated.ts && prettier src/lib/api-types.generated.ts --write",
 		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test:vitest": "vitest run",
-		"test:vitest:watch": "vitest"
+		"test:vitest:watch": "vitest",
+		"test:e2e:live": "DISCOBOT_LIVE_E2E=1 DISCOBOT_LIVE_E2E_API_ROOT=http://localhost:3001/api vitest run src/lib/context/test/session-events.e2e.vitest.ts"
 	},
 	"dependencies": {
 		"@fontsource/geist-sans": "^5.2.5",
@@ -71,6 +73,7 @@
 		"jsdom": "^29.1.1",
 		"layerchart": "2.0.0-next.43",
 		"mode-watcher": "^1.1.0",
+		"openapi-typescript": "^7.13.0",
 		"paneforge": "^1.0.2",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^3.5.1",

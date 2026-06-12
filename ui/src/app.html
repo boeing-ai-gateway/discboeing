@@ -31,8 +31,15 @@
 						: window.matchMedia("(prefers-color-scheme: dark)").matches
 							? "dark"
 							: "light";
+				const storedColorScheme = localStorage.getItem("theme.colorScheme");
 
 				document.documentElement.classList.toggle("dark", theme === "dark");
+				if (storedColorScheme) {
+					document.documentElement.setAttribute(
+						"data-theme",
+						storedColorScheme,
+					);
+				}
 			} catch (_error) {
 				document.documentElement.classList.add("dark");
 			}

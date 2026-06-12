@@ -1,0 +1,12 @@
+{
+  "responses": [
+    {
+      "name": "hello",
+      "match": { "exact": "hello" },
+      "response": { "text": "Hello from the e2e mock LLM." }
+    }
+  ],
+  "fallback": {
+    "text": "E2E mock LLM fallback response. Add a JSON fixture in agent-go/llm-responses or set DISCOBOT_E2E_MOCK_LLM_RESPONSES_DIR for test-specific mappings."
+  }
+}

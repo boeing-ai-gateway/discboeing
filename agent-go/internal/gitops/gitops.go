@@ -9,50 +9,27 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/obot-platform/discobot/agent-go/internal/api"
 )
 
 // FileDiffEntry represents a single changed file in the diff.
-type FileDiffEntry struct {
-	Path      string `json:"path"`
-	Status    string `json:"status"` // "added", "modified", "deleted", "renamed"
-	OldPath   string `json:"oldPath,omitempty"`
-	Additions int    `json:"additions"`
-	Deletions int    `json:"deletions"`
-	Binary    bool   `json:"binary"`
-	Patch     string `json:"patch,omitempty"`
-}
+type FileDiffEntry = api.FileDiffEntry
 
 // DiffStats contains summary statistics for a diff.
-type DiffStats struct {
-	FilesChanged int `json:"filesChanged"`
-	Additions    int `json:"additions"`
-	Deletions    int `json:"deletions"`
-}
+type DiffStats = api.DiffStats
 
 // DiffResult is the full diff result.
-type DiffResult struct {
-	Files []FileDiffEntry `json:"files"`
-	Stats DiffStats       `json:"stats"`
-}
+type DiffResult = api.DiffResponse
 
 // CommitsResult is the successful result of getting commit patches.
-type CommitsResult struct {
-	Patches     string `json:"patches"`
-	CommitCount int    `json:"commitCount"`
-	HeadCommit  string `json:"headCommit"`
-}
+type CommitsResult = api.CommitsResponse
 
 // WorkspaceChangeCommit describes a Discobot workspace change commit.
-type WorkspaceChangeCommit struct {
-	CreatedAt string    `json:"createdAt"`
-	Hash      string    `json:"hash"`
-	DiffStat  DiffStats `json:"diffstat"`
-}
+type WorkspaceChangeCommit = api.WorkspaceChangeCommit
 
 // WorkspaceChangeCommitsResult is the successful result of listing workspace change commits.
-type WorkspaceChangeCommitsResult struct {
-	Commits []WorkspaceChangeCommit `json:"commits"`
-}
+type WorkspaceChangeCommitsResult = api.WorkspaceChangeCommitsResponse
 
 // CommitsError represents an error during commit operations.
 type CommitsError struct {

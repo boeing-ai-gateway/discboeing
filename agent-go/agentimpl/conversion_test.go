@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/obot-platform/discobot/agent-go/internal/api"
 	"github.com/obot-platform/discobot/agent-go/scriptexec"
 	"github.com/obot-platform/discobot/agent-go/sessionconfig"
 	"github.com/obot-platform/discobot/agent-go/thread"
@@ -57,18 +57,18 @@ func TestDiscobotCommandMetadata(t *testing.T) {
 			}},
 		}},
 	})
-	want := agent.DiscobotCommandMetadata{
+	want := api.CommandDiscobotMetadata{
 		UI:          true,
 		Label:       "Commit",
 		ActiveLabel: "Committing",
 		Icon:        "git-commit",
 		Group:       "Git",
 		Order:       10,
-		CredentialRequest: []agent.DiscobotCredentialRequest{{
+		CredentialRequest: []api.CommandCredentialRequest{{
 			EnvVar:        "GH_TOKEN",
 			Name:          "GitHub credential",
 			Justification: "Authenticate push.",
-			ApprovedUses: []agent.DiscobotCredentialApprovedUse{{
+			ApprovedUses: []api.CommandApprovedUse{{
 				Description: "push with gh",
 			}},
 		}},

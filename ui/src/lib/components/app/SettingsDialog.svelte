@@ -48,34 +48,11 @@
 	import SandboxProvidersManager from "$lib/components/app/SandboxProvidersManager.svelte";
 	import SupportInfoDialog from "$lib/components/app/SupportInfoDialog.svelte";
 	import { api } from "$lib/api-client";
-	import { RECENT_THREADS_VISIBLE_LIMIT_PRESETS } from "$lib/store/ui-state.store.svelte";
 	import type { ModelInfo, ThemeColorScheme } from "$lib/api-types";
 	import type { ThemeMode } from "$lib/theme";
-	import {
-		closeSettingsDialog,
-		openSupportInfoDialog,
-		setSettingsDialogOpen,
-		setSettingsDialogTab,
-	} from "$lib/context/commands/dialog";
-	import {
-		setAutoScrollOnStream,
-		setChatWidthMode,
-		setColorScheme,
-		setDefaultModel,
-		setDefaultReasoning,
-		setDefaultServiceTier,
-		setRecentThreadsVisibleLimit,
-		setShowRefreshButton,
-		setTheme,
-		setTopBarIconOnly,
-	} from "$lib/context/commands/preference";
-	import {
-		checkForUpdates,
-		ignoreUpdate,
-		installUpdateAndRelaunch,
-		setTrackPrereleases,
-	} from "$lib/context/commands/update";
-	import { useContext } from "$lib/context/context.svelte";
+	import { useContext } from "$lib/context";
+
+	const RECENT_THREADS_VISIBLE_LIMIT_PRESETS = [1, 4, 8, 12] as const;
 
 	function getCleanModelName(name: string) {
 		return name.replace(/\s*\(latest\)\s*/gi, "").trim();
@@ -137,13 +114,16 @@
 	}
 
 	const context = useContext();
-	const models = $derived(context.data.models);
+	const models = $derived.by(() =>
+		context.data.models.allIds
+			.map((id) => context.data.models.byId[id])
+			.filter((model): model is ModelInfo => Boolean(model)),
+	);
 	const preferences = $derived(context.view.app.preferences);
 
 	const selectedDefaultModel = $derived.by(() =>
 		preferences.defaultModel
-			? (models.items.find((model) => model.id === preferences.defaultModel) ??
-				null)
+			? (models.find((model) => model.id === preferences.defaultModel) ?? null)
 			: null,
 	);
 	const defaultReasoningLevels = $derived.by(() =>
@@ -162,7 +142,7 @@
 	);
 
 	const modelProviderEntries = $derived.by(() => {
-		const dedupedModels = getDedupedModels(models.items);
+		const dedupedModels = getDedupedModels(models);
 		const grouped: Record<string, ModelInfo[]> = {};
 
 		for (const model of dedupedModels) {
@@ -183,7 +163,9 @@
 		return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
 	});
 	const settingsDialog = $derived(context.view.app.dialogs.settings);
-	const updates = $derived(context.data.updates);
+	const settingsDialogOpen = $derived(settingsDialog.open);
+	const settingsDialogTab = $derived(settingsDialog.tab);
+	const updates = $derived(context.view.app.updates);
 	const showUpdateBadge = $derived(context.view.app.updates.showBadge);
 	const trackPrereleases = $derived(
 		context.view.app.preferences.trackPrereleases,
@@ -237,15 +219,15 @@
 
 	function handleSettingsOpenChange(open: boolean) {
 		if (!open) {
-			closeSettingsDialog();
+			void context.commands.dialogs.closeSettingsDialog();
 			return;
 		}
 
-		if (!showUpdateTab && settingsDialog.tab === "update") {
-			setSettingsDialogTab("appearance");
+		if (!showUpdateTab && settingsDialogTab === "update") {
+			void context.commands.dialogs.setSettingsDialogTab("appearance");
 		}
 
-		setSettingsDialogOpen(true);
+		void context.commands.dialogs.setSettingsDialogOpen(true);
 		void loadProviderCapabilities();
 	}
 
@@ -260,7 +242,7 @@
 			return;
 		}
 
-		setSettingsDialogTab(value);
+		void context.commands.dialogs.setSettingsDialogTab(value);
 	}
 
 	function handleSettingsInteractOutside(event: Event) {
@@ -272,10 +254,10 @@
 	}
 
 	function handleDefaultModelChange(modelId: string) {
-		setDefaultModel(modelId);
+		void context.commands.preferences.setDefaultModel(modelId);
 
 		const nextModel = modelId
-			? (models.items.find((model) => model.id === modelId) ?? null)
+			? (models.find((model) => model.id === modelId) ?? null)
 			: null;
 		if (
 			preferences.defaultReasoning &&
@@ -284,7 +266,7 @@
 					preferences.defaultReasoning,
 				))
 		) {
-			setDefaultReasoning("");
+			void context.commands.preferences.setDefaultReasoning("");
 		}
 		if (
 			preferences.defaultServiceTier &&
@@ -293,7 +275,7 @@
 					tier.toLowerCase() === preferences.defaultServiceTier.toLowerCase(),
 			)
 		) {
-			setDefaultServiceTier("");
+			void context.commands.preferences.setDefaultServiceTier("");
 		}
 	}
 
@@ -315,7 +297,7 @@
 	}
 </script>
 
-<Dialog.Root open={settingsDialog.open} onOpenChange={handleSettingsOpenChange}>
+<Dialog.Root open={settingsDialogOpen} onOpenChange={handleSettingsOpenChange}>
 	<Dialog.Content
 		class="sm:max-w-2xl max-h-[90vh] overflow-y-auto"
 		onInteractOutside={handleSettingsInteractOutside}
@@ -331,7 +313,7 @@
 		</Dialog.Header>
 
 		<Tabs
-			value={settingsDialog.tab}
+			value={settingsDialogTab}
 			onValueChange={handleSettingsTabChange}
 			class="mt-1"
 		>
@@ -384,7 +366,7 @@
 													value === "dark" ||
 													value === "system"
 												) {
-													setTheme(value);
+													void context.commands.preferences.setTheme(value);
 												}
 											}}
 											variant="outline"
@@ -417,7 +399,7 @@
 											id="settings-theme"
 											value={preferences.colorScheme}
 											onchange={(event) => {
-												setColorScheme(
+												void context.commands.preferences.setColorScheme(
 													(event.currentTarget as HTMLSelectElement)
 														.value as ThemeColorScheme,
 												);
@@ -451,7 +433,9 @@
 														nextValue as (typeof RECENT_THREADS_VISIBLE_LIMIT_PRESETS)[number],
 													)
 												) {
-													setRecentThreadsVisibleLimit(nextValue);
+													void context.commands.preferences.setRecentThreadsVisibleLimit(
+														nextValue,
+													);
 												}
 											}}
 											variant="outline"
@@ -484,7 +468,9 @@
 											aria-label="Show refresh button"
 											checked={preferences.showRefreshButton}
 											onCheckedChange={(checked) => {
-												setShowRefreshButton(checked === true);
+												void context.commands.preferences.setShowRefreshButton(
+													checked === true,
+												);
 											}}
 										/>
 									</ItemActions>
@@ -503,7 +489,9 @@
 											aria-label="Icon-only top bar"
 											checked={preferences.topBarIconOnly}
 											onCheckedChange={(checked) => {
-												setTopBarIconOnly(checked === true);
+												void context.commands.preferences.setTopBarIconOnly(
+													checked === true,
+												);
 											}}
 										/>
 									</ItemActions>
@@ -583,7 +571,9 @@
 											onchange={(event) => {
 												const next = (event.currentTarget as HTMLSelectElement)
 													.value;
-												setDefaultReasoning(next === "__model__" ? "" : next);
+												void context.commands.preferences.setDefaultReasoning(
+													next === "__model__" ? "" : next,
+												);
 											}}
 											class="w-full"
 										>
@@ -623,7 +613,7 @@
 											onchange={(event) => {
 												const next = (event.currentTarget as HTMLSelectElement)
 													.value;
-												setDefaultServiceTier(
+												void context.commands.preferences.setDefaultServiceTier(
 													next === "__standard__" ? "" : next,
 												);
 											}}
@@ -652,7 +642,7 @@
 											aria-label="Full width conversation"
 											checked={preferences.chatWidthMode === "full"}
 											onCheckedChange={(checked) => {
-												setChatWidthMode(
+												void context.commands.preferences.setChatWidthMode(
 													checked === true ? "full" : "constrained",
 												);
 											}}
@@ -674,7 +664,9 @@
 											aria-label="Auto-scroll"
 											checked={preferences.autoScrollOnStream}
 											onCheckedChange={(checked) => {
-												setAutoScrollOnStream(checked === true);
+												void context.commands.preferences.setAutoScrollOnStream(
+													checked === true,
+												);
 											}}
 										/>
 									</ItemActions>
@@ -693,7 +685,7 @@
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							{#if settingsDialog.open && settingsDialog.tab === "providers"}
+							{#if settingsDialogOpen && settingsDialogTab === "providers"}
 								<SandboxProvidersManager />
 							{/if}
 						</CardContent>
@@ -713,7 +705,7 @@
 										variant="ghost"
 										size="xs"
 										onclick={() => {
-											void checkForUpdates();
+											void context.commands.updates.checkForUpdates();
 										}}
 										disabled={updates.status === "checking" ||
 											updates.status === "downloading" ||
@@ -744,7 +736,9 @@
 											aria-label="Track pre-releases"
 											checked={trackPrereleases}
 											onCheckedChange={(checked) =>
-												void setTrackPrereleases(checked === true)}
+												void context.commands.updates.setTrackPrereleases(
+													checked === true,
+												)}
 										/>
 									</div>
 								{/if}
@@ -760,11 +754,16 @@
 											<Button
 												variant="default"
 												size="xs"
-												onclick={() => void installUpdateAndRelaunch()}
+												onclick={() =>
+													void context.commands.updates.installUpdateAndRelaunch()}
 											>
 												Restart to update
 											</Button>
-											<Button variant="outline" size="xs" onclick={ignoreUpdate}
+											<Button
+												variant="outline"
+												size="xs"
+												onclick={() =>
+													void context.commands.updates.ignoreUpdate()}
 												>Ignore</Button
 											>
 										</div>
@@ -873,7 +872,7 @@
 							</CardDescription>
 						</CardHeader>
 						<CardContent>
-							{#if settingsDialog.open && settingsDialog.tab === "credentials"}
+							{#if settingsDialogOpen && settingsDialogTab === "credentials"}
 								<CredentialsManager />
 							{/if}
 						</CardContent>
@@ -888,15 +887,21 @@
 					<Button
 						variant="outline"
 						size="icon-sm"
-						onclick={openSupportInfoDialog}
+						onclick={() => {
+							void context.commands.dialogs.openSupportInfoDialog();
+						}}
 						title="Support information"
 						aria-label="Support information"
 					>
 						<InfoIcon class="size-4" />
 					</Button>
 				</div>
-				<Button variant="default" size="sm" onclick={closeSettingsDialog}
-					>Done</Button
+				<Button
+					variant="default"
+					size="sm"
+					onclick={() => {
+						void context.commands.dialogs.closeSettingsDialog();
+					}}>Done</Button
 				>
 			</div>
 		</Dialog.Footer>

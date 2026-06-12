@@ -32,10 +32,7 @@ func (h *Handler) ListFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.ListFilesResponse{
-		Path:    result.Path,
-		Entries: toAPIFileEntries(result.Entries),
-	})
+	h.JSON(w, http.StatusOK, api.ListFilesResponse(*result))
 }
 
 // SearchFiles handles GET /files/search — fuzzy search files in workspace.
@@ -55,10 +52,7 @@ func (h *Handler) SearchFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.SearchFilesResponse{
-		Query:   result.Query,
-		Results: toAPISearchEntries(result.Results),
-	})
+	h.JSON(w, http.StatusOK, api.SearchFilesResponse(*result))
 }
 
 // ReadFile handles GET /files/read — reads file content.
@@ -75,12 +69,7 @@ func (h *Handler) ReadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.ReadFileResponse{
-		Path:     result.Path,
-		Content:  result.Content,
-		Encoding: result.Encoding,
-		Size:     result.Size,
-	})
+	h.JSON(w, http.StatusOK, api.ReadFileResponse(*result))
 }
 
 // ReadThreadArtifact handles GET /threads/{id}/artifacts/read — reads a
@@ -108,12 +97,7 @@ func (h *Handler) ReadThreadArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.ReadFileResponse{
-		Path:     result.Path,
-		Content:  result.Content,
-		Encoding: result.Encoding,
-		Size:     result.Size,
-	})
+	h.JSON(w, http.StatusOK, api.ReadFileResponse(*result))
 }
 
 func parseThreadArtifactURI(raw string) (string, error) {
@@ -175,10 +159,8 @@ func (h *Handler) WriteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.WriteFileResponse{
-		Path: result.Path,
-		Size: result.Size,
-	})
+	h.JSON(w, http.StatusOK, api.WriteFileResponse(*result))
+	h.notifyActivityChanged()
 }
 
 // DeleteFile handles POST /files/delete — deletes a file or directory.
@@ -200,10 +182,8 @@ func (h *Handler) DeleteFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.DeleteFileResponse{
-		Path: result.Path,
-		Type: result.Type,
-	})
+	h.JSON(w, http.StatusOK, api.DeleteFileResponse(*result))
+	h.notifyActivityChanged()
 }
 
 // RenameFile handles POST /files/rename — renames/moves a file or directory.
@@ -229,34 +209,6 @@ func (h *Handler) RenameFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.JSON(w, http.StatusOK, api.RenameFileResponse{
-		OldPath: result.OldPath,
-		NewPath: result.NewPath,
-	})
-}
-
-// toAPIFileEntries converts internal file entries to API file entries.
-func toAPIFileEntries(entries []files.FileEntry) []api.FileEntry {
-	result := make([]api.FileEntry, len(entries))
-	for i, e := range entries {
-		result[i] = api.FileEntry{
-			Name: e.Name,
-			Type: e.Type,
-			Size: e.Size,
-		}
-	}
-	return result
-}
-
-// toAPISearchEntries converts internal search entries to API search entries.
-func toAPISearchEntries(entries []files.SearchResultEntry) []api.SearchResultEntry {
-	result := make([]api.SearchResultEntry, len(entries))
-	for i, e := range entries {
-		result[i] = api.SearchResultEntry{
-			Path:  e.Path,
-			Type:  e.Type,
-			Score: e.Score,
-		}
-	}
-	return result
+	h.JSON(w, http.StatusOK, api.RenameFileResponse(*result))
+	h.notifyActivityChanged()
 }
