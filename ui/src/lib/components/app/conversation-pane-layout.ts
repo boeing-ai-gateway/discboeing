@@ -84,6 +84,53 @@ export function groupMessagesIntoTurns(
 	return turns;
 }
 
+export function orderStreamingCompactionMessages(
+	messages: ChatMessage[],
+): ChatMessage[] {
+	const streamingAssistantIndex = messages.findIndex(
+		(message) => message.role === "assistant" && message.status === "streaming",
+	);
+	if (streamingAssistantIndex === -1) {
+		return messages;
+	}
+
+	const compactionMessagesAfterStreamingAssistant: ChatMessage[] = [];
+	const remainingMessages: ChatMessage[] = [];
+	let changed = false;
+
+	for (let index = 0; index < messages.length; index += 1) {
+		const message = messages[index];
+		if (
+			index > streamingAssistantIndex &&
+			message &&
+			isCompactionMessage(message)
+		) {
+			compactionMessagesAfterStreamingAssistant.push(message);
+			changed = true;
+			continue;
+		}
+
+		remainingMessages.push(message);
+	}
+
+	if (!changed) {
+		return messages;
+	}
+
+	const nextStreamingAssistantIndex = remainingMessages.findIndex(
+		(message) => message.role === "assistant" && message.status === "streaming",
+	);
+	if (nextStreamingAssistantIndex === -1) {
+		return messages;
+	}
+
+	return [
+		...remainingMessages.slice(0, nextStreamingAssistantIndex),
+		...compactionMessagesAfterStreamingAssistant,
+		...remainingMessages.slice(nextStreamingAssistantIndex),
+	];
+}
+
 function nextStableRenderId(id: string, counts: Map<string, number>): string {
 	const count = (counts.get(id) ?? 0) + 1;
 	counts.set(id, count);

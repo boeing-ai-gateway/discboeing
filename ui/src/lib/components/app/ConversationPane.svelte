@@ -59,6 +59,7 @@
 		getReservedTurnMinHeight,
 		groupMessagesIntoTurns,
 		isCompactionMessage,
+		orderStreamingCompactionMessages,
 	} from "$lib/components/app/conversation-pane-layout";
 	import { Alert, AlertDescription } from "$lib/components/ui/alert";
 	import { Button } from "$lib/components/ui/button";
@@ -150,8 +151,10 @@
 		() => messages ?? threadContent?.messages ?? [],
 	);
 	const visibleConversationMessages = $derived.by(() =>
-		conversationMessages.filter(
-			(message) => !message.synthetic || isCompactionMessage(message),
+		orderStreamingCompactionMessages(
+			conversationMessages.filter(
+				(message) => !message.synthetic || isCompactionMessage(message),
+			),
 		),
 	);
 	const conversationStatus = $derived.by(() => {
@@ -230,8 +233,12 @@
 	const canShowComposer = $derived.by(
 		() => showComposer && Boolean(activeSessionId) && Boolean(activeThreadId),
 	);
-	const latestConversationMessageId = $derived.by(
-		() => visibleConversationMessages.at(-1)?.id ?? null,
+	const activeStreamingAssistantMessageId = $derived.by(
+		() =>
+			visibleConversationMessages.find(
+				(message) =>
+					message.role === "assistant" && message.status === "streaming",
+			)?.id ?? null,
 	);
 	const savedScrollTop = $derived.by(() => {
 		if (!activeSessionId || !activeThreadId) {
@@ -1043,7 +1050,7 @@
 		return (
 			isStreaming &&
 			message.role === "assistant" &&
-			message.id === latestConversationMessageId
+			message.id === activeStreamingAssistantMessageId
 		);
 	}
 

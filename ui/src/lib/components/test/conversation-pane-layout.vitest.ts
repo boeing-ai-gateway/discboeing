@@ -5,6 +5,7 @@ import type { ChatMessage } from "$lib/api-types";
 import {
 	getReservedTurnMinHeight,
 	groupMessagesIntoTurns,
+	orderStreamingCompactionMessages,
 } from "../app/conversation-pane-layout";
 
 function makeUserMessage(id: string, text: string): ChatMessage {
@@ -32,6 +33,26 @@ function withTurnId(message: ChatMessage, turnId: string): ChatMessage {
 				: {}),
 			discobot: {
 				turnId,
+			},
+		},
+	};
+}
+
+function makeCompactionMessage(
+	id: string,
+	role: ChatMessage["role"],
+	compactionFor: string,
+): ChatMessage {
+	return {
+		id,
+		role,
+		synthetic: true,
+		parts: [{ type: "text", text: "Compacted" }],
+		metadata: {
+			discobot: {
+				kind: "compaction",
+				compactionFor,
+				turnId: `compaction-${compactionFor}`,
 			},
 		},
 	};
@@ -185,6 +206,51 @@ test("groupMessagesIntoTurns assigns unique stable render ids for duplicate ids"
 		"parts",
 		"metadata",
 	]);
+});
+
+test("orderStreamingCompactionMessages moves compaction before active assistant", () => {
+	const streamingAssistant: ChatMessage = {
+		...makeAssistantMessage("assistant-streaming", "partial"),
+		status: "streaming",
+	};
+	const compactionUser = makeCompactionMessage(
+		"compaction-user",
+		"user",
+		"assistant-previous",
+	);
+	const compactionAssistant = makeCompactionMessage(
+		"compaction-assistant",
+		"assistant",
+		"assistant-previous",
+	);
+
+	const ordered = orderStreamingCompactionMessages([
+		makeUserMessage("user-1", "prompt"),
+		streamingAssistant,
+		compactionUser,
+		compactionAssistant,
+	]);
+
+	assert.deepEqual(
+		ordered.map((message) => message.id),
+		[
+			"user-1",
+			"compaction-user",
+			"compaction-assistant",
+			"assistant-streaming",
+		],
+	);
+});
+
+test("orderStreamingCompactionMessages preserves completed history order", () => {
+	const messages = [
+		makeUserMessage("user-1", "prompt"),
+		makeAssistantMessage("assistant-1", "reply"),
+		makeCompactionMessage("compaction-user", "user", "assistant-1"),
+		makeCompactionMessage("compaction-assistant", "assistant", "assistant-1"),
+	];
+
+	assert.equal(orderStreamingCompactionMessages(messages), messages);
 });
 
 test("getReservedTurnMinHeight fills the visible viewport when the turn is short", () => {
