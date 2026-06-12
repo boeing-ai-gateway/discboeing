@@ -104,6 +104,11 @@ function createHarness(
 		completionId?: string;
 		isRunning: boolean;
 	}>;
+	approvalResponses: Array<{
+		approvalId: string;
+		approved: boolean;
+		reason?: string;
+	}>;
 	setCount: number;
 	state: ReturnType<typeof createChatStreamState>;
 } {
@@ -115,6 +120,11 @@ function createHarness(
 		threadId?: string;
 		completionId?: string;
 		isRunning: boolean;
+	}> = [];
+	const approvalResponses: Array<{
+		approvalId: string;
+		approved: boolean;
+		reason?: string;
 	}> = [];
 
 	const state = createChatStreamState({
@@ -139,6 +149,10 @@ function createHarness(
 			completionStatusEvents.push(info);
 			return overrides.onCompletionStatus?.(info);
 		},
+		onToolApprovalResponse: (response) => {
+			approvalResponses.push(response);
+			return overrides.onToolApprovalResponse?.(response);
+		},
 		onFinish: overrides.onFinish,
 		onFinishStep: overrides.onFinishStep,
 		onHistoryReplayEnd: overrides.onHistoryReplayEnd,
@@ -158,6 +172,9 @@ function createHarness(
 		},
 		get completionStatusEvents() {
 			return completionStatusEvents;
+		},
+		get approvalResponses() {
+			return approvalResponses;
 		},
 		get setCount() {
 			return setCount;
@@ -1312,11 +1329,14 @@ test("tool approval responses are accepted during resumed streams", async () => 
 	});
 
 	assert.deepEqual(harness.startEvents, [{ resume: true }]);
+	assert.deepEqual(harness.approvalResponses, [
+		{ approvalId: "approval-123", approved: true },
+	]);
 	assert.equal(
 		harness.messages[0]?.parts[1]?.type === "dynamic-tool"
 			? harness.messages[0]?.parts[1]?.approval?.approved
 			: undefined,
-		true,
+		undefined,
 	);
 });
 
@@ -1358,7 +1378,7 @@ test("tool outputs update the tool part without extra callbacks", async () => {
 	);
 });
 
-test("denied tool outputs preserve rejected approval metadata", async () => {
+test("denied tool outputs preserve rejected approval state", async () => {
 	const harness = createHarness([
 		makeCustomAssistantMessage("assistant-custom"),
 	]);
@@ -1400,8 +1420,11 @@ test("denied tool outputs preserve rejected approval metadata", async () => {
 		harness.messages[0]?.parts[1]?.type === "dynamic-tool"
 			? harness.messages[0].parts[1].approval
 			: undefined,
-		{ id: "approval-123", approved: false, reason: "continue" },
+		{ id: "approval-123", approved: false },
 	);
+	assert.deepEqual(harness.approvalResponses, [
+		{ approvalId: "approval-123", approved: false, reason: "continue" },
+	]);
 });
 
 test("bindChatStreamEventSource wires EventSource events into the reducer", async () => {

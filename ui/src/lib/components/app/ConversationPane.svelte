@@ -945,6 +945,18 @@
 		};
 	}
 
+	function getToolApprovalResponse(
+		toolPart: DynamicToolPart,
+	): { approved: boolean; reason?: string } | undefined {
+		const approvalId =
+			toolPart.approval && typeof toolPart.approval.id === "string"
+				? toolPart.approval.id
+				: toolPart.toolCallId;
+		return approvalId
+			? threadContent?.answeredApprovalIds[approvalId]
+			: undefined;
+	}
+
 	function getTurnGroupedStepCount(
 		turn: ConversationTurn,
 		partGroups: ReturnType<typeof getAssistantMessagePartGroups> | null,
@@ -1584,6 +1596,7 @@
 				previousTodoEntries={part.toolName === "TodoWrite"
 					? (previousTodoEntriesByToolCallId[part.toolCallId] ?? [])
 					: undefined}
+				approvalResponse={getToolApprovalResponse(part as DynamicToolPart)}
 				onToolApprovalResponse={activeSessionId && activeThreadId
 					? (payload) =>
 							void context.commands.threadComposer.addToolApprovalResponse(

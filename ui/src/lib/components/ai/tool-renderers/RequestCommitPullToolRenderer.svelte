@@ -61,6 +61,7 @@
 		sessionId = null,
 		threadId = null,
 		onToolApprovalResponse,
+		approvalResponse,
 		isRaw,
 		onToggleRaw,
 		resolvedTheme = "light",
@@ -89,6 +90,10 @@
 		}
 		return toolPart.toolCallId || null;
 	});
+	const isApprovalAnswered = $derived(approvalResponse !== undefined);
+	const isPendingApproval = $derived.by(
+		() => toolPart.state === "approval-requested" && !isApprovalAnswered,
+	);
 	const summary = $derived.by(() => {
 		const notes = pendingQuestion?.questions?.find(
 			(question) => question.notes,
@@ -137,9 +142,16 @@
 		typeof toolPart.output === "string" ? toolPart.output : null,
 	);
 	const wasApproved = $derived.by(
-		() => outputText === APPROVED_TEXT || approvalStatus === "answered",
+		() =>
+			approvalResponse?.approved !== false &&
+			(outputText === APPROVED_TEXT ||
+				approvalStatus === "answered" ||
+				approvalResponse?.approved === true),
 	);
 	const rejectionSummary = $derived.by(() => {
+		if (approvalResponse?.approved === false) {
+			return approvalResponse.reason ?? "";
+		}
 		const localReason = rejectionReason.trim();
 		if (localReason) {
 			return localReason;
@@ -175,7 +187,21 @@
 	}
 
 	$effect(() => {
-		if (toolPart.state !== "approval-requested") {
+		if (isApprovalAnswered) {
+			approvalStatus = "answered";
+			approvalError = null;
+			pendingQuestion = null;
+			preview = null;
+			previewStatus = "idle";
+			previewError = null;
+			diffDialogOpen = false;
+			rawPatchDialogOpen = false;
+			notesDialogOpen = false;
+			rejectDialogOpen = false;
+			return;
+		}
+
+		if (!isPendingApproval) {
 			approvalStatus = "idle";
 			approvalError = null;
 			pendingQuestion = null;
@@ -239,7 +265,7 @@
 
 	$effect(() => {
 		if (
-			toolPart.state !== "approval-requested" ||
+			!isPendingApproval ||
 			approvalStatus !== "pending" ||
 			!pendingQuestion ||
 			!sessionId ||
@@ -429,17 +455,13 @@
 <div class="flex items-center justify-between gap-4 px-4 pt-4">
 	<CollapsibleTrigger
 		class="flex min-w-0 flex-1 items-center gap-2 text-left text-muted-foreground"
-		disabled={toolPart.state === "approval-requested"}
+		disabled={isPendingApproval}
 	>
 		<GitCommitHorizontalIcon class="size-4 shrink-0 text-muted-foreground" />
 		<span class="truncate font-medium text-sm">Pull Sandbox Commit</span>
 		<ToolHeaderStatus state={toolPart.state} />
 	</CollapsibleTrigger>
-	<ToolHeaderControls
-		{isRaw}
-		{onToggleRaw}
-		canCollapse={toolPart.state !== "approval-requested"}
-	/>
+	<ToolHeaderControls {isRaw} {onToggleRaw} canCollapse={!isPendingApproval} />
 </div>
 
 <ToolContent>

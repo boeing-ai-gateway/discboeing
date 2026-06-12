@@ -20,6 +20,7 @@
 		threadId?: string | null;
 		resolvedTheme?: ResolvedTheme;
 		previousTodoEntries?: PlanEntry[];
+		approvalResponse?: { approved: boolean; reason?: string };
 		onToolApprovalResponse?: (payload: {
 			id: string;
 			approved: boolean;
@@ -36,16 +37,19 @@
 		threadId,
 		resolvedTheme,
 		previousTodoEntries,
+		approvalResponse,
 		onToolApprovalResponse,
 	}: Props = $props();
 
+	const isApprovalAnswered = $derived(approvalResponse !== undefined);
+	const isPendingApproval = $derived(
+		toolPart.state === "approval-requested" && !isApprovalAnswered,
+	);
 	const getInitialOpen = () =>
 		defaultOpen ||
 		toolPart.toolName === "AskUserQuestion" ||
-		(toolPart.toolName === "RequestCommitPull" &&
-			toolPart.state === "approval-requested") ||
-		(toolPart.toolName === "RequestUserCredential" &&
-			toolPart.state === "approval-requested");
+		(toolPart.toolName === "RequestCommitPull" && isPendingApproval) ||
+		(toolPart.toolName === "RequestUserCredential" && isPendingApproval);
 
 	let isRaw = $derived(forceRaw);
 	let open = $state(getInitialOpen());
@@ -53,10 +57,8 @@
 	$effect(() => {
 		if (
 			toolPart.toolName === "AskUserQuestion" ||
-			(toolPart.toolName === "RequestCommitPull" &&
-				toolPart.state === "approval-requested") ||
-			(toolPart.toolName === "RequestUserCredential" &&
-				toolPart.state === "approval-requested")
+			(toolPart.toolName === "RequestCommitPull" && isPendingApproval) ||
+			(toolPart.toolName === "RequestUserCredential" && isPendingApproval)
 		) {
 			open = true;
 		}
@@ -70,10 +72,8 @@
 	const isAlwaysExpanded = $derived.by(
 		() =>
 			toolPart.toolName === "AskUserQuestion" ||
-			(toolPart.toolName === "RequestCommitPull" &&
-				toolPart.state === "approval-requested") ||
-			(toolPart.toolName === "RequestUserCredential" &&
-				toolPart.state === "approval-requested"),
+			(toolPart.toolName === "RequestCommitPull" && isPendingApproval) ||
+			(toolPart.toolName === "RequestUserCredential" && isPendingApproval),
 	);
 	const showRaw = $derived.by(() => !hasOptimizedView || isRaw);
 	const title = $derived.by(() => getToolTitle(toolPart));
@@ -104,6 +104,7 @@
 			{threadId}
 			{resolvedTheme}
 			{previousTodoEntries}
+			{approvalResponse}
 			{onToolApprovalResponse}
 			{isRaw}
 			onToggleRaw={() => (isRaw = !isRaw)}

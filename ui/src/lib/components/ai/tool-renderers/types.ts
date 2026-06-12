@@ -9,6 +9,7 @@ export type ToolRendererComponentProps = {
 	threadId?: string | null;
 	resolvedTheme?: ResolvedTheme;
 	previousTodoEntries?: PlanEntry[];
+	approvalResponse?: { approved: boolean; reason?: string };
 	onToolApprovalResponse?: (payload: {
 		id: string;
 		approved: boolean;

@@ -1,7 +1,6 @@
 import { api } from "$lib/api-client";
 import type { ChatMessage, UpdateQueuedPromptRequest } from "$lib/api-types";
 import {
-	addToolApprovalResponse as applyToolApprovalResponse,
 	createUserMessageFromParts,
 	getPendingQuestionApprovalId,
 	hasUserMessageContent,
@@ -368,6 +367,7 @@ export async function submitThread(
 		if (!payload.runAfter) {
 			content.isStreaming = true;
 			content.pendingQuestionId = null;
+			content.answeredApprovalIds = {};
 		}
 		const response = await api.startChat({
 			sessionId,
@@ -431,7 +431,10 @@ export async function submitThread(
 				),
 			);
 		}
-		content.pendingQuestionId = getPendingQuestionApprovalId(content.messages);
+		content.pendingQuestionId = getPendingQuestionApprovalId(
+			content.messages,
+			content.answeredApprovalIds,
+		);
 		content.error =
 			error instanceof Error ? error.message : "Failed to start chat";
 		content.status = createErrorStatus(content.error);
@@ -468,12 +471,17 @@ export async function addToolApprovalResponse(
 	threadId: string,
 	payload: { id: string; approved: boolean; reason?: string },
 ): Promise<void> {
-	applyToolApprovalResponse(
-		ensureThreadContentState(
-			ensureSessionRecord(context.data.sessions, sessionId).threads,
-			threadId,
-		).messages,
-		payload,
+	const content = ensureThreadContentState(
+		ensureSessionRecord(context.data.sessions, sessionId).threads,
+		threadId,
+	);
+	content.answeredApprovalIds[payload.id] = {
+		approved: payload.approved,
+		...(payload.reason ? { reason: payload.reason } : {}),
+	};
+	content.pendingQuestionId = getPendingQuestionApprovalId(
+		content.messages,
+		content.answeredApprovalIds,
 	);
 }
 

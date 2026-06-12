@@ -18,6 +18,11 @@ const REQUEST_USER_CREDENTIAL_RENDERER_FILE = path.resolve(
 	"../ai/tool-renderers/RequestUserCredentialToolRenderer.svelte",
 );
 
+const REQUEST_COMMIT_PULL_RENDERER_FILE = path.resolve(
+	import.meta.dirname,
+	"../ai/tool-renderers/RequestCommitPullToolRenderer.svelte",
+);
+
 function readRegistrySource() {
 	return readFileSync(REGISTRY_FILE, "utf-8");
 }
@@ -28,6 +33,10 @@ function readOptimizedRendererSource() {
 
 function readRequestUserCredentialRendererSource() {
 	return readFileSync(REQUEST_USER_CREDENTIAL_RENDERER_FILE, "utf-8");
+}
+
+function readRequestCommitPullRendererSource() {
+	return readFileSync(REQUEST_COMMIT_PULL_RENDERER_FILE, "utf-8");
 }
 
 test("request user credential uses the optimized tool renderer", () => {
@@ -54,7 +63,14 @@ test("optimized tool renderer auto-expands pending credential requests", () => {
 	const source = readOptimizedRendererSource();
 
 	assert.match(source, /toolPart\.toolName === "RequestUserCredential"/);
-	assert.match(source, /toolPart\.state === "approval-requested"/);
+	assert.match(
+		source,
+		/toolPart\.state === "approval-requested" && !isApprovalAnswered/,
+	);
+	assert.match(
+		source,
+		/toolPart\.toolName === "RequestUserCredential" && isPendingApproval/,
+	);
 });
 
 test("sudo credential requests use approval-only UI", () => {
@@ -84,4 +100,28 @@ test("credential denial form is not reset for the same pending request", () => {
 		source,
 		/approvalError = null;\s*showRejectionForm = false;\s*isSubmittingApproval = false;\s*isSubmittingRejection = false;/,
 	);
+});
+
+test("credential renderer uses answered approval metadata", () => {
+	const source = readRequestUserCredentialRendererSource();
+
+	assert.match(source, /approvalResponse,/);
+	assert.match(source, /approvalResponse\?\.approved === false/);
+	assert.match(source, /approvalResponse\.reason \?\? ""/);
+	assert.match(source, /isPendingApproval \|\| isApprovalAnswered/);
+	assert.match(
+		source,
+		/approvalStatus === "answered"[\s\S]*approvalResponse\?\.approved === false[\s\S]*Credential request rejected/,
+	);
+});
+
+test("commit pull renderer uses answered approval metadata", () => {
+	const source = readRequestCommitPullRendererSource();
+
+	assert.match(source, /approvalResponse,/);
+	assert.match(source, /approvalResponse\?\.approved !== false/);
+	assert.match(source, /approvalResponse\?\.approved === true/);
+	assert.match(source, /approvalResponse\?\.approved === false/);
+	assert.match(source, /approvalResponse\.reason \?\? ""/);
+	assert.match(source, /disabled=\{isPendingApproval\}/);
 });

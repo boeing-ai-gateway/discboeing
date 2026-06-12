@@ -355,11 +355,16 @@
 	function hasPendingQuestion(
 		messages: ChatMessage[],
 		pendingQuestionId: string | null | undefined,
+		answeredApprovalIds: Record<string, { approved: boolean; reason?: string }>,
 	): boolean {
-		return (
-			(getPendingQuestionApprovalId(messages) ?? pendingQuestionId ?? null) !==
-			null
+		const pendingApprovalId = getPendingQuestionApprovalId(
+			messages,
+			answeredApprovalIds,
 		);
+		if (pendingApprovalId) {
+			return true;
+		}
+		return !!pendingQuestionId && !answeredApprovalIds[pendingQuestionId];
 	}
 
 	const threadComposerState = $derived.by(() => {
@@ -393,6 +398,7 @@
 			hasPendingQuestion: hasPendingQuestion(
 				messages,
 				threadContent?.pendingQuestionId,
+				threadContent?.answeredApprovalIds ?? {},
 			),
 			pendingComments: threadView?.composer.pendingComments ?? [],
 		};

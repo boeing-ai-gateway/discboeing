@@ -19,6 +19,7 @@
 		sessionId = null,
 		threadId = null,
 		onToolApprovalResponse,
+		approvalResponse,
 		isRaw,
 		onToggleRaw,
 	}: ToolRendererComponentProps = $props();
@@ -102,13 +103,17 @@
 		return toolPart.toolCallId || null;
 	}
 
+	const isApprovalAnswered = $derived(approvalResponse !== undefined);
 	const isStreaming = $derived.by(
 		() =>
 			toolPart.state === "input-streaming" ||
 			toolPart.state === "input-available" ||
-			toolPart.state === "approval-requested",
+			(toolPart.state === "approval-requested" && !isApprovalAnswered),
 	);
 	const approvalId = $derived.by(() => getApprovalId());
+	const isPendingApproval = $derived.by(
+		() => toolPart.state === "approval-requested" && !isApprovalAnswered,
+	);
 	const inputValidation = $derived.by(() =>
 		validateAskUserQuestionInput(toolPart.input),
 	);
@@ -155,7 +160,14 @@
 	}
 
 	$effect(() => {
-		if (toolPart.state !== "approval-requested") {
+		if (isApprovalAnswered) {
+			approvalStatus = "answered";
+			approvalError = null;
+			pendingQuestion = null;
+			return;
+		}
+
+		if (!isPendingApproval) {
 			approvalStatus = "idle";
 			approvalError = null;
 			pendingQuestion = null;
@@ -263,7 +275,7 @@
 </div>
 
 <ToolContent>
-	{#if toolPart.state === "approval-requested"}
+	{#if isPendingApproval || isApprovalAnswered}
 		<div class="space-y-4 p-4 pt-3">
 			{#if approvalStatus === "loading"}
 				<p class="text-muted-foreground text-sm">Loading question...</p>

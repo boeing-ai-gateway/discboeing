@@ -4,7 +4,6 @@ import { test } from "vitest";
 import type { ChatMessage } from "$lib/api-types";
 
 import {
-	addToolApprovalResponse,
 	buildUserMessageParts,
 	createUserMessage,
 	createUserMessageAttachment,
@@ -66,45 +65,6 @@ test("createUserMessage can mark a message as provisional", () => {
 	assert.equal(message.provisional, true);
 });
 
-test("addToolApprovalResponse updates a pending dynamic tool in place", () => {
-	const messages = [
-		{
-			id: "assistant-1",
-			role: "assistant" as const,
-			parts: [
-				{
-					type: "dynamic-tool" as const,
-					toolCallId: "call-1",
-					toolName: "AskUserQuestion",
-					state: "approval-requested" as const,
-					input: { questions: [] },
-					approval: { id: "call-1" },
-				},
-			],
-		},
-	];
-
-	const updated = addToolApprovalResponse(messages, {
-		id: "call-1",
-		approved: true,
-	});
-
-	assert.equal(updated, true);
-	assert.equal(messages[0]?.parts[0]?.type, "dynamic-tool");
-	assert.equal(
-		messages[0]?.parts[0]?.type === "dynamic-tool"
-			? messages[0].parts[0].state
-			: undefined,
-		"approval-responded",
-	);
-	assert.deepEqual(
-		messages[0]?.parts[0]?.type === "dynamic-tool"
-			? messages[0].parts[0].approval
-			: undefined,
-		{ id: "call-1", approved: true },
-	);
-});
-
 test("getPendingQuestionApprovalId returns the latest pending approval id", () => {
 	const messages: ChatMessage[] = [
 		{
@@ -140,7 +100,7 @@ test("getPendingQuestionApprovalId returns the latest pending approval id", () =
 	assert.equal(getPendingQuestionApprovalId(messages), "approval-new");
 });
 
-test("addToolApprovalResponse ignores already-resolved tools", () => {
+test("getPendingQuestionApprovalId ignores approval ids answered by stream", () => {
 	const messages: ChatMessage[] = [
 		{
 			id: "assistant-1",
@@ -148,29 +108,21 @@ test("addToolApprovalResponse ignores already-resolved tools", () => {
 			parts: [
 				{
 					type: "dynamic-tool",
-					toolCallId: "call-1",
+					toolCallId: "call-new",
 					toolName: "AskUserQuestion",
-					state: "output-available",
+					state: "approval-requested",
+					approval: { id: "approval-new" },
 					input: { questions: [] },
-					output: [],
-					approval: { id: "call-1", approved: true },
 				},
 			],
 		},
 	];
 
-	const updated = addToolApprovalResponse(messages, {
-		id: "call-1",
-		approved: true,
-	});
-
-	assert.equal(updated, false);
-	assert.equal(messages[0]?.parts[0]?.type, "dynamic-tool");
 	assert.equal(
-		messages[0]?.parts[0]?.type === "dynamic-tool"
-			? messages[0].parts[0].state
-			: undefined,
-		"output-available",
+		getPendingQuestionApprovalId(messages, {
+			"approval-new": { approved: true },
+		}),
+		null,
 	);
 });
 

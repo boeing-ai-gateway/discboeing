@@ -234,41 +234,12 @@ function getDynamicToolParts(message: ChatMessage): DynamicToolPart[] {
 	) as unknown as DynamicToolPart[];
 }
 
-export function addToolApprovalResponse(
-	messages: ChatMessage[],
-	options: { id: string; approved: boolean; reason?: string },
-): boolean {
-	for (
-		let messageIndex = messages.length - 1;
-		messageIndex >= 0;
-		messageIndex -= 1
-	) {
-		const message = messages[messageIndex];
-		if (message.role !== "assistant") {
-			continue;
-		}
-
-		for (const part of getDynamicToolParts(message)) {
-			if (
-				part.state === "approval-requested" &&
-				part.approval?.id === options.id
-			) {
-				part.state = "approval-responded";
-				part.approval = {
-					id: options.id,
-					approved: options.approved,
-					...(options.reason ? { reason: options.reason } : {}),
-				};
-				return true;
-			}
-		}
-	}
-
-	return false;
-}
-
 export function getPendingQuestionApprovalId(
 	messages: ChatMessage[],
+	answeredApprovalIds: Record<
+		string,
+		{ approved: boolean; reason?: string }
+	> = {},
 ): string | null {
 	for (
 		let messageIndex = messages.length - 1;
@@ -285,7 +256,13 @@ export function getPendingQuestionApprovalId(
 				continue;
 			}
 			if (typeof part.approval?.id === "string") {
+				if (answeredApprovalIds[part.approval.id]) {
+					continue;
+				}
 				return part.approval.id;
+			}
+			if (part.toolCallId && answeredApprovalIds[part.toolCallId]) {
+				continue;
 			}
 			return part.toolCallId || null;
 		}

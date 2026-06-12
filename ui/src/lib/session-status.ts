@@ -23,6 +23,9 @@ export function resolveThreadDisplayStatus(
 
 	const thread = record.threads.byId[threadId]?.value ?? null;
 	const content = record.threads.byId[threadId]?.content;
+	const hasPendingQuestion =
+		!!content?.pendingQuestionId &&
+		!content.answeredApprovalIds[content.pendingQuestionId];
 	return resolveThreadFromSession({
 		session: record.value,
 		sessionThreadStatus:
@@ -32,7 +35,7 @@ export function resolveThreadDisplayStatus(
 		thread,
 		localActivityStatus: content?.isStreaming
 			? { status: "running" }
-			: content?.pendingQuestionId
+			: hasPendingQuestion
 				? { status: "needs_attention" }
 				: null,
 	});

@@ -67,6 +67,7 @@
 		sessionId = null,
 		threadId = null,
 		onToolApprovalResponse,
+		approvalResponse,
 		isRaw,
 		onToggleRaw,
 	}: ToolRendererComponentProps = $props();
@@ -237,6 +238,10 @@
 	}
 
 	const approvalId = $derived.by(() => getApprovalId());
+	const isApprovalAnswered = $derived(approvalResponse !== undefined);
+	const isPendingApproval = $derived.by(
+		() => toolPart.state === "approval-requested" && !isApprovalAnswered,
+	);
 	const inputValidation = $derived.by(() =>
 		validateRequestUserCredentialInput(toolPart.input),
 	);
@@ -272,13 +277,16 @@
 		() =>
 			toolPart.state === "input-streaming" ||
 			toolPart.state === "input-available" ||
-			toolPart.state === "approval-requested",
+			isPendingApproval,
 	);
 	const requestedCredentials = $derived.by(() => validInput?.credentials ?? []);
 	const grantedCredentials = $derived.by(
 		() => validOutput?.grantedCredentials ?? localGrantedCredentials,
 	);
 	const rejectionSummary = $derived.by(() => {
+		if (approvalResponse?.approved === false) {
+			return approvalResponse.reason ?? "";
+		}
 		const localReason = rejectionReason.trim();
 		if (localReason.length > 0) {
 			return localReason;
@@ -358,7 +366,19 @@
 	}
 
 	$effect(() => {
-		if (toolPart.state !== "approval-requested") {
+		if (isApprovalAnswered) {
+			approvalStatus = "answered";
+			approvalError = null;
+			pendingCredentialRequest = null;
+			credentialTypes = [];
+			rejectionReason = "";
+			showRejectionForm = false;
+			isSubmittingApproval = false;
+			isSubmittingRejection = false;
+			return;
+		}
+
+		if (!isPendingApproval) {
 			approvalStatus = "idle";
 			approvalError = null;
 			pendingCredentialRequest = null;
@@ -812,7 +832,7 @@
 				</div>
 			{/each}
 		</div>
-	{:else if toolPart.state === "approval-requested"}
+	{:else if isPendingApproval || isApprovalAnswered}
 		<div class="space-y-4 p-4 pt-3">
 			{#if approvalStatus === "loading"}
 				<p class="text-muted-foreground text-sm">
@@ -823,9 +843,18 @@
 					{approvalError ?? "Failed to load credential request"}
 				</p>
 			{:else if approvalStatus === "answered"}
-				<p class="text-muted-foreground text-sm">
-					Credential request answered.
-				</p>
+				{#if approvalResponse?.approved === false}
+					<div class="space-y-1">
+						<p class="font-medium text-sm">Credential request rejected</p>
+						{#if rejectionSummary}
+							<p class="text-muted-foreground text-sm">{rejectionSummary}</p>
+						{/if}
+					</div>
+				{:else}
+					<p class="text-muted-foreground text-sm">
+						Credential request answered.
+					</p>
+				{/if}
 			{:else if pendingCredentialRequest}
 				<div class="space-y-4 rounded-lg border bg-card p-4">
 					<div>

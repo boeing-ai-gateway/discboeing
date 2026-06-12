@@ -1,4 +1,3 @@
-import { addToolApprovalResponse } from "$lib/conversation-helpers";
 import type {
 	BrowserEventChunkData,
 	ChatMessage,
@@ -40,6 +39,11 @@ export type ChatStreamStateOptions = {
 	onThreadUpdate?: (thread: Thread) => void | Promise<void>;
 	onHooksStatusUpdate?: (status: HooksStatusResponse) => void | Promise<void>;
 	onBrowserEvent?: (event: BrowserEventChunkData) => void | Promise<void>;
+	onToolApprovalResponse?: (response: {
+		approvalId: string;
+		approved: boolean;
+		reason?: string;
+	}) => void | Promise<void>;
 };
 
 type MessagePart = ChatMessage["parts"][number];
@@ -620,11 +624,17 @@ export function createChatStreamState(options: ChatStreamStateOptions) {
 				if (typeof approvalId !== "string" || typeof approved !== "boolean") {
 					throw new Error("Approval response chunk is missing approval data");
 				}
-				addToolApprovalResponse(getTargetMessages(), {
-					id: approvalId,
-					approved,
-					reason: chunk.data.reason,
-				});
+				runCallbackInBackground(
+					"onToolApprovalResponse",
+					options.onToolApprovalResponse,
+					{
+						approvalId,
+						approved,
+						...(typeof chunk.data.reason === "string"
+							? { reason: chunk.data.reason }
+							: {}),
+					},
+				);
 				return;
 			}
 

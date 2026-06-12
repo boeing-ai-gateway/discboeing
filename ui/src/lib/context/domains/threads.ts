@@ -45,6 +45,7 @@ export type ThreadContentState = {
 	isStreaming: boolean;
 	error: string | null;
 	pendingQuestionId: string | null;
+	answeredApprovalIds: Record<string, { approved: boolean; reason?: string }>;
 	status: ResourceStatus;
 	subscription: ThreadSubscription | null;
 };
@@ -76,6 +77,7 @@ function createThreadContentState(): ThreadContentState {
 		isStreaming: false,
 		error: null,
 		pendingQuestionId: null,
+		answeredApprovalIds: {},
 		status: createIdleStatus(),
 		subscription: null,
 	};
@@ -144,13 +146,17 @@ export function createThreadEventTarget(
 			onHistoryReplayStart: () => {
 				const state = content();
 				state.browserEventsByTurnId = {};
+				state.answeredApprovalIds = {};
 				state.status = { state: "loading" } satisfies ResourceStatus;
 			},
 			onHistoryReplayEnd: () => {
 				const state = content();
 				state.status = createReadyStatus();
 				state.historyReplayVersion += 1;
-				state.pendingQuestionId = getPendingQuestionApprovalId(state.messages);
+				state.pendingQuestionId = getPendingQuestionApprovalId(
+					state.messages,
+					state.answeredApprovalIds,
+				);
 				target.controls.resolveReady();
 			},
 			onChunkError: (errorText) => {
@@ -189,6 +195,17 @@ export function createThreadEventTarget(
 			},
 			onBrowserEvent: (event) => {
 				applyBrowserEvent(content(), event);
+			},
+			onToolApprovalResponse: ({ approvalId, approved, reason }) => {
+				const state = content();
+				state.answeredApprovalIds[approvalId] = {
+					approved,
+					...(reason ? { reason } : {}),
+				};
+				state.pendingQuestionId = getPendingQuestionApprovalId(
+					state.messages,
+					state.answeredApprovalIds,
+				);
 			},
 		}),
 	};
