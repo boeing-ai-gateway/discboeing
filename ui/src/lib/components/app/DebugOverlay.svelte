@@ -50,6 +50,7 @@
 		x: VIEWPORT_PADDING,
 		y: VIEWPORT_PADDING,
 	});
+	let searchQuery = $state("");
 	let dragOffset = $state<Point | null>(null);
 	let copiedState = $state(false);
 	let copyStateTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -83,6 +84,24 @@
 	const visibleLogs = $derived(
 		debug.logs.filter((log) => log.kind === "console" || log.level === "error"),
 	);
+	const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
+	const hasSearchQuery = $derived(normalizedSearchQuery.length > 0);
+	const filteredSubscriptions = $derived(
+		filterDebugEntries(subscriptions, subscriptionSearchText),
+	);
+	const filteredEvents = $derived(
+		filterDebugEntries(debug.events, eventSearchText),
+	);
+	const filteredLogs = $derived(filterDebugEntries(visibleLogs, logSearchText));
+	const filteredCommands = $derived(
+		filterDebugEntries(debug.commands, commandSearchText),
+	);
+	const filteredRequests = $derived(
+		filterDebugEntries(debug.requests, requestSearchText),
+	);
+	const filteredStateChanges = $derived(
+		filterDebugEntries(debug.stateChanges, stateChangeSearchText),
+	);
 	const hasErrors = $derived(
 		debug.logs.some((log) => log.level === "error") ||
 			debug.commands.some((command) => command.status === "error") ||
@@ -95,6 +114,9 @@
 	const stateSnapshot = $derived.by(() => stringifyJson(stateSnapshotValue));
 	const stateRows = $derived.by(() =>
 		flattenJsonRows(stateSnapshotValue, "$", "root", 0),
+	);
+	const filteredStateRows = $derived(
+		filterDebugEntries(stateRows, stateRowSearchText),
 	);
 
 	function formatTime(value: string | null) {
@@ -133,6 +155,116 @@
 			default:
 				return "text-muted-foreground";
 		}
+	}
+
+	function tabHasErrors(item: DebugTab) {
+		switch (item) {
+			case "subscriptions":
+				return subscriptions.some(
+					(subscription) => subscription.status === "error",
+				);
+			case "logs":
+				return visibleLogs.some((log) => log.level === "error");
+			case "commands":
+				return debug.commands.some((command) => command.status === "error");
+			case "network":
+				return debug.requests.some((request) => request.status === "error");
+			default:
+				return false;
+		}
+	}
+
+	function filterDebugEntries<T>(
+		entries: T[],
+		getSearchText: (entry: T) => string,
+	): T[] {
+		if (!hasSearchQuery) return entries;
+		return entries.filter((entry) =>
+			getSearchText(entry).toLowerCase().includes(normalizedSearchQuery),
+		);
+	}
+
+	function searchText(...values: unknown[]) {
+		return values
+			.filter((value) => value !== null && value !== undefined)
+			.map((value) => String(value))
+			.join(" ");
+	}
+
+	function subscriptionSearchText(
+		subscription: (typeof subscriptions)[number],
+	) {
+		return searchText(
+			subscription.label,
+			subscription.stream,
+			subscription.status,
+			subscription.eventCount,
+			subscription.lastEvent,
+			subscription.openedAt,
+			subscription.closedAt,
+			subscription.lastEventAt,
+		);
+	}
+
+	function eventSearchText(event: (typeof debug.events)[number]) {
+		return searchText(
+			event.direction,
+			event.stream,
+			event.type,
+			event.event,
+			event.label,
+			event.payload,
+			event.at,
+		);
+	}
+
+	function logSearchText(log: (typeof visibleLogs)[number]) {
+		return searchText(log.kind, log.level, log.message, log.detail, log.at);
+	}
+
+	function commandSearchText(command: (typeof debug.commands)[number]) {
+		return searchText(
+			command.name,
+			command.status,
+			command.args,
+			command.callStack,
+			command.error,
+			command.durationMs,
+			command.startedAt,
+			command.finishedAt,
+		);
+	}
+
+	function requestSearchText(request: (typeof debug.requests)[number]) {
+		return searchText(
+			request.method,
+			request.url,
+			formatRequestPath(request.url),
+			request.status,
+			request.statusCode,
+			request.statusText,
+			request.error,
+			request.durationMs,
+			request.startedAt,
+			request.finishedAt,
+		);
+	}
+
+	function stateChangeSearchText(entry: (typeof debug.stateChanges)[number]) {
+		return searchText(
+			entry.changeCount,
+			entry.at,
+			...entry.changes.flatMap((change) => [
+				change.type,
+				change.path,
+				change.before,
+				change.after,
+			]),
+		);
+	}
+
+	function stateRowSearchText(row: JsonRow) {
+		return searchText(row.path, row.key, jsonValuePreview(row.value));
 	}
 
 	function toggleOpen() {
@@ -386,9 +518,26 @@
 							}`}
 							onclick={() => (tab = item)}
 						>
-							{item}
+							<span class="inline-flex items-center gap-1.5">
+								<span>{item}</span>
+								{#if tabHasErrors(item)}
+									<span
+										class="inline-block size-1.5 rounded-full bg-destructive"
+										aria-label={`${item} has errors`}
+									></span>
+								{/if}
+							</span>
 						</button>
 					{/each}
+				</div>
+
+				<div class="border-b border-border p-2">
+					<input
+						type="search"
+						class="w-full rounded border border-border bg-background px-2 py-1 font-sans text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-ring"
+						placeholder="Search debug entries..."
+						bind:value={searchQuery}
+					/>
 				</div>
 
 				<div class="min-h-0 flex-1 overflow-auto p-3 font-mono">
@@ -397,9 +546,13 @@
 							<div class="text-muted-foreground">
 								No subscriptions recorded.
 							</div>
+						{:else if filteredSubscriptions.length === 0}
+							<div class="text-muted-foreground">
+								No subscriptions match your search.
+							</div>
 						{:else}
 							<div class="space-y-2">
-								{#each subscriptions as subscription (subscription.id)}
+								{#each filteredSubscriptions as subscription (subscription.id)}
 									<div class="rounded-lg border border-border px-2 py-1.5">
 										<button
 											type="button"
@@ -452,9 +605,13 @@
 							<div class="text-muted-foreground">
 								No socket events recorded.
 							</div>
+						{:else if filteredEvents.length === 0}
+							<div class="text-muted-foreground">
+								No socket events match your search.
+							</div>
 						{:else}
 							<div class="space-y-2">
-								{#each debug.events as event (event.id)}
+								{#each filteredEvents as event (event.id)}
 									<div class="rounded-lg border border-border px-2 py-1.5">
 										<button
 											type="button"
@@ -500,9 +657,13 @@
 							<div class="text-muted-foreground">
 								No console logs or errors.
 							</div>
+						{:else if filteredLogs.length === 0}
+							<div class="text-muted-foreground">
+								No logs match your search.
+							</div>
 						{:else}
 							<div class="space-y-1">
-								{#each visibleLogs as log (log.id)}
+								{#each filteredLogs as log (log.id)}
 									<div class="rounded border border-border px-2 py-1.5">
 										<button
 											type="button"
@@ -531,67 +692,79 @@
 							</div>
 						{/if}
 					{:else if tab === "commands"}
-						<div class="space-y-2">
-							{#each debug.commands as command (command.id)}
-								<div class="rounded-lg border border-border px-2 py-1.5">
-									<button
-										type="button"
-										class="flex w-full min-w-0 items-center gap-2 text-left"
-										aria-expanded={expandedCommandIds[command.id] ?? false}
-										onclick={() =>
-											(expandedCommandIds[command.id] =
-												!expandedCommandIds[command.id])}
-									>
-										<span class="w-3 shrink-0 text-muted-foreground">
-											{expandedCommandIds[command.id] ? "▾" : "▸"}
-										</span>
-										<span class="truncate font-semibold">{command.name}</span>
-										<span class={`shrink-0 ${statusClass(command.status)}`}>
-											{command.status}
-										</span>
-										<span class="shrink-0 text-muted-foreground">
-											{command.durationMs ?? "—"}ms
-										</span>
-										<span class="ml-auto shrink-0 text-muted-foreground">
-											{formatTime(command.startedAt)}
-										</span>
-									</button>
-									{#if expandedCommandIds[command.id]}
-										<div class="mt-2 space-y-2">
-											<div>
-												<div
-													class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground"
-												>
-													args
-												</div>
-												<pre
-													class="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{command.args}</pre>
-											</div>
-											{#if command.callStack}
+						{#if debug.commands.length === 0}
+							<div class="text-muted-foreground">No commands recorded.</div>
+						{:else if filteredCommands.length === 0}
+							<div class="text-muted-foreground">
+								No commands match your search.
+							</div>
+						{:else}
+							<div class="space-y-2">
+								{#each filteredCommands as command (command.id)}
+									<div class="rounded-lg border border-border px-2 py-1.5">
+										<button
+											type="button"
+											class="flex w-full min-w-0 items-center gap-2 text-left"
+											aria-expanded={expandedCommandIds[command.id] ?? false}
+											onclick={() =>
+												(expandedCommandIds[command.id] =
+													!expandedCommandIds[command.id])}
+										>
+											<span class="w-3 shrink-0 text-muted-foreground">
+												{expandedCommandIds[command.id] ? "▾" : "▸"}
+											</span>
+											<span class="truncate font-semibold">{command.name}</span>
+											<span class={`shrink-0 ${statusClass(command.status)}`}>
+												{command.status}
+											</span>
+											<span class="shrink-0 text-muted-foreground">
+												{command.durationMs ?? "—"}ms
+											</span>
+											<span class="ml-auto shrink-0 text-muted-foreground">
+												{formatTime(command.startedAt)}
+											</span>
+										</button>
+										{#if expandedCommandIds[command.id]}
+											<div class="mt-2 space-y-2">
 												<div>
 													<div
 														class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground"
 													>
-														initiation stack
+														args
 													</div>
 													<pre
-														class="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{command.callStack}</pre>
+														class="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{command.args}</pre>
 												</div>
+												{#if command.callStack}
+													<div>
+														<div
+															class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground"
+														>
+															initiation stack
+														</div>
+														<pre
+															class="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{command.callStack}</pre>
+													</div>
+												{/if}
+											</div>
+											{#if command.error}
+												<div class="mt-1 text-destructive">{command.error}</div>
 											{/if}
-										</div>
-										{#if command.error}
-											<div class="mt-1 text-destructive">{command.error}</div>
 										{/if}
-									{/if}
-								</div>
-							{/each}
-						</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					{:else if tab === "network"}
 						{#if debug.requests.length === 0}
 							<div class="text-muted-foreground">No requests recorded.</div>
+						{:else if filteredRequests.length === 0}
+							<div class="text-muted-foreground">
+								No requests match your search.
+							</div>
 						{:else}
 							<div class="space-y-2">
-								{#each debug.requests as request (request.id)}
+								{#each filteredRequests as request (request.id)}
 									<div class="rounded-lg border border-border px-2 py-1.5">
 										<button
 											type="button"
@@ -646,9 +819,13 @@
 							<div class="text-muted-foreground">
 								No state changes recorded yet.
 							</div>
+						{:else if filteredStateChanges.length === 0}
+							<div class="text-muted-foreground">
+								No state changes match your search.
+							</div>
 						{:else}
 							<div class="space-y-2">
-								{#each debug.stateChanges as entry (entry.id)}
+								{#each filteredStateChanges as entry (entry.id)}
 									<div class="rounded-lg border border-border px-2 py-1.5">
 										<button
 											type="button"
@@ -747,7 +924,7 @@
 						<div
 							class="rounded-lg border border-border bg-muted/20 py-2 text-[11px]"
 						>
-							{#each stateRows as row (row.path)}
+							{#each filteredStateRows as row (row.path)}
 								<div
 									class="flex min-w-max items-start gap-1 px-2 leading-5 hover:bg-tree-hover"
 									style={`padding-left: ${row.depth * 14 + 8}px;`}
@@ -777,6 +954,11 @@
 									</button>
 								</div>
 							{/each}
+							{#if hasSearchQuery && filteredStateRows.length === 0}
+								<div class="px-2 text-muted-foreground">
+									No state rows match your search.
+								</div>
+							{/if}
 						</div>
 					{/if}
 				</div>
