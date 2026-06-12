@@ -219,6 +219,45 @@ describe("ng view commands", () => {
 		});
 	});
 
+	test("refreshes the default merge-base diff summary", async () => {
+		const context = createPlainContext();
+		apiMock.getSessionDiff.mockResolvedValueOnce({
+			files: [{ path: "src/default.ts", status: "modified" }],
+			stats: { filesChanged: 1, additions: 3, deletions: 1 },
+		});
+
+		await context.commands.files.setDiffTarget("session-1", " ");
+
+		expect(apiMock.getSessionDiff).toHaveBeenCalledWith("session-1", {
+			format: "files",
+			target: "",
+		});
+		expect(context.view.sessions["session-1"]?.files.diffTarget).toBe("");
+		expect(context.data.sessions.byId["session-1"]?.diff.files).toEqual({
+			files: [{ path: "src/default.ts", status: "modified" }],
+			stats: { filesChanged: 1, additions: 3, deletions: 1 },
+		});
+	});
+
+	test("keeps default diff summary reference when refresh is unchanged", async () => {
+		const context = createPlainContext();
+		const diff = {
+			files: [{ path: "src/default.ts", status: "modified" }],
+			stats: { filesChanged: 1, additions: 3, deletions: 1 },
+		};
+		apiMock.getSessionDiff.mockResolvedValueOnce(diff);
+		await context.commands.files.setDiffTarget("session-1", "");
+		const existingDiff = context.data.sessions.byId["session-1"]?.diff.files;
+
+		apiMock.getSessionDiff.mockResolvedValueOnce(structuredClone(diff));
+		await context.commands.files.setDiffTarget("session-1", "");
+
+		expect(apiMock.getSessionDiff).toHaveBeenCalledTimes(2);
+		expect(context.data.sessions.byId["session-1"]?.diff.files).toBe(
+			existingDiff,
+		);
+	});
+
 	test("refreshes an already cached session diff target summary", async () => {
 		const context = createPlainContext();
 		apiMock.getSessionDiff

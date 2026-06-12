@@ -617,13 +617,7 @@ ${selectedText}
 	}
 
 	function refreshDiffReview() {
-		if (fileView.diffTarget) {
-			return context.commands.files.setDiffTarget(
-				sessionId,
-				fileView.diffTarget,
-			);
-		}
-		return context.commands.files.refreshFileSubtree(sessionId, "");
+		return context.commands.files.setDiffTarget(sessionId, fileView.diffTarget);
 	}
 
 	async function handleOpenDiffFile(path: string) {

@@ -110,11 +110,7 @@ test("dock panel lazy-mounts panes on first open and keeps them mounted afterwar
 	);
 	assert.match(
 		source,
-		/function refreshDiffReview\(\) \{[\s\S]*if \(fileView\.diffTarget\) \{[\s\S]*context\.commands\.files\.setDiffTarget\(\s*sessionId,\s*fileView\.diffTarget,/,
-	);
-	assert.match(
-		source,
-		/return context\.commands\.files\.refreshFileSubtree\(sessionId, ""\);/,
+		/function refreshDiffReview\(\) \{[\s\S]*return context\.commands\.files\.setDiffTarget\(sessionId, fileView\.diffTarget\);/,
 	);
 	assert.match(source, /onDiffTargetChange=\{handleDiffTargetChange\}/);
 	assert.match(source, /onRefresh=\{refreshDiffReview\}/);

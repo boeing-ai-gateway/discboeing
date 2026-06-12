@@ -13,6 +13,7 @@ import {
 import type { ResourceStatus } from "$lib/context/cache";
 import { createIdleStatus } from "$lib/context/cache";
 import type { CommandOptions, Context } from "$lib/context/context.types";
+import { applyDiffStatusSnapshotToRecord } from "$lib/context/domains/diff";
 import { ensureSessionView } from "$lib/context/domains/view";
 import {
 	ensureSessionRecord,
@@ -204,17 +205,21 @@ export async function setDiffTarget(
 	const view = ensureSessionView(context, sessionId);
 	const normalizedTarget = target.trim();
 	view.files.diffTarget = normalizedTarget;
-	if (!normalizedTarget) {
-		return;
-	}
 
 	const response = (await api.getSessionDiff(sessionId, {
 		format: "files",
 		target: normalizedTarget,
 	})) as SessionDiffFilesResponse;
-	if (view.files.diffTarget === normalizedTarget) {
-		view.files.diffFilesByTarget[normalizedTarget] = response;
+	if (view.files.diffTarget !== normalizedTarget) {
+		return;
 	}
+	if (normalizedTarget) {
+		view.files.diffFilesByTarget[normalizedTarget] = response;
+		return;
+	}
+
+	const record = ensureSessionRecord(context.data.sessions, sessionId);
+	applyDiffStatusSnapshotToRecord(record, response);
 }
 
 function clearDiffTargetSummaries(context: Context, sessionId: string): void {
