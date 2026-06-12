@@ -49,7 +49,8 @@
 	const sessionItems = $derived(
 		context.data.sessions.allIds
 			.map((sessionId) => context.data.sessions.byId[sessionId]?.value ?? null)
-			.filter((session): session is Session => session !== null),
+			.filter((session): session is Session => session !== null)
+			.sort(compareSessionsByCreatedAtDesc),
 	);
 	const sessionsById = $derived(
 		Object.fromEntries(
@@ -112,6 +113,18 @@
 		'[data-slot="dialog-content"]',
 		'[data-slot="alert-dialog-content"]',
 	].join(", ");
+
+	function sessionCreatedAtTime(session: Session) {
+		const createdAtTime = Date.parse(session.createdAt);
+		return Number.isNaN(createdAtTime) ? 0 : createdAtTime;
+	}
+
+	function compareSessionsByCreatedAtDesc(
+		sessionA: Session,
+		sessionB: Session,
+	) {
+		return sessionCreatedAtTime(sessionB) - sessionCreatedAtTime(sessionA);
+	}
 
 	function closeFloatingSidebar() {
 		if (!floatingMode) {
