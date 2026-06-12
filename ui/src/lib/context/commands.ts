@@ -140,6 +140,7 @@ import {
 	mountSessionView,
 	mountThreadView,
 	resetPendingWorkspaceSetup,
+	setLastSessionWorkspaceSelection,
 	setPendingWorkspaceSandboxProviderId,
 	setSessionHooksExpanded,
 } from "$lib/context/domains/view";
@@ -218,6 +219,7 @@ export function createCommands(context: Context): Commands {
 			mountThreadView,
 			setSessionHooksExpanded,
 			setPendingWorkspaceSandboxProviderId,
+			setLastSessionWorkspaceSelection,
 			resetPendingWorkspaceSetup,
 		},
 		navigation: {

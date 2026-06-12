@@ -7,6 +7,7 @@ import {
 	createInitialSessionViewState,
 	createInitialThreadViewState,
 } from "$lib/context/initial-state";
+import { lastSessionWorkspaceStore } from "$lib/context/stores/last-session-workspace";
 
 export function ensureSessionView(
 	context: Context,
@@ -60,6 +61,14 @@ export async function setPendingWorkspaceSandboxProviderId(
 ): Promise<void> {
 	const session = ensureSessionView(context, sessionId);
 	session.pendingWorkspace.sandboxProviderId = providerId;
+}
+
+export async function setLastSessionWorkspaceSelection(
+	context: Context,
+	option: string,
+): Promise<void> {
+	context.view.app.lastSessionWorkspaceSelection =
+		lastSessionWorkspaceStore.set(context.data.project.id, option);
 }
 
 export async function resetPendingWorkspaceSetup(

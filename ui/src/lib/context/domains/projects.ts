@@ -39,6 +39,7 @@ import {
 	logDebugSubscriptionEvent,
 	openDebugSubscription,
 } from "$lib/context/debug";
+import { lastSessionWorkspaceStore } from "$lib/context/stores/last-session-workspace";
 import { setProjectEventSocket } from "$lib/project-events";
 
 type ActivationPhase = "idle" | "initializing" | "active" | "stopped";
@@ -68,6 +69,8 @@ export async function activateProject(
 	options: CommandOptions = {},
 ): Promise<void> {
 	context.data.project.id = projectId;
+	context.view.app.lastSessionWorkspaceSelection =
+		lastSessionWorkspaceStore.readInitial(projectId);
 	const work = startProjectActivation(context);
 	if (options.wait) await work;
 	else void work.catch(() => undefined);

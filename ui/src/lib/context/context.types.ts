@@ -211,6 +211,7 @@ export type AppViewState = {
 	projectEvents: {
 		connected: boolean;
 	};
+	lastSessionWorkspaceSelection: string | null;
 	debug: DebugState;
 };
 
@@ -403,6 +404,7 @@ export type Commands = {
 			sessionId: string,
 			providerId: string,
 		): Promise<void>;
+		setLastSessionWorkspaceSelection(option: string): Promise<void>;
 		resetPendingWorkspaceSetup(sessionId: string): Promise<void>;
 	};
 	navigation: {

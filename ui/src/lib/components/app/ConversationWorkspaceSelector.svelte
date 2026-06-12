@@ -255,6 +255,7 @@
 	function handleWorkspaceOptionChange(nextOption: string) {
 		hasUserSelectedWorkspace = true;
 		setPendingWorkspaceOption(nextOption);
+		void context.commands.view.setLastSessionWorkspaceSelection(nextOption);
 		setPendingWorkspaceBranch("");
 		setPendingWorkspaceSetupMessage(null);
 		setPendingWorkspaceValidation(null);
@@ -479,6 +480,9 @@
 			}
 
 			setPendingWorkspaceSetupMessage(null);
+			void context.commands.view.setLastSessionWorkspaceSelection(
+				pendingWorkspace.option,
+			);
 			return {
 				ready: true,
 				workspaceId,
@@ -489,6 +493,9 @@
 
 		if (!requiresSourceInput) {
 			setPendingWorkspaceSetupMessage(null);
+			void context.commands.view.setLastSessionWorkspaceSelection(
+				pendingWorkspace.option,
+			);
 			return {
 				ready: true,
 				workspaceId: null,
@@ -555,6 +562,9 @@
 		}
 
 		setPendingWorkspaceSetupMessage(null);
+		void context.commands.view.setLastSessionWorkspaceSelection(
+			pendingWorkspace.option,
+		);
 		return {
 			ready: true,
 			workspaceId: null,
@@ -569,10 +579,38 @@
 			if (pendingWorkspace.option.startsWith("existing:")) {
 				setPendingWorkspaceOption("new-workspace");
 			}
+			if (
+				!hasUserSelectedWorkspace &&
+				!hasInitializedSelection &&
+				pendingWorkspace.option === "new-workspace"
+			) {
+				const storedOption = context.view.app.lastSessionWorkspaceSelection;
+				if (
+					storedOption === "new-workspace" ||
+					storedOption === "local-directory" ||
+					storedOption === "git-repo"
+				) {
+					hasInitializedSelection = true;
+					setPendingWorkspaceOption(storedOption);
+					return true;
+				}
+			}
 			return false;
 		}
 
+		const storedOption =
+			!hasUserSelectedWorkspace && !hasInitializedSelection
+				? context.view.app.lastSessionWorkspaceSelection
+				: null;
+		const storedExistingWorkspace =
+			storedOption?.startsWith("existing:") === true
+				? (workspacesList.find(
+						(workspace) =>
+							workspace.id === storedOption.slice("existing:".length),
+					) ?? null)
+				: null;
 		const preferredWorkspace =
+			storedExistingWorkspace ||
 			workspacesList.find((workspace) => workspace.status === "ready") ||
 			workspacesList[0];
 		if (!preferredWorkspace) {
@@ -601,6 +639,14 @@
 			pendingWorkspace.option === "new-workspace"
 		) {
 			hasInitializedSelection = true;
+			if (
+				storedOption === "new-workspace" ||
+				storedOption === "local-directory" ||
+				storedOption === "git-repo"
+			) {
+				setPendingWorkspaceOption(storedOption);
+				return true;
+			}
 			setPendingWorkspaceOption(`existing:${preferredWorkspace.id}`);
 			return true;
 		}

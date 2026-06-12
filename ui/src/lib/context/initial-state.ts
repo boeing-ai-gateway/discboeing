@@ -25,6 +25,7 @@ import { createStartupTasksState } from "$lib/context/domains/startup-tasks";
 import { createSupportInfoState } from "$lib/context/domains/support-info";
 import { createWorkspacesState } from "$lib/context/domains/workspaces";
 import { diffReviewPreferencesStore } from "$lib/context/stores/diff-review-preferences";
+import { lastSessionWorkspaceStore } from "$lib/context/stores/last-session-workspace";
 import { sidebarLayoutStore } from "$lib/context/stores/sidebar-layout";
 import { threadSelectionStore } from "$lib/context/stores/thread-selection";
 
@@ -64,6 +65,7 @@ export function createInitialDataState(bootstrap: Bootstrap = {}): DataState {
 
 export function createInitialViewState(bootstrap: Bootstrap = {}): ViewState {
 	const pendingSessionId = generateId();
+	const projectId = bootstrap.projectId ?? DEFAULT_PROJECT_ID;
 	const storedSelection = threadSelectionStore.readInitial();
 	const selectedSessionId =
 		bootstrap.selectedSessionId ?? storedSelection?.sessionId ?? null;
@@ -147,6 +149,8 @@ export function createInitialViewState(bootstrap: Bootstrap = {}): ViewState {
 			projectEvents: {
 				connected: false,
 			},
+			lastSessionWorkspaceSelection:
+				lastSessionWorkspaceStore.readInitial(projectId),
 			debug: createDebugState(),
 		},
 		selection: {
