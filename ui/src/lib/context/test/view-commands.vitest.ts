@@ -129,6 +129,26 @@ describe("ng view commands", () => {
 		);
 	});
 
+	test("completes a pending session with a fresh pending placeholder", async () => {
+		const context = createPlainContext();
+
+		await context.commands.navigation.startNewSession();
+		const pendingSessionId = context.view.selection.pendingSessionId;
+		await context.commands.navigation.completePendingSession(
+			pendingSessionId,
+			"session-1",
+		);
+
+		expect(context.view.selection.sessionId).toBe("session-1");
+		expect(context.view.selection.threadId).toBe("session-1");
+		expect(context.view.selection.requestedThreadIdBySessionId).toEqual({
+			"session-1": "session-1",
+		});
+		expect(context.view.selection.pendingSessionId).toBeTruthy();
+		expect(context.view.selection.pendingSessionId).not.toBe(pendingSessionId);
+		expect(context.view.navigation.mountedSessionIds).toContain("session-1");
+	});
+
 	test("selects the primary thread when selecting a session", async () => {
 		const context = createPlainContext();
 

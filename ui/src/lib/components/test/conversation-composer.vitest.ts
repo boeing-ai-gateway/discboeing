@@ -7,12 +7,23 @@ const CONVERSATION_COMPOSER_COMPONENT = path.resolve(
 	import.meta.dirname,
 	"../app/ConversationComposer.svelte",
 );
+const CONVERSATION_COMPOSER_SESSION_SETUP_STATUS_COMPONENT = path.resolve(
+	import.meta.dirname,
+	"../app/ConversationComposerSessionSetupStatus.svelte",
+);
 
 function readConversationComposerSource() {
 	return readFileSync(CONVERSATION_COMPOSER_COMPONENT, "utf-8");
 }
 
-test("pending composer submit opens the created thread", () => {
+function readConversationComposerSessionSetupStatusSource() {
+	return readFileSync(
+		CONVERSATION_COMPOSER_SESSION_SETUP_STATUS_COMPONENT,
+		"utf-8",
+	);
+}
+
+test("pending composer submit completes the pending session", () => {
 	const source = readConversationComposerSource();
 
 	assert.match(source, /const wasPending = isPending;/);
@@ -23,8 +34,9 @@ test("pending composer submit opens the created thread", () => {
 	assert.match(source, /if \(wasPending && result\) \{/);
 	assert.match(
 		source,
-		/await context\.commands\.navigation\.openThread\(\s*result\.sessionId,\s*result\.threadId,\s*\);/,
+		/await context\.commands\.navigation\.completePendingSession\(\s*sessionId,\s*result\.sessionId,\s*\);/,
 	);
+	assert.doesNotMatch(source, /context\.commands\.navigation\.openThread/);
 	assert.doesNotMatch(source, /app\.sessions\.openThread/);
 	assert.doesNotMatch(source, /\$lib\/context\/runtime/);
 });
@@ -46,4 +58,15 @@ test("composer updates session UI state through commands", () => {
 	);
 	assert.doesNotMatch(source, /sessionView\.hooks\.expanded =/);
 	assert.doesNotMatch(source, /sessionView\.pendingWorkspace\.[a-zA-Z]+ =/);
+});
+
+test("pending composer UI excludes the selected real session", () => {
+	const pendingPredicate =
+		/context\.view\.selection\.pendingSessionId === sessionId &&\s*context\.view\.selection\.sessionId !== sessionId/;
+
+	assert.match(readConversationComposerSource(), pendingPredicate);
+	assert.match(
+		readConversationComposerSessionSetupStatusSource(),
+		pendingPredicate,
+	);
 });

@@ -63,6 +63,7 @@ import {
 } from "$lib/context/domains/dialogs";
 import { pauseHooks, pauseHook, rerunHook } from "$lib/context/domains/hooks";
 import {
+	completePendingSession,
 	openThread,
 	selectSession,
 	setDesktopSidebarOpen,
@@ -227,6 +228,7 @@ export function createCommands(context: Context): Commands {
 			setMobileSidebarOpen,
 			toggleMobileSidebarOpen,
 			startNewSession,
+			completePendingSession,
 			selectSession,
 			openThread,
 			toggleSelectedSessionView,

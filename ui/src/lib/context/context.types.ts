@@ -412,6 +412,10 @@ export type Commands = {
 		setMobileSidebarOpen(open: boolean): Promise<void>;
 		toggleMobileSidebarOpen(): Promise<void>;
 		startNewSession(): Promise<void>;
+		completePendingSession(
+			pendingSessionId: string,
+			sessionId: string,
+		): Promise<void>;
 		selectSession(sessionId: string): Promise<void>;
 		openThread(sessionId: string, threadId: string): Promise<void>;
 		toggleSelectedSessionView(viewKind: SessionDockViewKind): Promise<void>;

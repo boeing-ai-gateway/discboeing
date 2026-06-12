@@ -89,7 +89,8 @@
 	const threadContent = $derived(threadRecord?.content ?? null);
 	const threadView = $derived(sessionView?.threads[threadId] ?? null);
 	const isPending = $derived(
-		context.view.selection.pendingSessionId === sessionId,
+		context.view.selection.pendingSessionId === sessionId &&
+			context.view.selection.sessionId !== sessionId,
 	);
 	const composerDraft = $derived.by(() => sessionView?.composer.draft ?? "");
 	const sessionHooks = $derived(sessionRecord?.hooks ?? null);
@@ -979,9 +980,9 @@
 				},
 			);
 			if (wasPending && result) {
-				await context.commands.navigation.openThread(
+				await context.commands.navigation.completePendingSession(
+					sessionId,
 					result.sessionId,
-					result.threadId,
 				);
 				if (preserveDraft) {
 					movePendingDraftToThread(result.threadId, currentDraft);

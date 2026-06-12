@@ -33,6 +33,32 @@ export async function startNewSession(context: Context): Promise<void> {
 	}
 }
 
+export async function completePendingSession(
+	context: Context,
+	pendingSessionId: string,
+	sessionId: string,
+): Promise<void> {
+	if (context.view.selection.pendingSessionId !== pendingSessionId) {
+		return;
+	}
+
+	if (context.view.selection.sessionId === null) {
+		const storedSelection = threadSelectionStore.set({
+			sessionId,
+			threadId: sessionId,
+		});
+		context.view.selection.sessionId = storedSelection.sessionId;
+		context.view.selection.threadId = storedSelection.threadId;
+		context.view.selection.requestedThreadIdBySessionId[sessionId] =
+			storedSelection.threadId;
+		ensureThreadView(context, sessionId, storedSelection.threadId);
+	}
+	context.view.selection.pendingSessionId = generateId();
+	if (!context.view.navigation.mountedSessionIds.includes(sessionId)) {
+		context.view.navigation.mountedSessionIds.push(sessionId);
+	}
+}
+
 export async function selectSession(
 	context: Context,
 	sessionId: string,

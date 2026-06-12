@@ -20,7 +20,8 @@
 	const threadRecord = $derived(sessionRecord?.threads.byId[threadId] ?? null);
 	const threadContent = $derived(threadRecord?.content ?? null);
 	const isPending = $derived(
-		context.view.selection.pendingSessionId === sessionId,
+		context.view.selection.pendingSessionId === sessionId &&
+			context.view.selection.sessionId !== sessionId,
 	);
 	const sessionStatus = $derived.by(
 		() => sessionRecord?.value?.sandboxStatus ?? null,
