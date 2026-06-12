@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/obot-platform/discobot/server/internal/events"
 	"github.com/obot-platform/discobot/server/internal/jobs"
 	"github.com/obot-platform/discobot/server/internal/model"
 	"github.com/obot-platform/discobot/server/internal/sandbox"
@@ -831,6 +832,137 @@ func TestSessionThreadStatusSyncerStaleSnapshotDoesNotLowerNewerSnapshot(t *test
 	if stored.ThreadStatus != model.SessionActivityStatusIdle {
 		t.Fatalf("thread status after fresh snapshot = %q, want %q", stored.ThreadStatus, model.SessionActivityStatusIdle)
 	}
+}
+
+func TestSessionThreadStatusSyncerPublishesThreadUpdateWhenPerThreadActivityChanges(t *testing.T) {
+	ctx := context.Background()
+	testStore := setupTestStore(t)
+	poller := events.NewPoller(testStore, events.DefaultPollerConfig())
+	broker := events.NewBroker(testStore, poller)
+	syncer := NewSessionThreadStatusSyncer(testStore, nil, broker, nil, time.Hour)
+
+	project := &model.Project{
+		ID:   "project-per-thread-activity",
+		Name: "Per Thread Activity",
+		Slug: "per-thread-activity",
+	}
+	if err := testStore.CreateProject(ctx, project); err != nil {
+		t.Fatalf("failed to create project: %v", err)
+	}
+	workspace := &model.Workspace{
+		ID:         "workspace-per-thread-activity",
+		ProjectID:  project.ID,
+		Path:       "/workspace-per-thread-activity",
+		SourceType: "local",
+		Status:     model.WorkspaceStatusReady,
+	}
+	if err := testStore.CreateWorkspace(ctx, workspace); err != nil {
+		t.Fatalf("failed to create workspace: %v", err)
+	}
+	dbSession := &model.Session{
+		ID:            "session-per-thread-activity",
+		ProjectID:     project.ID,
+		WorkspaceID:   workspace.ID,
+		SandboxStatus: model.SessionStatusReady,
+		ThreadStatus:  model.SessionActivityStatusRunning,
+	}
+	if err := testStore.CreateSession(ctx, dbSession); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	completionA := "completion-a"
+	completionB := "completion-b"
+	first := &sandboxapi.SessionActivityResponse{
+		Status:       model.SessionActivityStatusRunning,
+		RunningCount: 2,
+		Threads: []sandboxapi.SessionThreadActivityState{
+			{
+				ThreadID:     "thread-a",
+				Status:       model.SessionActivityStatusRunning,
+				Reason:       model.SessionActivityReasonCompletion,
+				CompletionID: &completionA,
+			},
+			{
+				ThreadID:     "thread-b",
+				Status:       model.SessionActivityStatusRunning,
+				Reason:       model.SessionActivityReasonCompletion,
+				CompletionID: &completionB,
+			},
+		},
+	}
+	if err := syncer.applyActivitySnapshot(ctx, project.ID, dbSession.ID, first, time.Now().UTC()); err != nil {
+		t.Fatalf("failed to apply first snapshot: %v", err)
+	}
+	threadUpdates, sessionUpdates := countProjectEventTypes(t, testStore, project.ID)
+	if threadUpdates != 1 {
+		t.Fatalf("thread updates after first snapshot = %d, want 1", threadUpdates)
+	}
+	if sessionUpdates != 0 {
+		t.Fatalf("session updates after first snapshot = %d, want 0", sessionUpdates)
+	}
+
+	second := &sandboxapi.SessionActivityResponse{
+		Status:       model.SessionActivityStatusRunning,
+		RunningCount: 1,
+		Threads: []sandboxapi.SessionThreadActivityState{
+			{
+				ThreadID:     "thread-b",
+				Status:       model.SessionActivityStatusRunning,
+				Reason:       model.SessionActivityReasonCompletion,
+				CompletionID: &completionB,
+			},
+		},
+	}
+	if err := syncer.applyActivitySnapshot(ctx, project.ID, dbSession.ID, second, time.Now().UTC()); err != nil {
+		t.Fatalf("failed to apply second snapshot: %v", err)
+	}
+	threadUpdates, sessionUpdates = countProjectEventTypes(t, testStore, project.ID)
+	if threadUpdates != 2 {
+		t.Fatalf("thread updates after per-thread change = %d, want 2", threadUpdates)
+	}
+	if sessionUpdates != 0 {
+		t.Fatalf("session updates after per-thread change = %d, want 0", sessionUpdates)
+	}
+
+	staleObservedAt := time.Now().UTC().Add(-time.Minute)
+	if err := syncer.applyActivitySnapshot(ctx, project.ID, dbSession.ID, first, staleObservedAt); err != nil {
+		t.Fatalf("failed to apply stale snapshot: %v", err)
+	}
+	threadUpdates, sessionUpdates = countProjectEventTypes(t, testStore, project.ID)
+	if threadUpdates != 2 {
+		t.Fatalf("thread updates after stale per-thread change = %d, want 2", threadUpdates)
+	}
+	if sessionUpdates != 0 {
+		t.Fatalf("session updates after stale per-thread change = %d, want 0", sessionUpdates)
+	}
+
+	if err := syncer.applyActivitySnapshot(ctx, project.ID, dbSession.ID, second, time.Now().UTC()); err != nil {
+		t.Fatalf("failed to reapply fresh snapshot: %v", err)
+	}
+	threadUpdates, sessionUpdates = countProjectEventTypes(t, testStore, project.ID)
+	if threadUpdates != 2 {
+		t.Fatalf("thread updates after reapplying current snapshot = %d, want 2", threadUpdates)
+	}
+	if sessionUpdates != 0 {
+		t.Fatalf("session updates after reapplying current snapshot = %d, want 0", sessionUpdates)
+	}
+}
+
+func countProjectEventTypes(t *testing.T, testStore *store.Store, projectID string) (threadUpdates, sessionUpdates int) {
+	t.Helper()
+	projectEvents, err := testStore.ListProjectEventsSince(context.Background(), projectID, time.Time{})
+	if err != nil {
+		t.Fatalf("failed to list project events: %v", err)
+	}
+	for _, event := range projectEvents {
+		switch event.Type {
+		case model.EventTypeThreadUpdated:
+			threadUpdates++
+		case model.EventTypeSessionUpdated:
+			sessionUpdates++
+		}
+	}
+	return threadUpdates, sessionUpdates
 }
 
 func TestStoppedSessionIncludesStoredNeedsAttentionStatus(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -33,6 +34,7 @@ type SessionThreadStatusSyncer struct {
 	running      bool
 	stopping     bool
 	streams      map[string]*sessionActivityStream
+	threadStates map[string]map[string]sessionThreadActivitySnapshot
 	stopChan     chan struct{}
 	wg           sync.WaitGroup
 	shutdownOnce sync.Once
@@ -40,6 +42,15 @@ type SessionThreadStatusSyncer struct {
 
 type sessionActivityStream struct {
 	cancel context.CancelFunc
+}
+
+type sessionThreadActivitySnapshot struct {
+	Status       string
+	Reason       string
+	CompletionID string
+	QueueCount   int
+	NextRunAfter string
+	Message      string
 }
 
 // NewSessionThreadStatusSyncer creates a background syncer for session thread
@@ -64,6 +75,7 @@ func NewSessionThreadStatusSyncer(
 		logger:        logger.With("component", "session_thread_status_syncer"),
 		checkInterval: checkInterval,
 		streams:       make(map[string]*sessionActivityStream),
+		threadStates:  make(map[string]map[string]sessionThreadActivitySnapshot),
 		stopChan:      make(chan struct{}),
 	}
 }
@@ -278,6 +290,7 @@ func (s *SessionThreadStatusSyncer) stopSessionActivityStream(sessionID string) 
 	s.mu.Lock()
 	stream := s.streams[sessionID]
 	delete(s.streams, sessionID)
+	delete(s.threadStates, sessionID)
 	s.mu.Unlock()
 
 	if stream != nil {
@@ -295,6 +308,7 @@ func (s *SessionThreadStatusSyncer) stopAllSessionActivityStreams() {
 	for sessionID, cancel := range s.streams {
 		cancels = append(cancels, cancel.cancel)
 		delete(s.streams, sessionID)
+		delete(s.threadStates, sessionID)
 	}
 	s.mu.Unlock()
 
@@ -398,20 +412,88 @@ func (s *SessionThreadStatusSyncer) applyActivitySnapshot(ctx context.Context, p
 	if err != nil {
 		return fmt.Errorf("failed to update session thread status: %w", err)
 	}
-	s.publishSessionThreadStatusChanged(ctx, projectID, sessionID, changed)
+	accepted, err := s.activitySnapshotAccepted(ctx, sessionID, observedAt, changed)
+	if err != nil {
+		return err
+	}
+	threadActivityChanged := false
+	if accepted {
+		threadActivityChanged = s.noteSessionThreadActivitySnapshot(sessionID, snapshot)
+	}
+	s.publishSessionThreadStatusChanged(ctx, projectID, sessionID, changed, threadActivityChanged)
 	return nil
 }
 
-func (s *SessionThreadStatusSyncer) publishSessionThreadStatusChanged(ctx context.Context, projectID, sessionID string, changed bool) {
-	if s == nil || !changed || s.eventBroker == nil {
+func (s *SessionThreadStatusSyncer) activitySnapshotAccepted(ctx context.Context, sessionID string, observedAt time.Time, changed bool) (bool, error) {
+	if changed || observedAt.IsZero() {
+		return true, nil
+	}
+	session, err := s.store.GetSessionByID(ctx, sessionID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check session thread snapshot freshness: %w", err)
+	}
+	return !session.UpdatedAt.After(observedAt), nil
+}
+
+func (s *SessionThreadStatusSyncer) noteSessionThreadActivitySnapshot(sessionID string, snapshot *sandboxapi.SessionActivityResponse) bool {
+	if s == nil || sessionID == "" || snapshot == nil {
+		return false
+	}
+	next := sessionThreadActivitySnapshotFromResponse(snapshot)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.threadStates == nil {
+		s.threadStates = make(map[string]map[string]sessionThreadActivitySnapshot)
+	}
+	previous, ok := s.threadStates[sessionID]
+	s.threadStates[sessionID] = next
+	if !ok {
+		return len(next) > 0
+	}
+	return !maps.Equal(previous, next)
+}
+
+func sessionThreadActivitySnapshotFromResponse(snapshot *sandboxapi.SessionActivityResponse) map[string]sessionThreadActivitySnapshot {
+	if snapshot == nil || len(snapshot.Threads) == 0 {
+		return map[string]sessionThreadActivitySnapshot{}
+	}
+	threads := make(map[string]sessionThreadActivitySnapshot, len(snapshot.Threads))
+	for _, thread := range snapshot.Threads {
+		if thread.ThreadID == "" {
+			continue
+		}
+		state := sessionThreadActivitySnapshot{
+			Status:     normalizeSessionActivityStatus(thread.Status),
+			Reason:     thread.Reason,
+			QueueCount: thread.QueueCount,
+			Message:    thread.Message,
+		}
+		if thread.CompletionID != nil {
+			state.CompletionID = *thread.CompletionID
+		}
+		if thread.NextRunAfter != nil {
+			state.NextRunAfter = thread.NextRunAfter.UTC().Format(time.RFC3339Nano)
+		}
+		threads[thread.ThreadID] = state
+	}
+	return threads
+}
+
+func (s *SessionThreadStatusSyncer) publishSessionThreadStatusChanged(ctx context.Context, projectID, sessionID string, sessionStatusChanged, threadActivityChanged bool) {
+	if s == nil || (!sessionStatusChanged && !threadActivityChanged) || s.eventBroker == nil {
 		return
 	}
 	logger := s.logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
-		logger.Warn("failed to publish session thread status event", "error", err)
+	if sessionStatusChanged {
+		if err := s.eventBroker.PublishSessionUpdated(ctx, projectID, sessionID, "", ""); err != nil {
+			logger.Warn("failed to publish session thread status event", "error", err)
+		}
 	}
 	if err := s.eventBroker.PublishSessionThreadsUpdated(ctx, projectID, sessionID); err != nil {
 		logger.Warn("failed to publish session threads update event", "error", err)
