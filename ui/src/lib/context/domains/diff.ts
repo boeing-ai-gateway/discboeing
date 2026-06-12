@@ -50,6 +50,12 @@ export function applyDiffSnapshotToRecord(
 	record: SessionRecord,
 	diff: SessionDiffResponse,
 ): void {
+	if (diffSnapshotsEqual(record.diff.value, diff)) {
+		if (record.diff.status.state !== "ready") {
+			record.diff.status = createReadyStatus();
+		}
+		return;
+	}
 	record.diff.value = diff;
 	record.diff.status = createReadyStatus();
 }
@@ -67,8 +73,69 @@ export function applyDiffStatusSnapshotToRecord(
 	record: SessionRecord,
 	diff: SessionDiffFilesResponse,
 ): void {
+	if (diffStatusSnapshotsEqual(record.diff.files, diff)) {
+		if (record.diff.filesStatus.state !== "ready") {
+			record.diff.filesStatus = createReadyStatus();
+		}
+		return;
+	}
 	record.diff.files = diff;
 	record.diff.filesStatus = createReadyStatus();
+}
+
+function diffSnapshotsEqual(
+	current: SessionDiffResponse | null,
+	next: SessionDiffResponse,
+): boolean {
+	if (!current || !diffStatsEqual(current.stats, next.stats)) {
+		return false;
+	}
+	if (current.files.length !== next.files.length) {
+		return false;
+	}
+	return current.files.every((file, index) => {
+		const nextFile = next.files[index];
+		return (
+			file.path === nextFile.path &&
+			file.status === nextFile.status &&
+			file.oldPath === nextFile.oldPath &&
+			file.additions === nextFile.additions &&
+			file.deletions === nextFile.deletions &&
+			file.binary === nextFile.binary &&
+			file.patch === nextFile.patch
+		);
+	});
+}
+
+function diffStatusSnapshotsEqual(
+	current: SessionDiffFilesResponse | null,
+	next: SessionDiffFilesResponse,
+): boolean {
+	if (!current || !diffStatsEqual(current.stats, next.stats)) {
+		return false;
+	}
+	if (current.files.length !== next.files.length) {
+		return false;
+	}
+	return current.files.every((file, index) => {
+		const nextFile = next.files[index];
+		return (
+			file.path === nextFile.path &&
+			file.status === nextFile.status &&
+			file.oldPath === nextFile.oldPath
+		);
+	});
+}
+
+function diffStatsEqual(
+	current: SessionDiffResponse["stats"],
+	next: SessionDiffResponse["stats"],
+): boolean {
+	return (
+		current.filesChanged === next.filesChanged &&
+		current.additions === next.additions &&
+		current.deletions === next.deletions
+	);
 }
 
 export async function loadDiffIntoCache(

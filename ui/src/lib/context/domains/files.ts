@@ -61,6 +61,12 @@ export function applyFileSubtreeSnapshotToRecord(
 	response: ListSessionFilesResponse,
 ): void {
 	const normalizedPath = normalizeFilePath(response.path);
+	if (fileSubtreeSnapshotEqual(record, normalizedPath, response)) {
+		if (record.files.statusBySubtree[normalizedPath]?.state !== "ready") {
+			record.files.statusBySubtree[normalizedPath] = createReadyStatus();
+		}
+		return;
+	}
 	const childPaths = response.entries.map((entry) =>
 		normalizedPath ? `${normalizedPath}/${entry.name}` : entry.name,
 	);
@@ -81,6 +87,35 @@ export function applyFileSubtreeSnapshotToRecord(
 		};
 	}
 	record.files.statusBySubtree[normalizedPath] = createReadyStatus();
+}
+
+function fileSubtreeSnapshotEqual(
+	record: SessionRecord,
+	normalizedPath: string,
+	response: ListSessionFilesResponse,
+): boolean {
+	const current = record.files.nodesByPath[normalizedPath];
+	if (!current?.childrenPaths) {
+		return false;
+	}
+	if (current.childrenPaths.length !== response.entries.length) {
+		return false;
+	}
+	return response.entries.every((entry, index) => {
+		const childPath = normalizedPath
+			? `${normalizedPath}/${entry.name}`
+			: entry.name;
+		if (current.childrenPaths?.[index] !== childPath) {
+			return false;
+		}
+		const currentChild = record.files.nodesByPath[childPath];
+		return (
+			currentChild?.parentPath === normalizedPath &&
+			currentChild.entry?.name === entry.name &&
+			currentChild.entry.type === entry.type &&
+			currentChild.entry.size === entry.size
+		);
+	});
 }
 
 export async function loadFileSubtreeIntoCache(
