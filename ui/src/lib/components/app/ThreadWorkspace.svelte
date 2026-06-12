@@ -20,6 +20,7 @@
 		mainClass: string;
 		sidebarOpen?: boolean;
 		reserveSidebarSpace?: boolean;
+		onPinSidebar?: () => void;
 		mode?: "full" | "conversation-only";
 	};
 
@@ -29,6 +30,7 @@
 		visible,
 		mainClass,
 		reserveSidebarSpace,
+		onPinSidebar,
 		mode,
 	}: Props = $props();
 
@@ -104,7 +106,7 @@
 </script>
 
 {#snippet sessionHeaderDropdown()}
-	<SessionHeaderDropdown label={sessionTitle} />
+	<SessionHeaderDropdown label={sessionTitle} {onPinSidebar} />
 {/snippet}
 
 <main class={mainClass}>
@@ -114,6 +116,7 @@
 			{threadId}
 			{visible}
 			{reserveSidebarSpace}
+			{onPinSidebar}
 			{mode}
 		/>
 	{:else}

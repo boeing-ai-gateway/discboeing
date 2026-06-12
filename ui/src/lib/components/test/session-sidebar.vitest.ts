@@ -261,7 +261,9 @@ test("session sidebar supports dropdown reuse and closes after creating a sessio
 test("session header dropdown can pin the sidebar open", () => {
 	const source = readSessionHeaderDropdownSource();
 
+	assert.match(source, /onPinSidebar\?: \(\) => void/);
 	assert.match(source, /function pinSidebar\(\)/);
+	assert.match(source, /if \(onPinSidebar\) \{\s*onPinSidebar\(\);/);
 	assert.match(source, /setDesktopSidebarOpen\(true\)/);
 	assert.match(source, /onPinSidebar=\{pinSidebar\}/);
 });

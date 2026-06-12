@@ -96,7 +96,12 @@ test("thread workspace keeps pending sessions on the active conversation view an
 	);
 	assert.match(source, /import SessionHeaderDropdown/);
 	assert.match(source, /\{#snippet sessionHeaderDropdown\(\)\}/);
-	assert.match(source, /<SessionHeaderDropdown label=\{sessionTitle\} \/>/);
+	assert.match(source, /onPinSidebar\?: \(\) => void;/);
+	assert.match(
+		source,
+		/<SessionHeaderDropdown label=\{sessionTitle\} \{onPinSidebar\} \/>/,
+	);
+	assert.match(source, /\{onPinSidebar\}/);
 	assert.match(source, /titleContent=\{sessionHeaderDropdown\}/);
 	assert.doesNotMatch(source, /const isConversationOnly = \$derived/);
 	assert.doesNotMatch(source, /const headerTitleContent = \$derived/);
@@ -137,7 +142,11 @@ test("active thread workspace keeps the stream live while inactive conversation 
 	);
 	assert.match(source, /import SessionHeaderDropdown/);
 	assert.match(source, /\{#snippet sessionHeaderDropdown\(\)\}/);
-	assert.match(source, /<SessionHeaderDropdown label=\{sessionTitle\} \/>/);
+	assert.match(source, /onPinSidebar\?: \(\) => void;/);
+	assert.match(
+		source,
+		/<SessionHeaderDropdown[\s\S]*label=\{sessionTitle\}[\s\S]*onPinSidebar=\{props\.onPinSidebar\}[\s\S]*\/>/,
+	);
 	assert.match(source, /titleContent=\{sessionHeaderDropdown\}/);
 	assert.doesNotMatch(source, /const isConversationOnly = \$derived/);
 	assert.doesNotMatch(source, /const headerTitleContent = \$derived/);

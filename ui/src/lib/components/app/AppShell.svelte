@@ -59,6 +59,16 @@
 		void context.commands.navigation.setDesktopSidebarOpen(false);
 	}
 
+	function pinSidebar() {
+		if (appEnvironment.isMobile) {
+			void context.commands.navigation.setMobileSidebarOpen(true);
+			return;
+		}
+
+		desktopSidebarPane?.expand();
+		void context.commands.navigation.setDesktopSidebarOpen(true);
+	}
+
 	function handleSessionSelect() {
 		if (appEnvironment.isMobile) {
 			void context.commands.navigation.setMobileSidebarOpen(false);
@@ -162,6 +172,7 @@
 				{sessionId}
 				visible={sessionId === currentSelectedSessionId}
 				{mainClass}
+				onPinSidebar={pinSidebar}
 			/>
 		{/if}
 	{/each}

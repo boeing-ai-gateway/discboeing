@@ -12,6 +12,7 @@
 		threadId: string;
 		visible: boolean;
 		reserveSidebarSpace?: boolean;
+		onPinSidebar?: () => void;
 		mode?: "full" | "conversation-only";
 	};
 
@@ -68,7 +69,10 @@
 {/if}
 
 {#snippet sessionHeaderDropdown()}
-	<SessionHeaderDropdown label={sessionTitle} />
+	<SessionHeaderDropdown
+		label={sessionTitle}
+		onPinSidebar={props.onPinSidebar}
+	/>
 {/snippet}
 
 {#if showDock && dockMaximized}

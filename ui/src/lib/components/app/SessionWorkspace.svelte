@@ -8,9 +8,10 @@
 		sessionId: string;
 		visible: boolean;
 		mainClass: string;
+		onPinSidebar?: () => void;
 	};
 
-	let { sessionId, visible, mainClass }: Props = $props();
+	let { sessionId, visible, mainClass, onPinSidebar }: Props = $props();
 	const context = useContext();
 	const mountedSessionId = untrack(() => sessionId);
 	const sessionRecord = $derived(
@@ -51,6 +52,7 @@
 			{threadId}
 			{visible}
 			{mainClass}
+			{onPinSidebar}
 			mode={!currentSession ? "conversation-only" : undefined}
 		/>
 	{/key}

@@ -10,9 +10,10 @@
 
 	type Props = {
 		label?: string;
+		onPinSidebar?: () => void;
 	};
 
-	let { label = "Sessions" }: Props = $props();
+	let { label = "Sessions", onPinSidebar }: Props = $props();
 
 	const context = useContext();
 	let open = $state(false);
@@ -41,7 +42,11 @@
 	}
 
 	function pinSidebar() {
-		void context.commands.navigation.setDesktopSidebarOpen(true);
+		if (onPinSidebar) {
+			onPinSidebar();
+		} else {
+			void context.commands.navigation.setDesktopSidebarOpen(true);
+		}
 		close();
 	}
 </script>

@@ -104,6 +104,18 @@ test("app shell re-syncs the desktop pane state when the selected session change
 	);
 });
 
+test("app shell expands the desktop pane when pinning the sidebar", () => {
+	const source = readAppShellSource();
+
+	assert.match(source, /function pinSidebar\(\) \{/);
+	assert.match(source, /desktopSidebarPane\?\.expand\(\);/);
+	assert.match(
+		source,
+		/void context\.commands\.navigation\.setDesktopSidebarOpen\(true\);/,
+	);
+	assert.match(source, /onPinSidebar=\{pinSidebar\}/);
+});
+
 test("app shell renders the extracted keyboard shortcut controller", () => {
 	const source = readAppShellSource();
 
