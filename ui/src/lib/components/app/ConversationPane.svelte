@@ -249,6 +249,16 @@
 				?.conversation.scrollTop ?? null
 		);
 	});
+	const stickToBottom = $derived.by(() => {
+		if (!activeSessionId || !activeThreadId) {
+			return context.view.app.preferences.autoScrollOnStream;
+		}
+		return (
+			context.view.sessions[activeSessionId]?.threads[activeThreadId]
+				?.conversation.stickToBottom ??
+			context.view.app.preferences.autoScrollOnStream
+		);
+	});
 
 	let viewport = $state<HTMLDivElement | null>(null);
 	let contentEl = $state<HTMLDivElement | null>(null);
@@ -284,6 +294,9 @@
 		Partial<Record<ConversationPaneErrorBannerKey, boolean>>
 	>({});
 	let lastRestoredVisibleThreadId = $state<string | null>(null);
+	let lastScrollTop = $state(0);
+	let userScrollIntent = false;
+	let pointerScrollIntent = false;
 
 	function getThreadContentStatus(
 		status: ResourceStatus | null | undefined,
@@ -1089,17 +1102,35 @@
 		);
 	}
 
-	function scrollToBottom(behavior: globalThis.ScrollBehavior = "auto") {
+	function setStickToBottom(value: boolean) {
+		if (!activeThreadId || !activeSessionId || stickToBottom === value) {
+			return;
+		}
+		void context.commands.threadComposer.setConversationStickToBottom(
+			activeSessionId,
+			activeThreadId,
+			value,
+		);
+	}
+
+	function scrollToBottom(
+		behavior: globalThis.ScrollBehavior = "auto",
+		options: { stick?: boolean } = {},
+	) {
 		const element = viewport;
 		if (!element) {
 			return;
 		}
 
+		if (options.stick) {
+			setStickToBottom(true);
+		}
 		element.scrollTo({ top: element.scrollHeight, behavior });
 		if (behavior === "auto") {
 			requestAnimationFrame(() => {
 				saveScrollPosition(element);
 				updateIsNearBottom();
+				lastScrollTop = element.scrollTop;
 			});
 		}
 	}
@@ -1197,16 +1228,61 @@
 			return;
 		}
 
+		const markUserScrollIntent = () => {
+			userScrollIntent = true;
+			requestAnimationFrame(() => {
+				userScrollIntent = false;
+			});
+		};
+		const handlePointerDown = () => {
+			pointerScrollIntent = true;
+		};
+		const clearPointerScrollIntent = () => {
+			pointerScrollIntent = false;
+		};
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (
+				event.key === "ArrowUp" ||
+				event.key === "PageUp" ||
+				event.key === "Home"
+			) {
+				markUserScrollIntent();
+			}
+		};
 		const handleScroll = () => {
+			if (
+				(userScrollIntent || pointerScrollIntent) &&
+				element.scrollTop < lastScrollTop
+			) {
+				setStickToBottom(false);
+			}
+			lastScrollTop = element.scrollTop;
 			saveScrollPosition(element);
 			updateIsNearBottom();
 		};
 
+		lastScrollTop = element.scrollTop;
 		updateIsNearBottom();
+		element.addEventListener("wheel", markUserScrollIntent, { passive: true });
+		element.addEventListener("touchmove", markUserScrollIntent, {
+			passive: true,
+		});
+		element.addEventListener("pointerdown", handlePointerDown, {
+			passive: true,
+		});
+		element.addEventListener("keydown", handleKeyDown);
 		element.addEventListener("scroll", handleScroll);
+		window.addEventListener("pointerup", clearPointerScrollIntent);
+		window.addEventListener("pointercancel", clearPointerScrollIntent);
 
 		return () => {
+			element.removeEventListener("wheel", markUserScrollIntent);
+			element.removeEventListener("touchmove", markUserScrollIntent);
+			element.removeEventListener("pointerdown", handlePointerDown);
+			element.removeEventListener("keydown", handleKeyDown);
 			element.removeEventListener("scroll", handleScroll);
+			window.removeEventListener("pointerup", clearPointerScrollIntent);
+			window.removeEventListener("pointercancel", clearPointerScrollIntent);
 		};
 	});
 
@@ -1238,6 +1314,7 @@
 				savedScrollTop,
 				Math.max(0, element.scrollHeight - element.clientHeight),
 			);
+			lastScrollTop = element.scrollTop;
 			saveScrollPosition(element);
 			updateIsNearBottom();
 		});
@@ -1352,21 +1429,19 @@
 			});
 	});
 
-	// Auto-scroll to bottom during streaming when the user is near the bottom.
+	// Auto-scroll to bottom during streaming while this thread is stuck to bottom.
 	// Uses a ResizeObserver on the content div so it fires as streamed text
 	// grows the layout, not just when the messages array reference changes.
-	// Scrolling up pauses auto-scroll; scrolling back to the bottom resumes it.
-	// Disabled when the autoScrollOnStream preference is off.
+	// Scrolling up pauses auto-scroll for this thread; the scroll-down button resumes it.
 	$effect(() => {
 		const element = contentEl;
-		const autoScroll = context.view.app.preferences.autoScrollOnStream;
 
-		if (!element || !autoScroll) {
+		if (!element || !stickToBottom) {
 			return;
 		}
 
 		const observer = new ResizeObserver(() => {
-			if (isStreaming && isNearBottom) {
+			if (isStreaming) {
 				scrollToBottom("auto");
 			}
 		});
@@ -2191,7 +2266,7 @@
 						<Button
 							aria-label="Scroll to bottom"
 							class="pointer-events-auto rounded-full shadow-sm"
-							onclick={() => scrollToBottom("smooth")}
+							onclick={() => scrollToBottom("smooth", { stick: true })}
 							size="icon"
 							type="button"
 							variant="outline"

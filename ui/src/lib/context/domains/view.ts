@@ -33,6 +33,7 @@ export function ensureThreadView(
 	session.threads[threadId] ??= createInitialThreadViewState(
 		sessionId,
 		threadId,
+		context.view.app.preferences.autoScrollOnStream,
 	);
 	return session.threads[threadId];
 }

@@ -286,6 +286,7 @@ export type ThreadViewState = {
 	};
 	conversation: {
 		scrollTop: number;
+		stickToBottom: boolean;
 	};
 };
 
@@ -522,6 +523,11 @@ export type Commands = {
 			sessionId: string,
 			threadId: string,
 			scrollTop: number,
+		): Promise<void>;
+		setConversationStickToBottom(
+			sessionId: string,
+			threadId: string,
+			stickToBottom: boolean,
 		): Promise<void>;
 		addToolApprovalResponse(
 			sessionId: string,

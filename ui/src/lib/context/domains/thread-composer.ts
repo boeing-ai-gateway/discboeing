@@ -319,6 +319,16 @@ export async function setConversationScrollTop(
 		scrollTop;
 }
 
+export async function setConversationStickToBottom(
+	context: Context,
+	sessionId: string,
+	threadId: string,
+	stickToBottom: boolean,
+): Promise<void> {
+	ensureThreadView(context, sessionId, threadId).conversation.stickToBottom =
+		stickToBottom;
+}
+
 export async function submitThread(
 	context: Context,
 	sessionId: string,

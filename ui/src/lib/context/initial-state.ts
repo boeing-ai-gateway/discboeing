@@ -232,6 +232,7 @@ export function createInitialSessionViewState(
 export function createInitialThreadViewState(
 	sessionId: string,
 	threadId: string,
+	stickToBottom = true,
 ): ThreadViewState {
 	return {
 		sessionId,
@@ -244,6 +245,7 @@ export function createInitialThreadViewState(
 		},
 		conversation: {
 			scrollTop: 0,
+			stickToBottom,
 		},
 	};
 }

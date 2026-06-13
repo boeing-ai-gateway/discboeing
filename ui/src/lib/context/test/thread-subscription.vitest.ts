@@ -14,6 +14,7 @@ import {
 	deactivateThread,
 	ensureThreadContentState,
 } from "$lib/context/domains/threads";
+import { ensureThreadView } from "$lib/context/domains/view";
 import { connectSessionEvents } from "$lib/context/session-subscription";
 import {
 	createInitialDataState,
@@ -356,6 +357,37 @@ test("thread activation builds messages from shared websocket chat chunks", asyn
 	expect(content?.messages).toHaveLength(1);
 	expect(content?.messages[0]?.id).toBe("assistant-1");
 	expect(content?.isStreaming).toBe(false);
+});
+
+test("thread history initializes stick-to-bottom from preference", async () => {
+	const context = createPlainContext();
+	const socket = new FakeProjectSocket();
+	const sessionId = "session-1";
+	const threadId = "thread-1";
+
+	context.view.app.preferences.autoScrollOnStream = false;
+	await activateReadyThread(context, socket, sessionId, threadId);
+
+	expect(
+		context.view.sessions[sessionId]?.threads[threadId]?.conversation
+			.stickToBottom,
+	).toBe(false);
+});
+
+test("thread history preserves existing stick-to-bottom state", async () => {
+	const context = createPlainContext();
+	const socket = new FakeProjectSocket();
+	const sessionId = "session-1";
+	const threadId = "thread-1";
+
+	ensureThreadView(context, sessionId, threadId).conversation.stickToBottom =
+		false;
+	await activateReadyThread(context, socket, sessionId, threadId);
+
+	expect(
+		context.view.sessions[sessionId]?.threads[threadId]?.conversation
+			.stickToBottom,
+	).toBe(false);
 });
 
 function emitChatEvent(

@@ -26,6 +26,7 @@ import {
 	ensureSessionRecord,
 	type SessionRecord,
 } from "$lib/context/domains/sessions";
+import { ensureThreadView } from "$lib/context/domains/view";
 import type { ProjectEventSocket } from "$lib/context/project-subscription";
 import type { ThreadSubscription } from "$lib/context/thread-subscription";
 import type { AsyncStatus } from "$lib/resource/types";
@@ -157,6 +158,7 @@ export function createThreadEventTarget(
 					state.messages,
 					state.answeredApprovalIds,
 				);
+				ensureThreadView(context, sessionId, threadId);
 				target.controls.resolveReady();
 			},
 			onChunkError: (errorText) => {
