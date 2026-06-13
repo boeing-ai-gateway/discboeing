@@ -35,6 +35,7 @@ import {
 import {
 	activateDebugSubscription,
 	closeDebugSubscription,
+	logDebugDiagnostic,
 	logDebugSocketMessage,
 	logDebugSubscriptionEvent,
 	openDebugSubscription,
@@ -131,6 +132,7 @@ async function startProjectActivation(context: Context): Promise<void> {
 		await historyReady;
 	} catch (error) {
 		if (activationId !== runtime.activationId) return;
+		logProjectStreamError(context, runtime, activationId, "activation", error);
 		runtime.phase = "idle";
 		setProjectEventSocket(context, null);
 		closeDebugSubscription(context, PROJECT_EVENTS_REQUEST, error);
@@ -191,9 +193,70 @@ function handleProjectStreamError(
 ): void {
 	if (activationId !== runtime.activationId || runtime.phase === "stopped")
 		return;
+	logProjectStreamError(context, runtime, activationId, "stream", error);
 	context.data.project.status = createErrorStatus(error);
 	closeDebugSubscription(context, PROJECT_EVENTS_REQUEST, error);
 	clearHistoryReadyPromise(runtime, error);
+}
+
+function logProjectStreamError(
+	context: Context,
+	runtime: ProjectRuntime,
+	activationId: number,
+	source: "activation" | "stream",
+	error: unknown,
+): void {
+	const detail = {
+		source,
+		activationId,
+		runtime: {
+			activationId: runtime.activationId,
+			phase: runtime.phase,
+			hasSocket: runtime.socket !== null,
+			hasHistoryTarget: runtime.historyTarget !== null,
+		},
+		project: {
+			id: context.data.project.id,
+			status: context.data.project.status.state,
+		},
+		selection: {
+			sessionId: context.view.selection.sessionId,
+			threadId: context.view.selection.threadId,
+			pendingSessionId: context.view.selection.pendingSessionId,
+		},
+		cache: {
+			sessions: arrayLengthDiagnostic(context.data.sessions.allIds),
+			workspaces: arrayLengthDiagnostic(context.data.workspaces.allIds),
+			startupTasks: arrayLengthDiagnostic(context.data.startupTasks.allIds),
+		},
+		error: formatProjectStreamError(error),
+	};
+	console.error("Project stream error", detail);
+	logDebugDiagnostic(
+		context,
+		"subscription",
+		"error",
+		`project-events ${source} error`,
+		JSON.stringify(detail, null, "\t"),
+	);
+}
+
+function formatProjectStreamError(error: unknown): Record<string, unknown> {
+	if (error instanceof Error) {
+		return {
+			name: error.name,
+			message: error.message,
+			stack: error.stack ?? null,
+		};
+	}
+	return {
+		message: String(error),
+		value: error,
+	};
+}
+
+function arrayLengthDiagnostic(value: unknown): number | string {
+	return Array.isArray(value) ? value.length : typeof value;
 }
 
 export function applyProjectEvent(

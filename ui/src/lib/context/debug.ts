@@ -410,6 +410,19 @@ export function logDebugSocketMessage(
 	});
 }
 
+export function logDebugDiagnostic(
+	context: DebugContext,
+	kind: DebugLogKind,
+	level: DebugLogLevel,
+	message: string,
+	detail?: string,
+): void {
+	untrack(() => {
+		if (!context.view.app.debug.enabled) return;
+		pushDebugLog(context, kind, level, message, detail);
+	});
+}
+
 export function clearDebugLogs(context: DebugContext): void {
 	untrack(() => {
 		context.view.app.debug.logs = [];

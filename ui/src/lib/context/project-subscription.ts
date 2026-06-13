@@ -154,6 +154,10 @@ export function connectProjectEvents(
 				options.onSocketMessage?.("in", message);
 				handleMessage(message);
 			} catch (error) {
+				console.error("Failed to handle project websocket message", {
+					error,
+					data: event.data,
+				});
 				options.onError?.(error);
 			}
 		};
