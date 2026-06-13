@@ -55,8 +55,9 @@ import {
 import type { ThreadsState } from "$lib/context/domains/threads";
 import {
 	applyThreadsSnapshotToRecord,
-	deactivateThread,
 	createThreadsState,
+	deactivateThread,
+	stopThreadWatchesForSession,
 } from "$lib/context/domains/threads";
 import { getProjectEventSocket } from "$lib/project-events";
 import type { ProjectEventSocket } from "$lib/context/project-subscription";
@@ -431,6 +432,7 @@ export async function deactivateSession(
 	if (!record) return;
 	record.subscription?.close();
 	record.subscription = null;
+	stopThreadWatchesForSession(context, sessionId);
 }
 
 export function stopSessionWatches(
@@ -451,7 +453,10 @@ export function stopSessionWatches(
 		if (id === exceptSessionId) continue;
 		const record = context.data.sessions.byId[id];
 		record?.subscription?.close();
-		if (record) record.subscription = null;
+		if (record) {
+			record.subscription = null;
+			stopThreadWatchesForSession(context, id);
+		}
 	}
 }
 

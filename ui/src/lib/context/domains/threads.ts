@@ -667,15 +667,35 @@ export async function deactivateThread(
 	content.isStreaming = false;
 }
 
+export function stopThreadWatchesForSession(
+	context: Context,
+	sessionId: string,
+): void {
+	const activations = threadActivationPromises.get(context);
+	if (activations) {
+		const sessionPrefix = `${sessionId}:`;
+		for (const key of activations.keys()) {
+			if (key.startsWith(sessionPrefix)) {
+				activations.delete(key);
+			}
+		}
+	}
+
+	const threads = context.data.sessions.byId[sessionId]?.threads;
+	if (!threads) return;
+	for (const threadId of threads.allIds) {
+		const content = threads.byId[threadId]?.content;
+		content?.subscription?.close();
+		if (content) {
+			content.subscription = null;
+			content.isStreaming = false;
+		}
+	}
+}
+
 export function stopThreadWatches(context: Context): void {
 	threadActivationPromises.delete(context);
 	for (const sessionId of context.data.sessions.allIds) {
-		const threads = context.data.sessions.byId[sessionId]?.threads;
-		if (!threads) continue;
-		for (const threadId of threads.allIds) {
-			const content = threads.byId[threadId]?.content;
-			content?.subscription?.close();
-			if (content) content.subscription = null;
-		}
+		stopThreadWatchesForSession(context, sessionId);
 	}
 }

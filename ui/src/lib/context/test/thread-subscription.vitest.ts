@@ -201,6 +201,25 @@ test("session activation can reactivate immediately after pending deactivate", a
 	await firstActivation;
 });
 
+test("session deactivation stops active thread subscriptions", async () => {
+	const context = createPlainContext();
+	const socket = new FakeProjectSocket();
+	const sessionId = "session-1";
+	const threadId = "thread-1";
+
+	await activateReadyThread(context, socket, sessionId, threadId);
+	const content = ensureThreadContentState(
+		ensureSessionRecord(context.data.sessions, sessionId).threads,
+		threadId,
+	);
+	expect(content.subscription).not.toBeNull();
+
+	await deactivateSession(context, sessionId);
+
+	expect(socket.closed).toBe(true);
+	expect(content.subscription).toBeNull();
+});
+
 test("thread snapshots preserve active subscription state", async () => {
 	const context = createPlainContext();
 	const socket = new FakeProjectSocket();

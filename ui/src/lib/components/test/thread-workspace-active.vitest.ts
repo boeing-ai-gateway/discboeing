@@ -31,7 +31,7 @@ test("thread workspace active mounts activation when visible with a session", ()
 	);
 	assert.match(
 		source,
-		/\{#if props\.visible && currentSession\}[\s\S]*<ThreadActivation \{sessionId\} \{threadId\} \/>[\s\S]*\{\/if\}/,
+		/\{#if props\.visible && currentSession\}[\s\S]*\{#key `\$\{sessionId\}:\$\{threadId\}`\}[\s\S]*<ThreadActivation \{sessionId\} \{threadId\} \/>[\s\S]*\{\/key\}[\s\S]*\{\/if\}/,
 	);
 	assert.doesNotMatch(source, /activateThread\(sessionId, threadId\)/);
 	assert.doesNotMatch(source, /deactivateThread\(sessionId, threadId\)/);
@@ -44,23 +44,22 @@ test("thread workspace active mounts activation when visible with a session", ()
 	assert.doesNotMatch(source, /SessionRuntimeState/);
 });
 
-test("thread activation deactivates after activation starts", () => {
+test("thread activation does not deactivate on unmount", () => {
 	const source = readThreadActivationSource();
 
-	assert.match(source, /import \{ onDestroy, onMount \} from "svelte";/);
+	assert.match(source, /import \{ onMount \} from "svelte";/);
 	assert.match(source, /import \{ useContext \} from "\$lib\/context";/);
-	assert.match(source, /let activationStarted = false;/);
-	assert.match(source, /activationStarted = true;/);
 	assert.match(
 		source,
 		/void context\.commands\.threads\s*\.activateThread\(sessionId, threadId\)\s*\.catch\(\(\) => undefined\);/,
 	);
-	assert.match(source, /if \(!activationStarted\) \{[\s\S]*return;[\s\S]*\}/);
-	assert.match(
+	assert.doesNotMatch(source, /\$effect/);
+	assert.doesNotMatch(source, /onDestroy/);
+	assert.doesNotMatch(source, /activationStarted/);
+	assert.doesNotMatch(
 		source,
-		/void context\.commands\.threads\s*\.deactivateThread\(sessionId, threadId\)\s*\.catch\(\(\) => undefined\);/,
+		/context\.commands\.threads\s*\.deactivateThread\(sessionId, threadId\)/,
 	);
-	assert.doesNotMatch(source, /destroyed/);
 	assert.doesNotMatch(
 		source,
 		/await context\.commands\.threads\.activateThread/,

@@ -65,7 +65,9 @@
 </script>
 
 {#if props.visible && currentSession}
-	<ThreadActivation {sessionId} {threadId} />
+	{#key `${sessionId}:${threadId}`}
+		<ThreadActivation {sessionId} {threadId} />
+	{/key}
 {/if}
 
 {#snippet sessionHeaderDropdown()}
