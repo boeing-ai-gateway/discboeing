@@ -1269,7 +1269,7 @@ export interface SessionDiffStats {
 
 /** Full diff response */
 export interface SessionDiffResponse {
-	files: SessionFileDiffEntry[];
+	files: SessionFileDiffEntry[] | null;
 	stats: SessionDiffStats;
 }
 
@@ -1282,7 +1282,7 @@ export interface SessionDiffFileEntry {
 
 /** Files-only diff response (with status) */
 export interface SessionDiffFilesResponse {
-	files: SessionDiffFileEntry[];
+	files: SessionDiffFileEntry[] | null;
 	stats: SessionDiffStats;
 }
 

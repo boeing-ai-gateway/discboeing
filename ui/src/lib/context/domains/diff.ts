@@ -2,6 +2,8 @@ import { api } from "$lib/api-client";
 import type {
 	SessionDiffFilesResponse,
 	SessionDiffResponse,
+	SessionDiffFileEntry,
+	SessionFileDiffEntry,
 	SessionSingleFileDiffResponse,
 } from "$lib/api-types";
 import type { ResourceStatus } from "$lib/context/cache";
@@ -19,11 +21,25 @@ import {
 
 export type DiffState = {
 	status: ResourceStatus;
-	value: SessionDiffResponse | null;
+	value: NormalizedSessionDiffResponse | null;
 	filesStatus: ResourceStatus;
-	files: SessionDiffFilesResponse | null;
+	files: NormalizedSessionDiffFilesResponse | null;
 	byPath: Record<string, SessionSingleFileDiffResponse>;
 	statusByPath: Record<string, ResourceStatus>;
+};
+
+export type NormalizedSessionDiffResponse = Omit<
+	SessionDiffResponse,
+	"files"
+> & {
+	files: SessionFileDiffEntry[];
+};
+
+export type NormalizedSessionDiffFilesResponse = Omit<
+	SessionDiffFilesResponse,
+	"files"
+> & {
+	files: SessionDiffFileEntry[];
 };
 
 export function createDiffState(): DiffState {
@@ -50,13 +66,14 @@ export function applyDiffSnapshotToRecord(
 	record: SessionRecord,
 	diff: SessionDiffResponse,
 ): void {
-	if (diffSnapshotsEqual(record.diff.value, diff)) {
+	const normalizedDiff = normalizeDiffSnapshot(diff);
+	if (diffSnapshotsEqual(record.diff.value, normalizedDiff)) {
 		if (record.diff.status.state !== "ready") {
 			record.diff.status = createReadyStatus();
 		}
 		return;
 	}
-	record.diff.value = diff;
+	record.diff.value = normalizedDiff;
 	record.diff.status = createReadyStatus();
 }
 
@@ -73,19 +90,44 @@ export function applyDiffStatusSnapshotToRecord(
 	record: SessionRecord,
 	diff: SessionDiffFilesResponse,
 ): void {
-	if (diffStatusSnapshotsEqual(record.diff.files, diff)) {
+	const normalizedDiff = normalizeDiffStatusSnapshot(diff);
+	if (diffStatusSnapshotsEqual(record.diff.files, normalizedDiff)) {
 		if (record.diff.filesStatus.state !== "ready") {
 			record.diff.filesStatus = createReadyStatus();
 		}
 		return;
 	}
-	record.diff.files = diff;
+	record.diff.files = normalizedDiff;
 	record.diff.filesStatus = createReadyStatus();
 }
 
+function normalizeDiffSnapshot(
+	diff: SessionDiffResponse,
+): NormalizedSessionDiffResponse {
+	if (Array.isArray(diff.files)) {
+		return diff as NormalizedSessionDiffResponse;
+	}
+	return {
+		...diff,
+		files: [],
+	};
+}
+
+export function normalizeDiffStatusSnapshot(
+	diff: SessionDiffFilesResponse,
+): NormalizedSessionDiffFilesResponse {
+	if (Array.isArray(diff.files)) {
+		return diff as NormalizedSessionDiffFilesResponse;
+	}
+	return {
+		...diff,
+		files: [],
+	};
+}
+
 function diffSnapshotsEqual(
-	current: SessionDiffResponse | null,
-	next: SessionDiffResponse,
+	current: NormalizedSessionDiffResponse | null,
+	next: NormalizedSessionDiffResponse,
 ): boolean {
 	if (!current || !diffStatsEqual(current.stats, next.stats)) {
 		return false;
@@ -108,8 +150,8 @@ function diffSnapshotsEqual(
 }
 
 function diffStatusSnapshotsEqual(
-	current: SessionDiffFilesResponse | null,
-	next: SessionDiffFilesResponse,
+	current: NormalizedSessionDiffFilesResponse | null,
+	next: NormalizedSessionDiffFilesResponse,
 ): boolean {
 	if (!current || !diffStatsEqual(current.stats, next.stats)) {
 		return false;

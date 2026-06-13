@@ -60,7 +60,6 @@
 	import type {
 		FileStatus,
 		SessionDiffFileEntry,
-		SessionDiffFilesResponse,
 		SessionDiffStats,
 	} from "$lib/api-types";
 	import type { SessionFileBufferState } from "$lib/context";
@@ -88,6 +87,11 @@
 		tree: SessionFileTreeNode[];
 	};
 
+	type NormalizedSessionDiffFilesResponse = {
+		files: SessionDiffFileEntry[];
+		stats: SessionDiffStats;
+	};
+
 	export type FilesPanelView = {
 		activePath: string;
 		openPaths: string[];
@@ -96,7 +100,7 @@
 		loadingPaths: Record<string, boolean>;
 		buffers: Record<string, SessionFileBufferState>;
 		diffTarget: string;
-		diffFilesByTarget: Record<string, SessionDiffFilesResponse>;
+		diffFilesByTarget: Record<string, NormalizedSessionDiffFilesResponse>;
 	};
 
 	export type FilesPanelActions = {

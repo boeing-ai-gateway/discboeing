@@ -28,7 +28,8 @@ import type {
 	OAuthExchangeResponse,
 	StartChatRequest,
 	SessionCredentialAssignment,
-	SessionDiffFilesResponse,
+	SessionDiffFileEntry,
+	SessionDiffStats,
 	ThemeColorScheme,
 	ChatMessage,
 	UpdateThreadRequest,
@@ -48,6 +49,11 @@ import type {
 } from "$lib/desktop/types";
 import type { ResourceStatus } from "$lib/context/cache";
 import type { ResolvedTheme, ThemeMetadata, ThemeMode } from "$lib/theme";
+
+type NormalizedSessionDiffFilesResponse = {
+	files: SessionDiffFileEntry[];
+	stats: SessionDiffStats;
+};
 import type { DiffStyle } from "$lib/pierre-diff";
 import type { CredentialsState } from "$lib/context/domains/credentials";
 import type { ModelsState } from "$lib/context/domains/models";
@@ -238,7 +244,7 @@ export type SessionViewState = {
 		editorModels: Record<string, unknown>;
 		editorViewStates: Record<string, unknown>;
 		diffTarget: string;
-		diffFilesByTarget: Record<string, SessionDiffFilesResponse>;
+		diffFilesByTarget: Record<string, NormalizedSessionDiffFilesResponse>;
 	};
 	hooks: {
 		expanded: boolean;

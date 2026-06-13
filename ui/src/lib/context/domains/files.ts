@@ -13,7 +13,10 @@ import {
 import type { ResourceStatus } from "$lib/context/cache";
 import { createIdleStatus } from "$lib/context/cache";
 import type { CommandOptions, Context } from "$lib/context/context.types";
-import { applyDiffStatusSnapshotToRecord } from "$lib/context/domains/diff";
+import {
+	applyDiffStatusSnapshotToRecord,
+	normalizeDiffStatusSnapshot,
+} from "$lib/context/domains/diff";
 import { ensureSessionView } from "$lib/context/domains/view";
 import {
 	ensureSessionRecord,
@@ -214,7 +217,8 @@ export async function setDiffTarget(
 		return;
 	}
 	if (normalizedTarget) {
-		view.files.diffFilesByTarget[normalizedTarget] = response;
+		view.files.diffFilesByTarget[normalizedTarget] =
+			normalizeDiffStatusSnapshot(response);
 		return;
 	}
 
