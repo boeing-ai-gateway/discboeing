@@ -13,7 +13,11 @@ const MAX_DEBUG_STATE_CHANGE_ENTRIES = 100;
 const MAX_DEBUG_STATE_DIFFS_PER_ENTRY = 80;
 const MAX_SERIALIZED_LENGTH = 600;
 const MAX_COMMAND_CALL_STACK_LENGTH = 8_000;
-const MAX_DEBUG_STORAGE_LENGTH = 2_000_000;
+const MAX_PERSISTED_DEBUG_LOG_ENTRIES = 50;
+const MAX_PERSISTED_DEBUG_REQUEST_ENTRIES = 50;
+const MAX_PERSISTED_DEBUG_EVENT_ENTRIES = 50;
+const MAX_PERSISTED_DEBUG_STATE_CHANGE_ENTRIES = 10;
+const MAX_PERSISTED_DEBUG_STORAGE_LENGTH = 200_000;
 const DEBUG_STORAGE_KEY = "discobot.ng.debug";
 
 let nextDebugId = 1;
@@ -598,16 +602,16 @@ function persistDebugState(context: DebugContext): void {
 }
 
 function serializeDebugStateForStorage(debugState: DebugState): string | null {
-	const persisted = cloneDebugState(debugState);
+	const persisted = cloneDebugStateForStorage(debugState);
 	let serialized = serializeDebugState(persisted);
 	while (
 		serialized &&
-		serialized.length > MAX_DEBUG_STORAGE_LENGTH &&
+		serialized.length > MAX_PERSISTED_DEBUG_STORAGE_LENGTH &&
 		dropOldestPersistedEntry(persisted)
 	) {
 		serialized = serializeDebugState(persisted);
 	}
-	return serialized && serialized.length <= MAX_DEBUG_STORAGE_LENGTH
+	return serialized && serialized.length <= MAX_PERSISTED_DEBUG_STORAGE_LENGTH
 		? serialized
 		: null;
 }
@@ -620,14 +624,17 @@ function serializeDebugState(debugState: DebugState): string | null {
 	}
 }
 
-function cloneDebugState(debugState: DebugState): DebugState {
+function cloneDebugStateForStorage(debugState: DebugState): DebugState {
 	return {
 		enabled: debugState.enabled,
-		commands: [...debugState.commands],
-		events: [...debugState.events],
-		logs: [...debugState.logs],
-		requests: [...debugState.requests],
-		stateChanges: [...debugState.stateChanges],
+		commands: debugState.commands.slice(0, MAX_PERSISTED_DEBUG_LOG_ENTRIES),
+		events: debugState.events.slice(0, MAX_PERSISTED_DEBUG_EVENT_ENTRIES),
+		logs: debugState.logs.slice(0, MAX_PERSISTED_DEBUG_LOG_ENTRIES),
+		requests: debugState.requests.slice(0, MAX_PERSISTED_DEBUG_REQUEST_ENTRIES),
+		stateChanges: debugState.stateChanges.slice(
+			0,
+			MAX_PERSISTED_DEBUG_STATE_CHANGE_ENTRIES,
+		),
 		subscriptions: { ...debugState.subscriptions },
 	};
 }
