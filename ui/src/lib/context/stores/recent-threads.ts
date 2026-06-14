@@ -220,6 +220,13 @@ function setRecentThreadsEntries(
 	writeRecentThreads(nextEntries);
 }
 
+export function replaceRecentThreads(
+	state: RecentThreadsState,
+	entries: SavedRecentThreadEntry[],
+): void {
+	setRecentThreadsEntries(state, entries);
+}
+
 export function clearRecentThreadRecording(state: RecentThreadsState): void {
 	state.lastRecordedKey = null;
 }

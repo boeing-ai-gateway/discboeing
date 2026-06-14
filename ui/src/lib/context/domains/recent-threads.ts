@@ -4,6 +4,7 @@ import {
 	createRecentThreadsStore,
 	getVisibleRecentThreads,
 	recordRecentThread,
+	replaceRecentThreads,
 } from "$lib/context/stores/recent-threads";
 import type { SavedRecentThreadEntry } from "$lib/context/stores/recent-threads";
 
@@ -84,8 +85,13 @@ export function syncRecentThreads(context: Context): void {
 		});
 	}
 
+	const cachedEntries = cachedRecentThreads(context, state.entries);
+	if (cachedEntries.length !== state.entries.length) {
+		replaceRecentThreads(state, cachedEntries);
+	}
+
 	context.view.app.recentThreads.visibleItems = getVisibleRecentThreads({
-		recentThreads: cachedRecentThreads(context, state.entries),
+		recentThreads: cachedEntries,
 		sessions: listCachedSessions(context),
 		limit: visibleLimit > 1 ? visibleLimit : 0,
 	});

@@ -57,6 +57,12 @@ function selectThread(context: Context, index: number): void {
 	context.view.selection.threadId = `thread-${index}`;
 }
 
+function readStoredRecentThreads(): unknown[] {
+	const stored = window.localStorage.getItem(RECENT_THREADS_STORAGE_KEY);
+	expect(stored).toBeTruthy();
+	return JSON.parse(stored ?? "[]") as unknown[];
+}
+
 test("syncRecentThreads keeps recent threads hidden when the off sentinel is selected", () => {
 	const context = createPlainContext();
 	context.view.app.preferences.recentThreadsVisibleLimit = 1;
@@ -84,6 +90,23 @@ test("syncRecentThreads makes four selected recent threads visible when the limi
 			(thread) => thread.threadId,
 		),
 	).toEqual(["thread-5", "thread-4", "thread-3", "thread-2"]);
+});
+
+test("syncRecentThreads saves selected threads to local storage", () => {
+	const context = createPlainContext();
+	context.view.app.preferences.recentThreadsVisibleLimit = 4;
+	addThread(context, 1);
+	selectThread(context, 1);
+
+	syncRecentThreads(context);
+
+	expect(readStoredRecentThreads()).toMatchObject([
+		{
+			sessionId: "session-1",
+			threadId: "thread-1",
+			name: "Thread 1",
+		},
+	]);
 });
 
 test("syncRecentThreads filters stale stored entries without cached sessions or threads", () => {
@@ -122,4 +145,11 @@ test("syncRecentThreads filters stale stored entries without cached sessions or 
 			(thread) => thread.threadId,
 		),
 	).toEqual(["thread-1"]);
+	expect(readStoredRecentThreads()).toMatchObject([
+		{
+			sessionId: "session-1",
+			threadId: "thread-1",
+			name: "Thread 1",
+		},
+	]);
 });
