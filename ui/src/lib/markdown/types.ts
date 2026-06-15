@@ -60,6 +60,11 @@ export type CodeHighlighterPlugin = {
 export type DiagramPlugin = {
 	language: string;
 	name: "mermaid";
+	render(
+		id: string,
+		code: string,
+		container: Element,
+	): Promise<string> | string;
 	type: "diagram";
 };
 

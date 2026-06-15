@@ -13,6 +13,10 @@ function renderMarkdown(
 	return container;
 }
 
+async function waitForRender() {
+	await new Promise((resolve) => window.setTimeout(resolve, 20));
+}
+
 test("renderMarkdownTree keeps loose ordered and unordered list markers outside the content block", () => {
 	const container =
 		renderMarkdown(`1. **Restart during question phase with no cached snapshot at all**
@@ -164,4 +168,86 @@ test("renderMarkdownTree uses content visibility on complete code fences", () =>
 	expect(codeBlock).toBeTruthy();
 	expect(codeBlock?.style.contentVisibility).toBe("auto");
 	expect(codeBlock?.style.containIntrinsicSize).toBe("auto 200px");
+});
+
+test("renderMarkdownTree renders Mermaid fences with the Mermaid plugin", async () => {
+	const container = renderMarkdown("```mermaid\ngraph TD\nA-->B\n```", {
+		plugins: {
+			mermaid: {
+				language: "mermaid",
+				name: "mermaid",
+				render: async (id, code) =>
+					`<svg id="${id}" role="img"><text>${code}</text></svg>`,
+				type: "diagram",
+			},
+		},
+	});
+	document.body.append(container);
+	const diagram = container.querySelector<HTMLElement>(
+		'[data-streamdown="mermaid"]',
+	);
+
+	expect(diagram).toBeTruthy();
+	expect(diagram?.textContent).toContain("Rendering diagram");
+
+	await waitForRender();
+
+	const svg = diagram?.querySelector("svg");
+	expect(svg).toBeTruthy();
+	expect(svg?.id).toMatch(/^discobot-mermaid-/);
+	expect(svg?.textContent).toContain("graph TD");
+	container.remove();
+});
+
+test("renderMarkdownTree renders incomplete Mermaid fences as code blocks", () => {
+	const container = renderMarkdown("```mermaid\ngraph TD\nA-->B", {
+		isIncompleteCodeFence: true,
+		plugins: {
+			mermaid: {
+				language: "mermaid",
+				name: "mermaid",
+				render: () => {
+					throw new Error("render should not be called");
+				},
+				type: "diagram",
+			},
+		},
+	});
+	const codeBlock = container.querySelector<HTMLElement>(
+		'[data-streamdown="code-block"]',
+	);
+
+	expect(codeBlock).toBeTruthy();
+	expect(codeBlock?.dataset.language).toBe("mermaid");
+});
+
+test("renderMarkdownTree waits to render Mermaid until the container is attached", async () => {
+	const renderStates: boolean[] = [];
+	const fragment = renderMarkdownTree(
+		parseMarkdownToHast("```mermaid\ngraph TD\nA-->B\n```"),
+		{
+			plugins: {
+				mermaid: {
+					language: "mermaid",
+					name: "mermaid",
+					render: async (_id, _code, container) => {
+						renderStates.push(container.isConnected);
+						return "<svg></svg>";
+					},
+					type: "diagram",
+				},
+			},
+		},
+	);
+
+	await waitForRender();
+	expect(renderStates).toEqual([]);
+
+	const container = document.createElement("div");
+	document.body.append(container);
+	container.append(fragment);
+	await waitForRender();
+
+	expect(renderStates).toEqual([true]);
+	container.remove();
 });

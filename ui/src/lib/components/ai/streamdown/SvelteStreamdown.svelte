@@ -7,6 +7,7 @@
 		LinkSafetyState,
 	} from "$lib/components/ai/link-safety-modal";
 	import { hasIncompleteCodeFence } from "$lib/markdown/incomplete-code-utils";
+	import { mermaidPlugin } from "$lib/markdown/mermaid";
 	import { parseMarkdownIntoBlocks } from "$lib/markdown/parse-blocks";
 	import { parseMarkdownToHast } from "$lib/markdown/pipeline";
 	import { preprocessMarkdown } from "$lib/markdown/preprocess";
@@ -26,7 +27,7 @@
 	let {
 		text,
 		class: className,
-		plugins = { code, math, cjk },
+		plugins = { code, math, cjk, mermaid: mermaidPlugin },
 		mode = "streaming",
 		isAnimating = false,
 		animated = false,

@@ -18,6 +18,7 @@ const languagePattern = /language-([^\s]+)/;
 const startLinePattern = /startLine=(\d+)/;
 const noLineNumbersPattern = /\bnoLineNumbers\b/;
 const fileExtensionPattern = /\.[^/.]+$/;
+let mermaidId = 0;
 
 function isElement(node: RootContent | HastNode): node is Element {
 	return node.type === "element";
@@ -179,6 +180,99 @@ function createCopyButton(code: string): HTMLButtonElement {
 		}
 	});
 	return button;
+}
+
+function isMermaidLanguage(
+	language: string,
+	options: RenderMarkdownOptions,
+): boolean {
+	const mermaid = options.plugins?.mermaid;
+	return (
+		Boolean(mermaid) &&
+		language.toLowerCase() === mermaid?.language.toLowerCase()
+	);
+}
+
+function waitForConnected(element: HTMLElement): Promise<void> {
+	if (element.isConnected) {
+		return Promise.resolve();
+	}
+
+	return new Promise((resolve, reject) => {
+		let attempts = 0;
+
+		const check = () => {
+			if (element.isConnected) {
+				resolve();
+				return;
+			}
+
+			attempts += 1;
+			if (attempts > 60) {
+				reject(new Error("Mermaid diagram container was not attached"));
+				return;
+			}
+
+			if (window.requestAnimationFrame) {
+				window.requestAnimationFrame(check);
+			} else {
+				window.setTimeout(check, 16);
+			}
+		};
+
+		check();
+	});
+}
+
+function renderMermaidBlock(
+	code: string,
+	options: RenderMarkdownOptions,
+): HTMLElement {
+	const mermaid = options.plugins?.mermaid;
+	const container = document.createElement("div");
+	container.className = cn(
+		"my-4 overflow-x-auto rounded-xl border border-border bg-background p-4",
+	);
+	container.dataset.language = mermaid?.language ?? "mermaid";
+	container.dataset.streamdown = "mermaid";
+
+	const status = document.createElement("div");
+	status.className = "text-sm text-muted-foreground";
+	status.textContent = "Rendering diagram…";
+	container.append(status);
+
+	const id = `discobot-mermaid-${++mermaidId}`;
+	if (!mermaid) {
+		return container;
+	}
+
+	void waitForConnected(container)
+		.then(() => mermaid.render(id, code, container))
+		.then((svg) => {
+			container.innerHTML = svg;
+			const svgElement = container.querySelector("svg");
+			if (svgElement) {
+				svgElement.classList.add("mx-auto", "max-w-full");
+				svgElement.removeAttribute("height");
+				svgElement.style.height = "auto";
+			}
+		})
+		.catch((error: unknown) => {
+			container.replaceChildren();
+			const message = document.createElement("div");
+			message.className = "mb-3 text-sm text-destructive";
+			message.textContent = "Unable to render Mermaid diagram.";
+
+			const details = document.createElement("pre");
+			details.className =
+				"overflow-x-auto rounded-md border border-border bg-muted p-3 text-xs text-muted-foreground";
+			details.textContent =
+				error instanceof Error ? error.message : "Unknown Mermaid render error";
+
+			container.append(message, details);
+		});
+
+	return container;
 }
 
 function parseRootStyle(rootStyle: string): Record<string, string> {
@@ -468,6 +562,10 @@ function renderCodeBlock(
 		metastring && noLineNumbersPattern.test(metastring)
 	);
 	const code = getTextContent(codeNode);
+
+	if (isMermaidLanguage(language, options) && !options.isIncompleteCodeFence) {
+		return renderMermaidBlock(code, options);
+	}
 
 	const container = document.createElement("div");
 	container.className = cn(
