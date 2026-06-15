@@ -219,7 +219,14 @@
 	}
 
 	function logSearchText(log: (typeof visibleLogs)[number]) {
-		return searchText(log.kind, log.level, log.message, log.detail, log.at);
+		return searchText(
+			log.kind,
+			log.level,
+			log.message,
+			log.detail,
+			log.stack,
+			log.at,
+		);
 	}
 
 	function commandSearchText(command: (typeof debug.commands)[number]) {
@@ -683,9 +690,31 @@
 												{formatTime(log.at)}
 											</span>
 										</button>
-										{#if expandedLogIds[log.id] && log.detail}
-											<pre
-												class="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{log.detail}</pre>
+										{#if expandedLogIds[log.id] && (log.detail || log.stack)}
+											<div class="mt-2 space-y-2">
+												{#if log.detail}
+													<div>
+														<div
+															class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground"
+														>
+															detail
+														</div>
+														<pre
+															class="max-h-48 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{log.detail}</pre>
+													</div>
+												{/if}
+												{#if log.stack}
+													<div>
+														<div
+															class="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground"
+														>
+															stack
+														</div>
+														<pre
+															class="max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/20 p-2 text-muted-foreground">{log.stack}</pre>
+													</div>
+												{/if}
+											</div>
 										{/if}
 									</div>
 								{/each}

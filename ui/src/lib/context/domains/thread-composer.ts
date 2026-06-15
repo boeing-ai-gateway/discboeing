@@ -43,6 +43,11 @@ type SubmitThreadResult = {
 	queued: boolean;
 };
 
+const COMPOSER_DRAFT_PERSIST_DELAY_MS = 250;
+
+let composerDraftPersistTimer: number | undefined;
+const pendingComposerDraftPersists = new Map<string, string>();
+
 function isPendingSession(context: Context, sessionId: string): boolean {
 	return context.view.selection.pendingSessionId === sessionId;
 }
@@ -164,7 +169,7 @@ export async function setComposerDraft(
 ): Promise<void> {
 	ensureSessionView(context, sessionId).composer.draft = value;
 	const threadId = resolveActiveThreadId(context, sessionId);
-	writeComposerDraft(
+	scheduleComposerDraftPersist(
 		resolveDraftStorageKey(context, sessionId, threadId),
 		value,
 	);
@@ -177,9 +182,45 @@ export async function clearComposerDraft(
 	storageKey?: string,
 ): Promise<void> {
 	ensureSessionView(context, sessionId).composer.draft = "";
-	clearStoredComposerDraft(
-		storageKey ?? resolveDraftStorageKey(context, sessionId, threadId),
-	);
+	const resolvedStorageKey =
+		storageKey ?? resolveDraftStorageKey(context, sessionId, threadId);
+	clearPendingComposerDraftPersist(resolvedStorageKey);
+	clearStoredComposerDraft(resolvedStorageKey);
+}
+
+function scheduleComposerDraftPersist(storageKey: string, value: string): void {
+	if (typeof window === "undefined") {
+		writeComposerDraft(storageKey, value);
+		return;
+	}
+
+	pendingComposerDraftPersists.set(storageKey, value);
+	if (composerDraftPersistTimer !== undefined) {
+		window.clearTimeout(composerDraftPersistTimer);
+	}
+	composerDraftPersistTimer = window.setTimeout(() => {
+		composerDraftPersistTimer = undefined;
+		flushPendingComposerDraftPersist();
+	}, COMPOSER_DRAFT_PERSIST_DELAY_MS);
+}
+
+function flushPendingComposerDraftPersist(): void {
+	for (const [storageKey, value] of pendingComposerDraftPersists) {
+		writeComposerDraft(storageKey, value);
+	}
+	pendingComposerDraftPersists.clear();
+}
+
+function clearPendingComposerDraftPersist(storageKey: string): void {
+	pendingComposerDraftPersists.delete(storageKey);
+	if (
+		pendingComposerDraftPersists.size === 0 &&
+		typeof window !== "undefined" &&
+		composerDraftPersistTimer !== undefined
+	) {
+		window.clearTimeout(composerDraftPersistTimer);
+		composerDraftPersistTimer = undefined;
+	}
 }
 
 export async function movePendingComposerDraftToThread(
@@ -188,11 +229,13 @@ export async function movePendingComposerDraftToThread(
 	nextThreadId: string,
 	value: string,
 ): Promise<void> {
+	const fromStorageKey = resolveComposerDraftStorageKey({
+		isPending: true,
+		threadId,
+	});
+	clearPendingComposerDraftPersist(fromStorageKey);
 	moveComposerDraft({
-		fromStorageKey: resolveComposerDraftStorageKey({
-			isPending: true,
-			threadId,
-		}),
+		fromStorageKey,
 		toStorageKey: resolveComposerDraftStorageKey({
 			isPending: false,
 			threadId: nextThreadId,

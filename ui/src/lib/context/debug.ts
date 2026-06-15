@@ -12,7 +12,7 @@ const MAX_DEBUG_EVENT_ENTRIES = 500;
 const MAX_DEBUG_STATE_CHANGE_ENTRIES = 100;
 const MAX_DEBUG_STATE_DIFFS_PER_ENTRY = 80;
 const MAX_SERIALIZED_LENGTH = 600;
-const MAX_COMMAND_CALL_STACK_LENGTH = 8_000;
+const MAX_CONSOLE_LOG_STACK_LENGTH = 8_000;
 const MAX_PERSISTED_DEBUG_LOG_ENTRIES = 50;
 const MAX_PERSISTED_DEBUG_REQUEST_ENTRIES = 50;
 const MAX_PERSISTED_DEBUG_EVENT_ENTRIES = 50;
@@ -39,6 +39,7 @@ export type DebugLogEntry = {
 	level: DebugLogLevel;
 	message: string;
 	detail?: string;
+	stack?: string;
 };
 
 export type DebugSubscriptionEntry = {
@@ -249,7 +250,7 @@ export function logDebugCommandStart(
 				finishedAt: null,
 				durationMs: null,
 				args: serialize(args),
-				callStack: captureCommandCallStack(),
+				callStack: null,
 				error: null,
 			},
 			...context.view.app.debug.commands,
@@ -493,6 +494,7 @@ function logDebugConsole(
 			method === "error" ? "error" : method === "warn" ? "warn" : "info",
 			`console.${method}`,
 			args.map(formatConsoleArg).join("\n"),
+			captureConsoleLogStack(),
 		);
 		scheduleDebugPersist(context);
 	});
@@ -562,6 +564,7 @@ function pushDebugLog(
 	level: DebugLogLevel,
 	message: string,
 	detail?: string,
+	stack?: string,
 ): void {
 	context.view.app.debug.logs = trimEntries([
 		{
@@ -571,6 +574,7 @@ function pushDebugLog(
 			level,
 			message,
 			detail,
+			stack,
 		},
 		...context.view.app.debug.logs,
 	]);
@@ -764,7 +768,8 @@ function isDebugLogEntry(value: unknown): value is DebugLogEntry {
 		isDebugLogKind(value.kind) &&
 		isDebugLogLevel(value.level) &&
 		typeof value.message === "string" &&
-		(value.detail === undefined || typeof value.detail === "string")
+		(value.detail === undefined || typeof value.detail === "string") &&
+		(value.stack === undefined || typeof value.stack === "string")
 	);
 }
 
@@ -996,20 +1001,22 @@ function stringifyStateSnapshot(context: DebugContext): string {
 	}
 }
 
-function captureCommandCallStack(): string | null {
+function captureConsoleLogStack(): string | undefined {
 	const stack = new Error().stack;
-	if (!stack) return null;
+	if (!stack) return undefined;
 	const frames = stack
 		.split("\n")
 		.filter(
 			(frame) =>
-				!frame.includes("captureCommandCallStack") &&
-				!frame.includes("logDebugCommandStart"),
+				!frame.includes("captureConsoleLogStack") &&
+				!frame.includes("logDebugConsole") &&
+				!frame.includes("console.<computed>") &&
+				!frame.includes("console[method]"),
 		);
 	const callStack = frames.join("\n").trim();
-	if (!callStack) return null;
-	return callStack.length > MAX_COMMAND_CALL_STACK_LENGTH
-		? `${callStack.slice(0, MAX_COMMAND_CALL_STACK_LENGTH)}…`
+	if (!callStack) return undefined;
+	return callStack.length > MAX_CONSOLE_LOG_STACK_LENGTH
+		? `${callStack.slice(0, MAX_CONSOLE_LOG_STACK_LENGTH)}…`
 		: callStack;
 }
 
