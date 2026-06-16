@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
+	import Markdown from "$lib/components/ai/streamdown/Markdown.svelte";
 	import { CollapsibleContent } from "$lib/components/ui/collapsible";
-	import { SvelteStreamdown } from "$lib/components/ai/streamdown";
 	import { cn } from "$lib/utils";
 	import { useReasoningContext } from "./context";
 
@@ -77,7 +77,7 @@
 	{...restProps}
 >
 	{#if text !== undefined}
-		<SvelteStreamdown {text} isAnimating={reasoning.isStreaming} />
+		<Markdown {text} isAnimating={reasoning.isStreaming} />
 	{:else}
 		<div class="whitespace-pre-wrap break-words">
 			{@render children?.()}

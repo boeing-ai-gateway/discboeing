@@ -1,9 +1,26 @@
 <script lang="ts">
+	import { dev } from "$app/environment";
+	import { page } from "$app/state";
 	import AppShell from "$lib/components/app/AppShell.svelte";
+	import MarkdownRendererComparison from "$lib/components/app/MarkdownRendererComparison.svelte";
+
+	const compareSessionId = $derived(
+		dev ? page.url.searchParams.get("markdown-compare") : null,
+	);
+	const compareThreadId = $derived(
+		dev ? page.url.searchParams.get("thread") : null,
+	);
 </script>
 
 <svelte:head>
 	<title>Discobot UI</title>
 </svelte:head>
 
-<AppShell />
+{#if dev && compareSessionId}
+	<MarkdownRendererComparison
+		sessionId={compareSessionId}
+		threadId={compareThreadId}
+	/>
+{:else}
+	<AppShell />
+{/if}

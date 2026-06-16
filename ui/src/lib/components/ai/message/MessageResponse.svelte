@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
-	import { SvelteStreamdown } from "$lib/components/ai/streamdown";
-	import type { MarkdownMode } from "$lib/markdown/types";
+	import Markdown from "$lib/components/ai/streamdown/Markdown.svelte";
+	import type { MarkdownMode } from "$lib/web-components/markdown";
 	import { cn } from "$lib/utils";
 
 	type Props = {
@@ -24,7 +24,7 @@
 
 <div class={cn("size-full break-words", className)} {...restProps}>
 	{#if text !== undefined}
-		<SvelteStreamdown
+		<Markdown
 			{text}
 			{mode}
 			{isAnimating}
