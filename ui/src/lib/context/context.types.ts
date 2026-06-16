@@ -188,6 +188,7 @@ export type AppViewState = {
 		sidebarAllOpen: boolean;
 		sidebarAllGroupedByWorkspace: boolean;
 		showRefreshButton: boolean;
+		showDebugOverlay: boolean;
 		topBarIconOnly: boolean;
 		autoScrollOnStream: boolean;
 		ignoredUpdateVersion: string | null;
@@ -456,6 +457,7 @@ export type Commands = {
 		setColorScheme(colorScheme: ThemeColorScheme): Promise<void>;
 		setRecentThreadsVisibleLimit(value: number): Promise<void>;
 		setShowRefreshButton(show: boolean): Promise<void>;
+		setShowDebugOverlay(show: boolean): Promise<void>;
 		setTopBarIconOnly(iconOnly: boolean): Promise<void>;
 		setDefaultModel(modelId: string): Promise<void>;
 		setDefaultReasoning(reasoning: string): Promise<void>;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { dev } from "$app/environment";
 	import type { PaneAPI } from "paneforge";
 	import AppHeader from "$lib/components/app/AppHeader.svelte";
 	import AppKeyboardShortcuts from "$lib/components/app/AppKeyboardShortcuts.svelte";
@@ -13,6 +14,9 @@
 
 	const context = useContext();
 	const appEnvironment = $derived(context.view.app.environment);
+	const showDebugOverlay = $derived.by(
+		() => dev && context.view.app.preferences.showDebugOverlay,
+	);
 	const SIDEBAR_MIN_WIDTH_PX = 300;
 	const SIDEBAR_MIN_SIZE_FALLBACK = 10;
 	let desktopPaneGroupElement = $state<HTMLDivElement | null>(null);
@@ -179,7 +183,9 @@
 {/snippet}
 
 <div class="h-[100dvh] flex flex-col bg-background text-foreground">
-	<DebugOverlay />
+	{#if showDebugOverlay}
+		<DebugOverlay />
+	{/if}
 	<AppKeyboardShortcuts />
 	<AppHeader {showSessionToolbar} onToggleSidebar={toggleSidebar} />
 	<StartupTasksBanner

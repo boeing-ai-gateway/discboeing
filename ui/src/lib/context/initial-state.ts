@@ -120,6 +120,7 @@ export function createInitialViewState(bootstrap: Bootstrap = {}): ViewState {
 				sidebarAllOpen: uiStateStore.sidebarAllOpen,
 				sidebarAllGroupedByWorkspace: uiStateStore.sidebarAllGroupedByWorkspace,
 				showRefreshButton: uiStateStore.showRefreshButton,
+				showDebugOverlay: uiStateStore.showDebugOverlay,
 				topBarIconOnly: uiStateStore.topBarIconOnly,
 				autoScrollOnStream: uiStateStore.autoScrollOnStream,
 				ignoredUpdateVersion: uiStateStore.ignoredUpdateVersion,

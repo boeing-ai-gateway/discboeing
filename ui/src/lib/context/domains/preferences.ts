@@ -63,6 +63,14 @@ export async function setShowRefreshButton(
 	uiStateStore.setShowRefreshButton(show);
 }
 
+export async function setShowDebugOverlay(
+	context: Context,
+	show: boolean,
+): Promise<void> {
+	context.view.app.preferences.showDebugOverlay = show;
+	uiStateStore.setShowDebugOverlay(show);
+}
+
 export async function setTopBarIconOnly(
 	context: Context,
 	iconOnly: boolean,

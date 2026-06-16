@@ -18,6 +18,7 @@ export const SIDEBAR_RECENT_OPEN_STORAGE_KEY = "sidebar.recent.open";
 export const SIDEBAR_ALL_OPEN_STORAGE_KEY = "sidebar.all.open";
 export const SIDEBAR_ALL_GROUPED_STORAGE_KEY = "sidebar.all.grouped";
 export const SHOW_REFRESH_BUTTON_STORAGE_KEY = "header.show.refresh.button";
+export const SHOW_DEBUG_OVERLAY_STORAGE_KEY = "debug.overlay.show";
 export const TOP_BAR_ICON_ONLY_STORAGE_KEY = "header.top-bar.icon-only";
 export const AUTO_SCROLL_ON_STREAM_STORAGE_KEY = "chat.auto-scroll";
 export const RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY =
@@ -87,6 +88,7 @@ export class UIStateStore {
 		true,
 	);
 	#showRefreshButton = readBoolean(SHOW_REFRESH_BUTTON_STORAGE_KEY, true);
+	#showDebugOverlay = readBoolean(SHOW_DEBUG_OVERLAY_STORAGE_KEY, true);
 	#topBarIconOnly = readBoolean(TOP_BAR_ICON_ONLY_STORAGE_KEY, false);
 	#autoScrollOnStream = readBoolean(AUTO_SCROLL_ON_STREAM_STORAGE_KEY, true);
 	#promptHistory = readStringArray(PROMPT_HISTORY_STORAGE_KEY);
@@ -132,6 +134,10 @@ export class UIStateStore {
 
 	get showRefreshButton(): boolean {
 		return this.#showRefreshButton;
+	}
+
+	get showDebugOverlay(): boolean {
+		return this.#showDebugOverlay;
 	}
 
 	get topBarIconOnly(): boolean {
@@ -238,6 +244,11 @@ export class UIStateStore {
 	setShowRefreshButton(value: boolean): void {
 		this.#showRefreshButton = value;
 		writeStorage(SHOW_REFRESH_BUTTON_STORAGE_KEY, String(value));
+	}
+
+	setShowDebugOverlay(value: boolean): void {
+		this.#showDebugOverlay = value;
+		writeStorage(SHOW_DEBUG_OVERLAY_STORAGE_KEY, String(value));
 	}
 
 	setTopBarIconOnly(value: boolean): void {

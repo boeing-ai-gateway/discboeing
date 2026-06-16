@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { dev } from "$app/environment";
 	import InfoIcon from "@lucide/svelte/icons/info";
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import {
@@ -172,6 +173,7 @@
 	);
 	const environment = $derived(context.data.environment);
 	const showUpdateTab = $derived(environment.supportsAppUpdates);
+	const showDevelopmentSettings = dev;
 	const themeModes: ThemeMode[] = ["light", "dark", "system"];
 	let clearCacheDialogOpen = $state(false);
 	let clearingCache = $state(false);
@@ -294,6 +296,10 @@
 		} finally {
 			clearingCache = false;
 		}
+	}
+
+	function handleShowDebugOverlayChange(show: boolean) {
+		void context.commands.preferences.setShowDebugOverlay(show);
 	}
 </script>
 
@@ -475,6 +481,27 @@
 										/>
 									</ItemActions>
 								</Item>
+								{#if showDevelopmentSettings}
+									<ItemSeparator />
+									<Item size="sm">
+										<ItemContent>
+											<ItemTitle>Debug overlay</ItemTitle>
+											<ItemDescription>
+												Show the development debug component.
+											</ItemDescription>
+										</ItemContent>
+										<ItemActions>
+											<Switch
+												id="settings-debug-overlay"
+												aria-label="Debug overlay"
+												checked={preferences.showDebugOverlay}
+												onCheckedChange={(checked) => {
+													void handleShowDebugOverlayChange(checked === true);
+												}}
+											/>
+										</ItemActions>
+									</Item>
+								{/if}
 								<ItemSeparator />
 								<Item size="sm">
 									<ItemContent>
