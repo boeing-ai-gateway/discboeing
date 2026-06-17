@@ -227,6 +227,29 @@ function waitForConnected(element: HTMLElement): Promise<void> {
 	});
 }
 
+function removeMermaidRenderArtifact(id: string) {
+	const artifact = document.getElementById(`d${id}`);
+	if (artifact?.parentElement === document.body) {
+		artifact.remove();
+	}
+}
+
+function createMermaidErrorFallback(error: unknown): DocumentFragment {
+	const fragment = document.createDocumentFragment();
+	const message = document.createElement("div");
+	message.className = "mb-3 text-sm text-destructive";
+	message.textContent = "Unable to render Mermaid diagram.";
+
+	const details = document.createElement("pre");
+	details.className =
+		"overflow-x-auto rounded-md border border-border bg-muted p-3 text-xs text-muted-foreground";
+	details.textContent =
+		error instanceof Error ? error.message : "Unknown Mermaid render error";
+
+	fragment.append(message, details);
+	return fragment;
+}
+
 function renderMermaidBlock(
 	code: string,
 	options: RenderMarkdownOptions,
@@ -251,6 +274,9 @@ function renderMermaidBlock(
 
 	void waitForConnected(container)
 		.then(() => mermaid.render(id, code, container))
+		.finally(() => {
+			removeMermaidRenderArtifact(id);
+		})
 		.then((svg) => {
 			container.innerHTML = svg;
 			const svgElement = container.querySelector("svg");
@@ -261,18 +287,7 @@ function renderMermaidBlock(
 			}
 		})
 		.catch((error: unknown) => {
-			container.replaceChildren();
-			const message = document.createElement("div");
-			message.className = "mb-3 text-sm text-destructive";
-			message.textContent = "Unable to render Mermaid diagram.";
-
-			const details = document.createElement("pre");
-			details.className =
-				"overflow-x-auto rounded-md border border-border bg-muted p-3 text-xs text-muted-foreground";
-			details.textContent =
-				error instanceof Error ? error.message : "Unknown Mermaid render error";
-
-			container.append(message, details);
+			container.replaceChildren(createMermaidErrorFallback(error));
 		});
 
 	return container;

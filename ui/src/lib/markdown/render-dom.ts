@@ -224,6 +224,13 @@ function waitForConnected(element: HTMLElement): Promise<void> {
 	});
 }
 
+function removeMermaidRenderArtifact(id: string) {
+	const artifact = document.getElementById(`d${id}`);
+	if (artifact?.parentElement === document.body) {
+		artifact.remove();
+	}
+}
+
 function createMermaidErrorFallback(error: unknown): DocumentFragment {
 	const fragment = document.createDocumentFragment();
 	const message = document.createElement("div");
@@ -264,6 +271,9 @@ function renderMermaidBlock(
 
 	void waitForConnected(container)
 		.then(() => mermaid.render(id, code, container))
+		.finally(() => {
+			removeMermaidRenderArtifact(id);
+		})
 		.then((svg) => {
 			container.innerHTML = svg;
 			const svgElement = container.querySelector("svg");

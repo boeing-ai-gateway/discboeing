@@ -249,6 +249,32 @@ test("renderMarkdownTree clears Mermaid render output after failures", async () 
 	container.remove();
 });
 
+test("renderMarkdownTree removes Mermaid body artifacts after failures", async () => {
+	const container = renderMarkdown("```mermaid\nbroken diagram\n```", {
+		plugins: {
+			mermaid: {
+				language: "mermaid",
+				name: "mermaid",
+				render: async (id) => {
+					const artifact = document.createElement("div");
+					artifact.id = `d${id}`;
+					artifact.innerHTML = "<svg><text>Syntax error in text</text></svg>";
+					document.body.append(artifact);
+					throw new Error("Mermaid syntax error");
+				},
+				type: "diagram",
+			},
+		},
+	});
+	document.body.append(container);
+
+	await waitForRender();
+
+	expect(document.body.querySelector('[id^="ddiscobot-mermaid-"]')).toBeNull();
+	expect(document.body.textContent).not.toContain("Syntax error in text");
+	container.remove();
+});
+
 test("renderMarkdownTree waits to render Mermaid until the container is attached", async () => {
 	const renderStates: boolean[] = [];
 	const fragment = renderMarkdownTree(
