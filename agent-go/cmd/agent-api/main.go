@@ -53,6 +53,8 @@ func main() {
 	// When invoked as "discobot-agent-api" (drop-in replacement), default to server mode.
 	if filepath.Base(os.Args[0]) == "discobot-agent-api" || *serverMode {
 		server.Run(cfg)
+	} else if flags.PrintMode() {
+		os.Exit(cli.RunPrint(cfg, flags, flag.Args()))
 	} else {
 		cli.Run(cfg, flags)
 	}

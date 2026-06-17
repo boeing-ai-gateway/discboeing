@@ -33,6 +33,7 @@ import (
 // Flags holds parsed CLI flag values for terminal mode.
 type Flags struct {
 	model     *string
+	printMode *bool
 	reasoning *bool
 	newThread *bool
 	resume    *string
@@ -48,6 +49,10 @@ func AddFlags() *Flags {
 	flag.StringVar(model, "model", "", "Model to use, e.g. anthropic/claude-opus-4-6 (overrides DISCOBOT_MODEL env var)")
 	flag.StringVar(model, "m", "", "Alias for --model")
 
+	printMode := new(bool)
+	flag.BoolVar(printMode, "print", false, "Run one prompt, print the final response to stdout, and exit")
+	flag.BoolVar(printMode, "p", false, "Alias for --print")
+
 	newThread := new(bool)
 	flag.BoolVar(newThread, "new-thread", false, "Start with a fresh thread ID (default behavior; retained for compatibility)")
 	flag.BoolVar(newThread, "n", false, "Alias for --new-thread")
@@ -58,12 +63,18 @@ func AddFlags() *Flags {
 
 	return &Flags{
 		model:     model,
+		printMode: printMode,
 		reasoning: flag.Bool("reasoning", true, "Enable extended thinking / reasoning (default on; use --reasoning=false to disable)"),
 		newThread: newThread,
 		resume:    resume,
 		maxTurns:  flag.Int("max-turns", 0, "Maximum LLM calls per turn (0 = unlimited)"),
 		subagent:  flag.String("subagent", "", "Subagent config name from .claude/agents/*.md"),
 	}
+}
+
+// PrintMode reports whether the CLI should run a single prompt and exit.
+func (f *Flags) PrintMode() bool {
+	return f != nil && f.printMode != nil && *f.printMode
 }
 
 // Run runs the agent in interactive terminal mode.
