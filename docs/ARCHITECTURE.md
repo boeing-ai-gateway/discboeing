@@ -262,7 +262,7 @@ For detailed UI architecture, see [UI Architecture](./ui/ARCHITECTURE.md).
 - **Styling**: Tailwind CSS v4 with CSS custom properties
 - **UI Components**: shadcn/ui (Radix primitives)
 - **State Management**: SWR for data fetching
-- **Terminal**: xterm.js v6
+- **Terminal**: switchable `ghostty-web`, WTerm, and `@xterm/xterm` renderers
 
 ### Layout Structure
 
@@ -289,7 +289,7 @@ For detailed UI architecture, see [UI Architecture](./ui/ARCHITECTURE.md).
 | `SidebarTree`    | Workspace/session navigation |
 | `AgentsPanel`    | Agent list and selection     |
 | `ChatPanel`      | AI conversation interface    |
-| `TerminalView`   | xterm.js terminal emulator   |
+| `TerminalView`   | Switchable web terminal      |
 | `TabbedDiffView` | File diff viewer with tabs   |
 | `FilePanel`      | Session file tree            |
 

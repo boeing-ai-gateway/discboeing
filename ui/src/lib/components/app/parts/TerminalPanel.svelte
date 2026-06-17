@@ -1,11 +1,19 @@
 <script lang="ts">
+	import "@wterm/dom/css";
+	import "@xterm/xterm/css/xterm.css";
 	import CheckIcon from "@lucide/svelte/icons/check";
 	import CopyIcon from "@lucide/svelte/icons/copy";
 	import RotateCcwIcon from "@lucide/svelte/icons/rotate-ccw";
 	import { appendAuthToken, getSSHPort, getWsBase } from "$lib/api-config";
-	import { openUrl, writeClipboardText } from "$lib/shell";
+	import { openUrl, readClipboardText, writeClipboardText } from "$lib/shell";
 	import DockWindowChrome from "$lib/components/app/parts/DockWindowChrome.svelte";
 	import { Button } from "$lib/components/ui/button";
+	import {
+		ContextMenu,
+		ContextMenuContent,
+		ContextMenuItem,
+		ContextMenuTrigger,
+	} from "$lib/components/ui/context-menu";
 	import { Switch } from "$lib/components/ui/switch";
 	import type {
 		ILink,
@@ -13,8 +21,23 @@
 		ITheme,
 		Terminal as GhosttyTerminal,
 	} from "ghostty-web";
+	import type { WTerm } from "@wterm/dom";
+	import type { Terminal as XtermTerminal } from "@xterm/xterm";
 
 	type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error";
+	type TerminalRenderer = "ghostty" | "xterm" | "wterm";
+	type XtermLikeTerminal = GhosttyTerminal | XtermTerminal;
+	type TerminalAdapter = {
+		rows: number;
+		cols: number;
+		write(data: string): void;
+		writeln(data: string): void;
+		clear(): void;
+		getSelection(): string;
+		hasSelection(): boolean;
+		focus(): void;
+		dispose(): void;
+	};
 
 	type Props = {
 		dockMaximized: boolean;
@@ -31,6 +54,7 @@
 	const RESIZE_DEBOUNCE_MS = 150;
 	const COPY_RESET_MS = 2000;
 	const GIT_PULL_WORKSPACE_PATH = "/home/discobot/workspace";
+	const TERMINAL_RENDERERS: TerminalRenderer[] = ["ghostty", "wterm", "xterm"];
 
 	let {
 		dockMaximized,
@@ -45,14 +69,18 @@
 	let terminalHost = $state<HTMLDivElement | null>(null);
 	let connectionStatus = $state<ConnectionStatus>("disconnected");
 	let copiedCommand = $state<"ssh" | "pull" | null>(null);
+	let terminalCanCopy = $state(false);
+	let terminalContextMenuOpen = $state(false);
 	let terminalReady = $state(false);
+	let terminalRenderer = $state<TerminalRenderer>("ghostty");
 
-	let terminal: GhosttyTerminal | null = null;
+	let terminal: TerminalAdapter | null = null;
 	let socket: WebSocket | null = null;
 	let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
 	let copyTimeout: ReturnType<typeof setTimeout> | null = null;
 	let dataSubscription: { dispose(): void } | null = null;
 	let resizeSubscription: { dispose(): void } | null = null;
+	let terminalResizeObserver: ResizeObserver | null = null;
 	let windowResizeHandler: (() => void) | null = null;
 	let lastSize: { rows: number; cols: number } | null = null;
 
@@ -329,6 +357,26 @@
 		void writeClipboardText(selection);
 	}
 
+	async function pasteClipboardIntoTerminal() {
+		if (!terminalReady || !terminal) {
+			return;
+		}
+
+		terminal.focus();
+		const text = await readClipboardText();
+		if (text.length > 0) {
+			sendInput(text);
+		}
+	}
+
+	$effect(() => {
+		if (!terminalContextMenuOpen) {
+			return;
+		}
+
+		terminalCanCopy = terminal?.hasSelection() ?? false;
+	});
+
 	async function copyCommand(command: string | null, kind: "ssh" | "pull") {
 		if (!command) {
 			return;
@@ -360,107 +408,341 @@
 		connect(sessionId, rootEnabled);
 	}
 
+	function getHostSelection(host: HTMLElement): string {
+		const selection = document.getSelection();
+		if (
+			!selection ||
+			selection.rangeCount === 0 ||
+			selection.toString().length === 0
+		) {
+			return "";
+		}
+
+		const anchorNode = selection.anchorNode;
+		const focusNode = selection.focusNode;
+		if (
+			(anchorNode && host.contains(anchorNode)) ||
+			(focusNode && host.contains(focusNode))
+		) {
+			return selection.toString();
+		}
+
+		return "";
+	}
+
+	function createXtermLikeAdapter(term: XtermLikeTerminal): TerminalAdapter {
+		return {
+			get rows() {
+				return term.rows;
+			},
+			get cols() {
+				return term.cols;
+			},
+			write: (data) => {
+				term.write(data);
+			},
+			writeln: (data) => {
+				term.writeln(data);
+			},
+			clear: () => {
+				term.clear();
+			},
+			getSelection: () => term.getSelection(),
+			hasSelection: () => term.hasSelection(),
+			focus: () => {
+				term.focus();
+			},
+			dispose: () => {
+				term.dispose();
+			},
+		};
+	}
+
+	function createWtermAdapter(
+		term: WTerm,
+		host: HTMLDivElement,
+	): TerminalAdapter {
+		return {
+			get rows() {
+				return term.rows;
+			},
+			get cols() {
+				return term.cols;
+			},
+			write: (data) => {
+				term.write(data);
+			},
+			writeln: (data) => {
+				term.write(`${data}\r\n`);
+			},
+			clear: () => {
+				term.write("\x1b[2J\x1b[H");
+			},
+			getSelection: () => getHostSelection(host),
+			hasSelection: () => getHostSelection(host).length > 0,
+			focus: () => {
+				term.focus();
+			},
+			dispose: () => {
+				term.destroy();
+			},
+		};
+	}
+
+	function createOpenUrlLinkProvider(provider: ILinkProvider): ILinkProvider {
+		return {
+			provideLinks: (y, callback) => {
+				provider.provideLinks(y, (links) => {
+					callback(
+						links?.map(
+							(link): ILink => ({
+								...link,
+								activate: (event: MouseEvent) => {
+									event.preventDefault();
+									void openUrl(link.text);
+								},
+							}),
+						),
+					);
+				});
+			},
+			dispose: () => {
+				provider.dispose?.();
+			},
+		};
+	}
+
+	async function setupGhosttyTerminal(
+		host: HTMLDivElement,
+		cancelled: () => boolean,
+	) {
+		const { FitAddon, OSC8LinkProvider, Terminal, UrlRegexProvider, init } =
+			await import("ghostty-web");
+		await init();
+
+		if (cancelled() || !terminalHost || terminal) {
+			return;
+		}
+
+		const nextTerminal = new Terminal({
+			cursorBlink: true,
+			cursorStyle: "block",
+			fontFamily:
+				'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
+			fontSize: 13,
+			scrollback: 5000,
+			theme: getTerminalTheme(),
+		});
+		const nextFitAddon = new FitAddon();
+
+		nextTerminal.loadAddon(nextFitAddon);
+		nextTerminal.open(host);
+		nextTerminal.registerLinkProvider(
+			createOpenUrlLinkProvider(new OSC8LinkProvider(nextTerminal)),
+		);
+		nextTerminal.registerLinkProvider(
+			createOpenUrlLinkProvider(new UrlRegexProvider(nextTerminal)),
+		);
+		nextFitAddon.fit();
+		nextFitAddon.observeResize();
+
+		installGhosttyCopyKeyHandler(nextTerminal);
+		activateTerminalTransport(nextTerminal, () => {
+			try {
+				nextFitAddon.fit();
+			} catch {
+				// Ignore fit errors during rapid resizing.
+			}
+		});
+	}
+
+	async function setupXtermTerminal(
+		host: HTMLDivElement,
+		cancelled: () => boolean,
+	) {
+		const [{ FitAddon }, { WebLinksAddon }, { Terminal }] = await Promise.all([
+			import("@xterm/addon-fit"),
+			import("@xterm/addon-web-links"),
+			import("@xterm/xterm"),
+		]);
+
+		if (cancelled() || !terminalHost || terminal) {
+			return;
+		}
+
+		const nextTerminal = new Terminal({
+			cursorBlink: true,
+			cursorStyle: "block",
+			fontFamily:
+				'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
+			fontSize: 13,
+			scrollback: 5000,
+			theme: getTerminalTheme(),
+		});
+		const nextFitAddon = new FitAddon();
+
+		nextTerminal.loadAddon(nextFitAddon);
+		nextTerminal.loadAddon(
+			new WebLinksAddon((event, uri) => {
+				event.preventDefault();
+				void openUrl(uri);
+			}),
+		);
+		nextTerminal.open(host);
+		nextFitAddon.fit();
+
+		installXtermCopyKeyHandler(nextTerminal);
+		activateTerminalTransport(nextTerminal, () => {
+			try {
+				nextFitAddon.fit();
+			} catch {
+				// Ignore fit errors during rapid resizing.
+			}
+		});
+		terminalResizeObserver = new ResizeObserver(() => {
+			try {
+				nextFitAddon.fit();
+			} catch {
+				// Ignore fit errors while the container is being remeasured.
+			}
+		});
+		terminalResizeObserver.observe(host);
+	}
+
+	async function setupWtermTerminal(
+		host: HTMLDivElement,
+		cancelled: () => boolean,
+	) {
+		const [{ WTerm }, { GhosttyCore }] = await Promise.all([
+			import("@wterm/dom"),
+			import("@wterm/ghostty"),
+		]);
+		const core = await GhosttyCore.load();
+
+		if (cancelled() || !terminalHost || terminal) {
+			return;
+		}
+
+		const nextTerminal = new WTerm(host, {
+			autoResize: true,
+			cols: MIN_TERMINAL_COLS,
+			core,
+			cursorBlink: true,
+			onData: (data) => {
+				sendInput(data);
+			},
+			onResize: (cols, rows) => {
+				sendResize(rows, cols);
+			},
+			rows: MIN_TERMINAL_ROWS,
+		});
+		await nextTerminal.init();
+
+		if (cancelled() || !terminalHost || terminal) {
+			nextTerminal.destroy();
+			return;
+		}
+
+		terminal = createWtermAdapter(nextTerminal, host);
+		nextTerminal.focus();
+		terminalReady = true;
+	}
+
+	function installGhosttyCopyKeyHandler(nextTerminal: GhosttyTerminal) {
+		nextTerminal.attachCustomKeyEventHandler((event) => {
+			const shortcut = getTerminalCopyShortcut(event);
+			if (!shortcut) {
+				return false;
+			}
+
+			if (shortcut === "ctrl-shift") {
+				if (terminal?.hasSelection()) {
+					event.preventDefault();
+					event.stopPropagation();
+					copyTerminalSelection();
+					return true;
+				}
+				return false;
+			}
+
+			if (!terminal?.hasSelection()) {
+				return false;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+			copyTerminalSelection();
+			return true;
+		});
+	}
+
+	function installXtermCopyKeyHandler(nextTerminal: XtermTerminal) {
+		nextTerminal.attachCustomKeyEventHandler((event) => {
+			const shortcut = getTerminalCopyShortcut(event);
+			if (!shortcut) {
+				return true;
+			}
+
+			if (shortcut === "ctrl-shift") {
+				if (terminal?.hasSelection()) {
+					event.preventDefault();
+					event.stopPropagation();
+					copyTerminalSelection();
+					return false;
+				}
+				return true;
+			}
+
+			if (!terminal?.hasSelection()) {
+				return true;
+			}
+
+			event.preventDefault();
+			event.stopPropagation();
+			copyTerminalSelection();
+			return false;
+		});
+	}
+
+	function activateTerminalTransport(
+		nextTerminal: XtermLikeTerminal,
+		fitTerminal: () => void,
+	) {
+		terminal = createXtermLikeAdapter(nextTerminal);
+		dataSubscription = nextTerminal.onData((data) => {
+			sendInput(data);
+		});
+		resizeSubscription = nextTerminal.onResize(({ cols, rows }) => {
+			sendResize(rows, cols);
+		});
+		windowResizeHandler = () => {
+			fitTerminal();
+		};
+		window.addEventListener("resize", windowResizeHandler);
+		nextTerminal.focus();
+		terminalReady = true;
+	}
+
 	$effect(() => {
 		if (!terminalHost) {
 			return;
 		}
 
+		const host = terminalHost;
+		const renderer = terminalRenderer;
 		let cancelled = false;
 		void (async () => {
-			const { FitAddon, OSC8LinkProvider, Terminal, UrlRegexProvider, init } =
-				await import("ghostty-web");
-			await init();
-
-			const createOpenUrlLinkProvider = (
-				provider: ILinkProvider,
-			): ILinkProvider => ({
-				provideLinks: (y, callback) => {
-					provider.provideLinks(y, (links) => {
-						callback(
-							links?.map(
-								(link): ILink => ({
-									...link,
-									activate: (event: MouseEvent) => {
-										event.preventDefault();
-										void openUrl(link.text);
-									},
-								}),
-							),
-						);
-					});
-				},
-				dispose: () => {
-					provider.dispose?.();
-				},
-			});
-
-			if (cancelled || !terminalHost || terminal) {
+			if (renderer === "ghostty") {
+				await setupGhosttyTerminal(host, () => cancelled);
 				return;
 			}
 
-			const nextTerminal = new Terminal({
-				cursorBlink: true,
-				cursorStyle: "block",
-				fontFamily:
-					'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
-				fontSize: 13,
-				scrollback: 5000,
-				theme: getTerminalTheme(),
-			});
-			const nextFitAddon = new FitAddon();
+			if (renderer === "xterm") {
+				await setupXtermTerminal(host, () => cancelled);
+				return;
+			}
 
-			nextTerminal.loadAddon(nextFitAddon);
-			nextTerminal.open(terminalHost);
-			nextTerminal.registerLinkProvider(
-				createOpenUrlLinkProvider(new OSC8LinkProvider(nextTerminal)),
-			);
-			nextTerminal.registerLinkProvider(
-				createOpenUrlLinkProvider(new UrlRegexProvider(nextTerminal)),
-			);
-			nextFitAddon.fit();
-			nextFitAddon.observeResize();
-
-			terminal = nextTerminal;
-			nextTerminal.attachCustomKeyEventHandler((event) => {
-				const shortcut = getTerminalCopyShortcut(event);
-				if (!shortcut) {
-					return false;
-				}
-
-				if (shortcut === "ctrl-shift") {
-					event.preventDefault();
-					event.stopPropagation();
-					if (nextTerminal.hasSelection()) {
-						copyTerminalSelection();
-					}
-					return true;
-				}
-
-				if (!nextTerminal.hasSelection()) {
-					return false;
-				}
-
-				event.preventDefault();
-				event.stopPropagation();
-				copyTerminalSelection();
-				return true;
-			});
-			dataSubscription = nextTerminal.onData((data) => {
-				sendInput(data);
-			});
-			resizeSubscription = nextTerminal.onResize(({ cols, rows }) => {
-				sendResize(rows, cols);
-			});
-			windowResizeHandler = () => {
-				try {
-					nextFitAddon.fit();
-				} catch {
-					// Ignore fit errors during rapid resizing.
-				}
-			};
-			window.addEventListener("resize", windowResizeHandler);
-			nextTerminal.focus();
-			terminalReady = true;
+			await setupWtermTerminal(host, () => cancelled);
 		})();
 
 		return () => {
@@ -480,6 +762,8 @@
 				window.removeEventListener("resize", windowResizeHandler);
 				windowResizeHandler = null;
 			}
+			terminalResizeObserver?.disconnect();
+			terminalResizeObserver = null;
 			terminal?.dispose();
 			terminal = null;
 		};
@@ -527,6 +811,28 @@
 	{/snippet}
 
 	{#snippet actions()}
+		<fieldset
+			class="flex items-center rounded-md border border-sidebar-border p-0.5 text-xs text-sidebar-foreground/70"
+			title="Switch terminal renderer"
+		>
+			<legend class="sr-only">Terminal renderer</legend>
+			{#each TERMINAL_RENDERERS as renderer (renderer)}
+				<label class="relative">
+					<input
+						class="peer sr-only"
+						type="radio"
+						name={`terminal-renderer-${sessionId ?? "default"}`}
+						value={renderer}
+						bind:group={terminalRenderer}
+					/>
+					<span
+						class="flex h-6 cursor-pointer items-center rounded-sm px-2 text-[0.6875rem] capitalize transition-colors peer-checked:bg-sidebar-accent peer-checked:text-sidebar-accent-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-background"
+					>
+						{renderer === "xterm" ? "Xterm.js" : renderer}
+					</span>
+				</label>
+			{/each}
+		</fieldset>
 		<label class="flex items-center gap-2 text-xs text-sidebar-foreground/70">
 			<span>root</span>
 			<Switch
@@ -597,9 +903,29 @@
 			</div>
 		{/if}
 
-		<div
-			bind:this={terminalHost}
-			class="h-full w-full cursor-text overflow-hidden rounded-md border border-border bg-terminal-bg p-3 outline-none [caret-color:transparent]"
-		></div>
+		<ContextMenu bind:open={terminalContextMenuOpen}>
+			<ContextMenuTrigger class="block h-full w-full">
+				<div
+					bind:this={terminalHost}
+					class="h-full w-full cursor-text overflow-hidden rounded-md border border-border bg-terminal-bg p-3 outline-none [caret-color:transparent]"
+				></div>
+			</ContextMenuTrigger>
+			<ContextMenuContent class="w-32">
+				<ContextMenuItem
+					disabled={!terminalCanCopy}
+					onclick={copyTerminalSelection}
+				>
+					Copy
+				</ContextMenuItem>
+				<ContextMenuItem
+					disabled={!terminalReady}
+					onclick={() => {
+						void pasteClipboardIntoTerminal();
+					}}
+				>
+					Paste
+				</ContextMenuItem>
+			</ContextMenuContent>
+		</ContextMenu>
 	</div>
 </DockWindowChrome>

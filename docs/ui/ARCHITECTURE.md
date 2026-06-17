@@ -145,7 +145,10 @@ Current Electron desktop packaging notes live in `docs/ELECTRON_PORT_PLAN.md`.
 | `@sveltejs/adapter-static` | Static SPA output                                      |
 | `@sentry/sveltekit`        | Browser error reporting and SvelteKit hook integration |
 | `monaco-editor`            | Code editor                                            |
-| `ghostty-web`              | Terminal emulator                                      |
+| `ghostty-web`              | Default terminal emulator                              |
+| `@wterm/dom`               | WTerm DOM renderer for terminal UX comparison          |
+| `@wterm/ghostty`           | Ghostty-backed WTerm terminal core                     |
+| `@xterm/xterm`             | Alternate terminal renderer for UX comparison          |
 | `@novnc/novnc`             | VNC display                                            |
 | `@pierre/diffs`            | Diff rendering                                         |
 | `bits-ui`                  | Headless UI primitives                                 |
