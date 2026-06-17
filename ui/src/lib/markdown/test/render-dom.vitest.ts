@@ -221,6 +221,34 @@ test("renderMarkdownTree renders incomplete Mermaid fences as code blocks", () =
 	expect(codeBlock?.dataset.language).toBe("mermaid");
 });
 
+test("renderMarkdownTree clears Mermaid render output after failures", async () => {
+	const container = renderMarkdown("```mermaid\nbroken diagram\n```", {
+		plugins: {
+			mermaid: {
+				language: "mermaid",
+				name: "mermaid",
+				render: async (_id, _code, container) => {
+					container.innerHTML = "<svg><text>Syntax error in text</text></svg>";
+					throw new Error("Mermaid syntax error");
+				},
+				type: "diagram",
+			},
+		},
+	});
+	document.body.append(container);
+	const diagram = container.querySelector<HTMLElement>(
+		'[data-streamdown="mermaid"]',
+	);
+
+	await waitForRender();
+
+	expect(diagram?.querySelector("svg")).toBeNull();
+	expect(diagram?.textContent).toContain("Unable to render Mermaid diagram.");
+	expect(diagram?.textContent).toContain("Mermaid syntax error");
+	expect(diagram?.textContent).not.toContain("Syntax error in text");
+	container.remove();
+});
+
 test("renderMarkdownTree waits to render Mermaid until the container is attached", async () => {
 	const renderStates: boolean[] = [];
 	const fragment = renderMarkdownTree(
