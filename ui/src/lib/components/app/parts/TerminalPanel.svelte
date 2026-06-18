@@ -73,6 +73,7 @@
 	let terminalContextMenuOpen = $state(false);
 	let terminalReady = $state(false);
 	let terminalRenderer = $state<TerminalRenderer>("ghostty");
+	let wtermHostHeight = $state<string | undefined>();
 
 	let terminal: TerminalAdapter | null = null;
 	let socket: WebSocket | null = null;
@@ -430,6 +431,11 @@
 		return "";
 	}
 
+	function cleanupWtermHost(host: HTMLDivElement) {
+		host.classList.remove("wterm", "cursor-blink", "focused", "has-scrollback");
+		wtermHostHeight = undefined;
+	}
+
 	function createXtermLikeAdapter(term: XtermLikeTerminal): TerminalAdapter {
 		return {
 			get rows() {
@@ -485,8 +491,68 @@
 			},
 			dispose: () => {
 				term.destroy();
+				cleanupWtermHost(host);
 			},
 		};
+	}
+
+	function measureWtermCell(host: HTMLElement) {
+		const grid = host.querySelector(".term-grid") ?? host;
+		const row = document.createElement("div");
+		const probe = document.createElement("span");
+
+		row.className = "term-row";
+		row.style.position = "absolute";
+		row.style.visibility = "hidden";
+		probe.textContent = "W";
+		row.appendChild(probe);
+		grid.appendChild(row);
+
+		const charWidth = probe.getBoundingClientRect().width;
+		const rowHeight = row.getBoundingClientRect().height;
+		row.remove();
+
+		if (charWidth <= 0 || rowHeight <= 0) {
+			return null;
+		}
+
+		return { charWidth, rowHeight };
+	}
+
+	function getWtermAvailableHeight(host: HTMLDivElement) {
+		const bounds = host.parentElement;
+		if (!bounds) {
+			return host.clientHeight;
+		}
+
+		const style = getComputedStyle(bounds);
+		const paddingTop = parseFloat(style.paddingTop) || 0;
+		const paddingBottom = parseFloat(style.paddingBottom) || 0;
+
+		return Math.max(1, bounds.clientHeight - paddingTop - paddingBottom);
+	}
+
+	function fitWtermTerminal(term: WTerm, host: HTMLDivElement) {
+		const measured = measureWtermCell(host);
+		if (!measured) {
+			return;
+		}
+
+		const nextCols = Math.max(
+			1,
+			Math.floor(host.clientWidth / measured.charWidth),
+		);
+		const nextRows = Math.max(
+			1,
+			Math.floor(getWtermAvailableHeight(host) / measured.rowHeight),
+		);
+		const snappedHeight = nextRows * measured.rowHeight;
+
+		wtermHostHeight = `${snappedHeight}px`;
+
+		if (nextCols !== term.cols || nextRows !== term.rows) {
+			term.resize(nextCols, nextRows);
+		}
 	}
 
 	function createOpenUrlLinkProvider(provider: ILinkProvider): ILinkProvider {
@@ -624,7 +690,7 @@
 		}
 
 		const nextTerminal = new WTerm(host, {
-			autoResize: true,
+			autoResize: false,
 			cols: MIN_TERMINAL_COLS,
 			core,
 			cursorBlink: true,
@@ -640,8 +706,20 @@
 
 		if (cancelled() || !terminalHost || terminal) {
 			nextTerminal.destroy();
+			cleanupWtermHost(host);
 			return;
 		}
+
+		fitWtermTerminal(nextTerminal, host);
+		requestAnimationFrame(() => {
+			if (!cancelled() && terminalHost === host) {
+				fitWtermTerminal(nextTerminal, host);
+			}
+		});
+		terminalResizeObserver = new ResizeObserver(() => {
+			fitWtermTerminal(nextTerminal, host);
+		});
+		terminalResizeObserver.observe(host.parentElement ?? host);
 
 		terminal = createWtermAdapter(nextTerminal, host);
 		nextTerminal.focus();
@@ -881,7 +959,7 @@
 		{/if}
 	{/snippet}
 
-	<div class="relative h-full min-h-0 min-w-0 overflow-hidden p-3">
+	<div class="relative box-border h-full min-h-0 min-w-0 overflow-hidden p-3">
 		{#if connectionStatus !== "connected"}
 			<div
 				class="absolute inset-3 z-10 flex items-center justify-center rounded-md bg-background/80"
@@ -903,29 +981,63 @@
 			</div>
 		{/if}
 
-		<ContextMenu bind:open={terminalContextMenuOpen}>
-			<ContextMenuTrigger class="block h-full w-full">
-				<div
-					bind:this={terminalHost}
-					class="h-full w-full cursor-text overflow-hidden rounded-md border border-border bg-terminal-bg p-3 outline-none [caret-color:transparent]"
-				></div>
-			</ContextMenuTrigger>
-			<ContextMenuContent class="w-32">
-				<ContextMenuItem
-					disabled={!terminalCanCopy}
-					onclick={copyTerminalSelection}
-				>
-					Copy
-				</ContextMenuItem>
-				<ContextMenuItem
-					disabled={!terminalReady}
-					onclick={() => {
-						void pasteClipboardIntoTerminal();
-					}}
-				>
-					Paste
-				</ContextMenuItem>
-			</ContextMenuContent>
-		</ContextMenu>
+		<div class="h-full min-h-0 min-w-0 overflow-hidden">
+			<ContextMenu bind:open={terminalContextMenuOpen}>
+				<ContextMenuTrigger class="block h-full min-h-0 w-full overflow-hidden">
+					<div
+						class="box-border h-full min-h-0 w-full overflow-hidden rounded-md border border-border bg-terminal-bg p-3"
+					>
+						<div
+							bind:this={terminalHost}
+							class="terminal-host h-full min-h-0 w-full cursor-text overflow-hidden outline-none [caret-color:transparent]"
+							style:height={wtermHostHeight}
+							style:max-height={wtermHostHeight}
+						></div>
+					</div>
+				</ContextMenuTrigger>
+				<ContextMenuContent class="w-32">
+					<ContextMenuItem
+						disabled={!terminalCanCopy}
+						onclick={copyTerminalSelection}
+					>
+						Copy
+					</ContextMenuItem>
+					<ContextMenuItem
+						disabled={!terminalReady}
+						onclick={() => {
+							void pasteClipboardIntoTerminal();
+						}}
+					>
+						Paste
+					</ContextMenuItem>
+				</ContextMenuContent>
+			</ContextMenu>
+		</div>
 	</div>
 </DockWindowChrome>
+
+<style>
+	:global(.terminal-host.wterm) {
+		background: transparent;
+		box-sizing: border-box;
+		height: 100%;
+		max-height: 100%;
+		min-height: 0;
+		padding: 0;
+		border-radius: 0;
+		box-shadow: none;
+		overflow-x: hidden;
+		overflow-y: auto;
+		scrollbar-gutter: stable;
+	}
+
+	:global(.terminal-host.wterm .term-grid) {
+		min-height: 0;
+	}
+
+	:global(.terminal-host .xterm) {
+		height: 100%;
+		max-height: 100%;
+		min-height: 0;
+	}
+</style>
