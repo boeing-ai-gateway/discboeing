@@ -2,8 +2,12 @@
 	import { dev } from "$app/environment";
 	import { page } from "$app/state";
 	import AppShell from "$lib/components/app/AppShell.svelte";
+	import ConversationRendererComparison from "$lib/components/app/ConversationRendererComparison.svelte";
 	import MarkdownRendererComparison from "$lib/components/app/MarkdownRendererComparison.svelte";
 
+	const compareConversation = $derived(
+		dev ? page.url.searchParams.has("conversation-compare") : false,
+	);
 	const compareSessionId = $derived(
 		dev ? page.url.searchParams.get("markdown-compare") : null,
 	);
@@ -16,7 +20,9 @@
 	<title>Discobot UI</title>
 </svelte:head>
 
-{#if dev && compareSessionId}
+{#if dev && compareConversation}
+	<ConversationRendererComparison />
+{:else if dev && compareSessionId}
 	<MarkdownRendererComparison
 		sessionId={compareSessionId}
 		threadId={compareThreadId}

@@ -30,7 +30,7 @@
 		"discobot-ai-shimmer relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent",
 		className,
 	)}
-	style={`--spread:${dynamicSpread}px;--duration:${duration}s;background-image:linear-gradient(90deg,#0000 calc(50% - var(--spread)),var(--color-background),#0000 calc(50% + var(--spread))),linear-gradient(var(--color-muted-foreground),var(--color-muted-foreground));`}
+	style={`--spread:${dynamicSpread}px;--duration:${duration}s;position:relative;display:inline-block;color:transparent;background-clip:text;-webkit-background-clip:text;background-size:250% 100%,auto;background-repeat:no-repeat,padding-box;background-image:linear-gradient(90deg,#0000 calc(50% - var(--spread)),var(--disco-conversation-background,var(--disco-background,var(--background,var(--color-background,#fff)))),#0000 calc(50% + var(--spread))),linear-gradient(var(--disco-conversation-muted-foreground,var(--disco-muted-foreground,var(--muted-foreground,var(--color-muted-foreground,#6b7280)))),var(--disco-conversation-muted-foreground,var(--disco-muted-foreground,var(--muted-foreground,var(--color-muted-foreground,#6b7280)))));animation:discobot-ai-shimmer-slide var(--duration) linear infinite;`}
 >
 	{#if children}
 		{@render children()}
@@ -41,7 +41,15 @@
 
 <style>
 	.discobot-ai-shimmer {
+		position: relative;
+		display: inline-block;
+		color: transparent;
+		background-clip: text;
+		background-size:
+			250% 100%,
+			auto;
 		background-repeat: no-repeat, padding-box;
+		-webkit-background-clip: text;
 		animation: discobot-ai-shimmer-slide var(--duration) linear infinite;
 	}
 

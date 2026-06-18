@@ -1,0 +1,407 @@
+{
+	"version": 1.1,
+	"tags": [
+		{
+			"name": "disco-conversation",
+			"description": "HTML-first conversation renderer. Child disco-message and optional disco-turn elements are the source of truth.",
+			"attributes": [
+				{
+					"name": "status",
+					"description": "Current loading/rendering status.",
+					"values": [
+						{
+							"name": "idle"
+						},
+						{
+							"name": "loading"
+						},
+						{
+							"name": "ready"
+						},
+						{
+							"name": "error"
+						}
+					]
+				},
+				{
+					"name": "auto-scroll",
+					"description": "Keep the viewport pinned to the bottom while content streams."
+				},
+				{
+					"name": "chat-width",
+					"description": "Controls the maximum rendered conversation width.",
+					"values": [
+						{
+							"name": "full"
+						},
+						{
+							"name": "constrained"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "disco-turn",
+			"description": "Optional template-defined grouping element for one conversation turn.",
+			"attributes": [
+				{
+					"name": "id",
+					"description": "Stable turn identifier."
+				},
+				{
+					"name": "open",
+					"description": "Whether the turn content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-step-group",
+			"description": "Expandable assistant step group rendered as the default centered step divider.",
+			"attributes": [
+				{
+					"name": "label",
+					"description": "Uppercase divider label, for example 1 STEP or 4 STEPS."
+				},
+				{
+					"name": "open",
+					"description": "Whether the grouped step content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-message",
+			"description": "A single chat message with ordered child part elements.",
+			"attributes": [
+				{
+					"name": "id",
+					"description": "Stable message identifier."
+				},
+				{
+					"name": "from",
+					"description": "Message role.",
+					"values": [
+						{
+							"name": "user"
+						},
+						{
+							"name": "assistant"
+						},
+						{
+							"name": "system"
+						},
+						{
+							"name": "tool"
+						}
+					]
+				},
+				{
+					"name": "state",
+					"description": "Message render state.",
+					"values": [
+						{
+							"name": "pending"
+						},
+						{
+							"name": "streaming"
+						},
+						{
+							"name": "complete"
+						},
+						{
+							"name": "error"
+						}
+					]
+				},
+				{
+					"name": "created-at",
+					"description": "ISO timestamp for message creation."
+				},
+				{
+					"name": "model",
+					"description": "Model that produced the message."
+				},
+				{
+					"name": "provisional",
+					"description": "Marks an optimistic local message."
+				},
+				{
+					"name": "synthetic",
+					"description": "Marks a synthetic/system-generated message."
+				},
+				{
+					"name": "replaces-message-id",
+					"description": "Identifier of the message this message replaces."
+				},
+				{
+					"name": "replaced-by-message-id",
+					"description": "Identifier of the message that replaced this message."
+				}
+			]
+		},
+		{
+			"name": "disco-message-content",
+			"description": "Text content part. The element renders plain text or markdown depending on format.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "format",
+					"description": "How to interpret child content.",
+					"values": [
+						{
+							"name": "text"
+						},
+						{
+							"name": "markdown"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "disco-generated-text",
+			"description": "Expandable generated prompt text associated with a user message.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "label",
+					"description": "Label shown above expanded generated text."
+				},
+				{
+					"name": "open",
+					"description": "Whether the generated text content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-reasoning",
+			"description": "Reasoning/thinking part associated with an assistant message.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "state",
+					"description": "Reasoning render state.",
+					"values": [
+						{
+							"name": "pending"
+						},
+						{
+							"name": "streaming"
+						},
+						{
+							"name": "complete"
+						},
+						{
+							"name": "error"
+						}
+					]
+				},
+				{
+					"name": "open",
+					"description": "Whether the expandable element content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-tool-call",
+			"description": "Dynamic tool call part with input and output children.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "call-id",
+					"description": "Tool call identifier."
+				},
+				{
+					"name": "name",
+					"description": "Tool name."
+				},
+				{
+					"name": "title",
+					"description": "Optional display title."
+				},
+				{
+					"name": "state",
+					"description": "Tool execution state.",
+					"values": [
+						{
+							"name": "input-streaming"
+						},
+						{
+							"name": "input-available"
+						},
+						{
+							"name": "approval-requested"
+						},
+						{
+							"name": "approval-responded"
+						},
+						{
+							"name": "output-available"
+						},
+						{
+							"name": "output-error"
+						},
+						{
+							"name": "output-denied"
+						}
+					]
+				},
+				{
+					"name": "approval-id",
+					"description": "Approval request identifier when state is approval-requested."
+				},
+				{
+					"name": "open",
+					"description": "Whether the expandable element content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-tool-input",
+			"description": "Tool input payload. Use child JSON script content for structured data.",
+			"attributes": [
+				{
+					"name": "format",
+					"description": "Payload format.",
+					"values": [
+						{
+							"name": "json"
+						},
+						{
+							"name": "text"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "disco-tool-output",
+			"description": "Tool output payload. Use child JSON script content for structured data.",
+			"attributes": [
+				{
+					"name": "format",
+					"description": "Payload format.",
+					"values": [
+						{
+							"name": "json"
+						},
+						{
+							"name": "text"
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "disco-attachment",
+			"description": "File, image, source, or artifact attachment part.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "kind",
+					"description": "Attachment kind.",
+					"values": [
+						{
+							"name": "file"
+						},
+						{
+							"name": "image"
+						},
+						{
+							"name": "source"
+						},
+						{
+							"name": "artifact"
+						}
+					]
+				},
+				{
+					"name": "src",
+					"description": "Attachment URL or source URI."
+				},
+				{
+					"name": "filename",
+					"description": "Display filename."
+				},
+				{
+					"name": "media-type",
+					"description": "MIME type."
+				}
+			]
+		},
+		{
+			"name": "disco-browser-activity",
+			"description": "Browser activity captured during a conversation turn.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "title",
+					"description": "Optional display title."
+				},
+				{
+					"name": "summary",
+					"description": "Optional activity summary."
+				},
+				{
+					"name": "step-count",
+					"description": "Number of browser steps represented by this activity."
+				},
+				{
+					"name": "open",
+					"description": "Whether the browser activity content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-event",
+			"description": "Generic timeline/event/data part.",
+			"attributes": [
+				{
+					"name": "part-id",
+					"description": "Stable part identifier."
+				},
+				{
+					"name": "kind",
+					"description": "Event kind."
+				},
+				{
+					"name": "title",
+					"description": "Optional event title."
+				},
+				{
+					"name": "summary",
+					"description": "Optional event summary."
+				},
+				{
+					"name": "open",
+					"description": "Whether the expandable element content is expanded."
+				}
+			]
+		},
+		{
+			"name": "disco-metadata",
+			"description": "Structured JSON metadata associated with the nearest conversation, message, or part.",
+			"attributes": []
+		}
+	],
+	"globalAttributes": [],
+	"valueSets": []
+}

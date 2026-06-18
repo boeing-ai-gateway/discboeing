@@ -100,6 +100,7 @@
 		messages?: ChatMessage[];
 		status?: ConversationPaneStatus;
 		isStreaming?: boolean;
+		browserEventsByTurnId?: Record<string, BrowserEventChunkData[]>;
 		threadError?: string | null;
 		sessionError?: string | null;
 		chatWidthMode?: ChatWidthMode;
@@ -119,6 +120,7 @@
 		messages,
 		status,
 		isStreaming: isStreamingOverride,
+		browserEventsByTurnId: browserEventsByTurnIdOverride,
 		threadError: threadErrorOverride = null,
 		sessionError: sessionErrorOverride = null,
 		chatWidthMode,
@@ -166,7 +168,10 @@
 		groupMessagesIntoTurns(visibleConversationMessages),
 	);
 	const browserEventsByTurnId = $derived.by(
-		() => threadContent?.browserEventsByTurnId ?? {},
+		() =>
+			browserEventsByTurnIdOverride ??
+			threadContent?.browserEventsByTurnId ??
+			{},
 	);
 	const previousTodoEntriesByToolCallId = $derived.by(() => {
 		const entriesByToolCallId: Record<
