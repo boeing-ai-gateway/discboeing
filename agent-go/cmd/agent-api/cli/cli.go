@@ -32,13 +32,15 @@ import (
 
 // Flags holds parsed CLI flag values for terminal mode.
 type Flags struct {
-	model     *string
-	printMode *bool
-	reasoning *bool
-	newThread *bool
-	resume    *string
-	maxTurns  *int
-	subagent  *string
+	model           *string
+	printMode       *bool
+	jsonOutput      *bool
+	reasoning       *bool
+	servicePriority *string
+	newThread       *bool
+	resume          *string
+	maxTurns        *int
+	subagent        *string
 }
 
 // AddFlags registers terminal-mode flags with the default flag set and
@@ -53,6 +55,9 @@ func AddFlags() *Flags {
 	flag.BoolVar(printMode, "print", false, "Run one prompt, print the final response to stdout, and exit")
 	flag.BoolVar(printMode, "p", false, "Alias for --print")
 
+	jsonOutput := new(bool)
+	flag.BoolVar(jsonOutput, "json", false, "In --print mode, write all events as JSONL to stdout")
+
 	newThread := new(bool)
 	flag.BoolVar(newThread, "new-thread", false, "Start with a fresh thread ID (default behavior; retained for compatibility)")
 	flag.BoolVar(newThread, "n", false, "Alias for --new-thread")
@@ -61,20 +66,34 @@ func AddFlags() *Flags {
 	flag.StringVar(resume, "resume", "", "Resume an existing thread by ID")
 	flag.StringVar(resume, "r", "", "Alias for --resume")
 
+	servicePriority := new(string)
+	flag.StringVar(servicePriority, "service-priority", "", "Provider service priority/tier for this request, e.g. fast")
+	flag.StringVar(servicePriority, "service-tier", "", "Alias for --service-priority")
+
+	subagent := new(string)
+	flag.StringVar(subagent, "agent", "", "Agent/subagent config name from .claude/agents/*.md")
+	flag.StringVar(subagent, "subagent", "", "Alias for --agent")
+
 	return &Flags{
-		model:     model,
-		printMode: printMode,
-		reasoning: flag.Bool("reasoning", true, "Enable extended thinking / reasoning (default on; use --reasoning=false to disable)"),
-		newThread: newThread,
-		resume:    resume,
-		maxTurns:  flag.Int("max-turns", 0, "Maximum LLM calls per turn (0 = unlimited)"),
-		subagent:  flag.String("subagent", "", "Subagent config name from .claude/agents/*.md"),
+		model:           model,
+		printMode:       printMode,
+		jsonOutput:      jsonOutput,
+		reasoning:       flag.Bool("reasoning", true, "Enable extended thinking / reasoning (default on; use --reasoning=false to disable)"),
+		servicePriority: servicePriority,
+		newThread:       newThread,
+		resume:          resume,
+		maxTurns:        flag.Int("max-turns", 0, "Maximum LLM calls per turn (0 = unlimited)"),
+		subagent:        subagent,
 	}
 }
 
 // PrintMode reports whether the CLI should run a single prompt and exit.
 func (f *Flags) PrintMode() bool {
 	return f != nil && f.printMode != nil && *f.printMode
+}
+
+func (f *Flags) JSONOutput() bool {
+	return f != nil && f.jsonOutput != nil && *f.jsonOutput
 }
 
 // Run runs the agent in interactive terminal mode.
@@ -284,6 +303,7 @@ func Run(cfg *config.Config, flags *Flags) {
 				req := agent.PromptRequest{
 					Model:        model,
 					Reasoning:    reasoning,
+					ServiceTier:  servicePriorityValue(flags),
 					MaxTurns:     *flags.maxTurns,
 					SubagentType: *flags.subagent,
 					FreshContext: consumeFreshContext(threadID),
@@ -322,6 +342,7 @@ func Run(cfg *config.Config, flags *Flags) {
 			req := agent.PromptRequest{
 				Model:        model,
 				Reasoning:    reasoning,
+				ServiceTier:  servicePriorityValue(flags),
 				MaxTurns:     *flags.maxTurns,
 				SubagentType: *flags.subagent,
 				FreshContext: consumeFreshContext(threadID),
