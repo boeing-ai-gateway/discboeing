@@ -102,6 +102,68 @@ func TestResolveOpenAIServiceTier(t *testing.T) {
 	}
 }
 
+func TestResolveOpenAIEffort(t *testing.T) {
+	tests := []struct {
+		name       string
+		reasoning  providers.Reasoning
+		providerID string
+		modelID    string
+		want       string
+	}{
+		{
+			name:       "omits enabled reasoning for gpt-4o-mini",
+			reasoning:  providers.ReasoningEnabled,
+			providerID: "openai",
+			modelID:    "gpt-4o-mini",
+			want:       "",
+		},
+		{
+			name:       "omits explicit effort for gpt-4o-mini",
+			reasoning:  providers.ReasoningHigh,
+			providerID: "openai",
+			modelID:    "gpt-4o-mini",
+			want:       "",
+		},
+		{
+			name:       "uses default reasoning level for gpt-5.5",
+			reasoning:  providers.ReasoningDefault,
+			providerID: "openai",
+			modelID:    "gpt-5.5",
+			want:       "medium",
+		},
+		{
+			name:       "maps enabled reasoning for gpt-5.5",
+			reasoning:  providers.ReasoningEnabled,
+			providerID: "openai",
+			modelID:    "gpt-5.5",
+			want:       "high",
+		},
+		{
+			name:       "uses codex metadata",
+			reasoning:  providers.ReasoningDefault,
+			providerID: "codex",
+			modelID:    "gpt-5.5",
+			want:       "medium",
+		},
+		{
+			name:       "preserves explicit reasoning for unknown models",
+			reasoning:  providers.ReasoningLow,
+			providerID: "openai",
+			modelID:    "unknown-reasoning-model",
+			want:       "low",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveOpenAIEffort(tt.reasoning, tt.providerID, tt.modelID)
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestExtractInstructionsFromMessages(t *testing.T) {
 	t.Run("extracts first system message and removes it", func(t *testing.T) {
 		msgs := []message.Message{

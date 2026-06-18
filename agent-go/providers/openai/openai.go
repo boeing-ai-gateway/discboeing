@@ -154,8 +154,9 @@ func (p *Provider) Complete(ctx context.Context, req providers.CompleteRequest) 
 		}
 		// Resolve the effective reasoning level and map to an OpenAI effort parameter.
 		// Returns "" if reasoning should be omitted.
-		if effort := resolveOpenAIEffort(req.Reasoning, req.Model.ModelID); effort != "" {
-			modelInfo := modelsdev.Lookup(req.Model.ProviderID, req.Model.ModelID)
+		effectiveProviderID := p.modelProviderID(req.Model.ProviderID)
+		if effort := resolveOpenAIEffort(req.Reasoning, effectiveProviderID, req.Model.ModelID); effort != "" {
+			modelInfo := modelsdev.Lookup(effectiveProviderID, req.Model.ModelID)
 			reasoning := map[string]any{"effort": effort}
 			if modelInfo == nil || modelInfo.SupportsReasoningSummary() {
 				reasoning["summary"] = "detailed"
@@ -257,6 +258,16 @@ func (p *Provider) DefaultModels() map[string]providers.ModelRef {
 		providers.ModelTaskChat:                {ProviderID: providerID, ModelID: "gpt-5.5"},
 		providers.ModelTaskThreadSummarization: {ProviderID: providerID, ModelID: "gpt-5.4-mini"},
 	}
+}
+
+func (p *Provider) modelProviderID(requestProviderID string) string {
+	if requestProviderID != "" {
+		return requestProviderID
+	}
+	if p.isCodex {
+		return codexProviderID
+	}
+	return providerID
 }
 
 // --- Message conversion ---
@@ -1430,7 +1441,11 @@ func unifyFinishReason(status string, hasToolCalls bool) string {
 
 // resolveOpenAIEffort maps a Reasoning request to an OpenAI effort string.
 // Returns "" if reasoning should be omitted entirely.
-func resolveOpenAIEffort(r providers.Reasoning, modelID string) string {
+func resolveOpenAIEffort(r providers.Reasoning, providerID, modelID string) string {
+	if r != providers.ReasoningEmpty && r != providers.ReasoningDefault && !supportsOpenAIReasoning(providerID, modelID) {
+		return ""
+	}
+
 	switch r {
 	case providers.ReasoningDisabled, providers.ReasoningNone:
 		return "" // omit reasoning block
@@ -1445,6 +1460,8 @@ func resolveOpenAIEffort(r providers.Reasoning, modelID string) string {
 			}
 		}
 		return ""
+	case providers.ReasoningAuto, providers.ReasoningEnabled:
+		return "high"
 	case providers.ReasoningLow:
 		return "low"
 	case providers.ReasoningMedium:
@@ -1453,9 +1470,14 @@ func resolveOpenAIEffort(r providers.Reasoning, modelID string) string {
 		return "high"
 	case providers.ReasoningXHigh:
 		return "xhigh"
-	default: // auto, enabled → high
+	default:
 		return "high"
 	}
+}
+
+func supportsOpenAIReasoning(providerID, modelID string) bool {
+	md := modelsdev.Lookup(providerID, modelID)
+	return md == nil || md.Reasoning
 }
 
 // openAIEffort maps a Reasoning level to an OpenAI effort string.
