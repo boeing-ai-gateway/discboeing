@@ -339,6 +339,8 @@
 
 	:global(.markdown-root table) {
 		width: 100%;
+		max-width: 100%;
+		table-layout: fixed;
 		border-collapse: collapse;
 		font-size: 0.875rem;
 	}
@@ -349,7 +351,8 @@
 		padding: 0.5rem;
 		text-align: left;
 		vertical-align: middle;
-		white-space: nowrap;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 
 	:global(.markdown-root th) {
