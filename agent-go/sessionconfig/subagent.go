@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
-	"github.com/obot-platform/discobot/agent-go/providers"
+	fmparser "github.com/boeing-ai-gateway/discboeing/agent-go/frontmatter"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 // SubAgentConfig represents a sub-agent defined in an agents/*.md directory.
@@ -40,7 +40,7 @@ func discoverSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 
 func discoverProjectSubAgents(projectRoot string) ([]SubAgentConfig, error) {
 	dirs := []string{
-		filepath.Join(projectRoot, ".discobot", "agents"),
+		filepath.Join(projectRoot, ".discboeing", "agents"),
 		filepath.Join(projectRoot, ".agents", "agents"),
 		filepath.Join(projectRoot, ".claude", "agents"),
 		filepath.Join(projectRoot, ".gemini", "agents"),

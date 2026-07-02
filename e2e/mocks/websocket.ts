@@ -1,10 +1,10 @@
 import type { Page, WebSocketRoute } from "@playwright/test";
 import type { ProjectStreamSocketRequest } from "../../ui/src/lib/api-types";
-import { FakeDiscobotApi } from "./fake-api";
+import { FakeDiscboeingApi } from "./fake-api";
 
 export async function installProjectWebSocketMock(
   page: Page,
-  api: FakeDiscobotApi,
+  api: FakeDiscboeingApi,
 ) {
   await page.routeWebSocket("**/api/projects/local/ws**", async (ws) => {
     ws.onMessage((message) => handleMessage(ws, api, message));
@@ -17,7 +17,7 @@ function send(ws: WebSocketRoute, value: unknown) {
 
 function handleMessage(
   ws: WebSocketRoute,
-  api: FakeDiscobotApi,
+  api: FakeDiscboeingApi,
   message: string | Buffer,
 ) {
   let request: ProjectStreamSocketRequest;

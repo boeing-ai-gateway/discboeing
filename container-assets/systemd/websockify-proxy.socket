@@ -3,7 +3,7 @@ Description=WebSocket proxy socket activation on localhost port 6080
 
 [Socket]
 # The desktop service has no VNC-layer authentication. It is intended to be
-# reached through Discobot's authenticated service proxy, not exposed directly.
+# reached through Discboeing's authenticated service proxy, not exposed directly.
 ListenStream=127.0.0.1:6080
 
 [Install]

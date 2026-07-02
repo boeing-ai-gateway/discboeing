@@ -201,7 +201,7 @@ async function prepareCommandCredentialDialog(
 	const sessionAssignments = assignmentsResponse.credentials;
 	const projectCredentials = getCredentials(context);
 	const credentialTypes = getCredentialTypes(context);
-	const requests = command.discobot?.credentialRequest ?? [];
+	const requests = command.discboeing?.credentialRequest ?? [];
 	const initialSelections = Object.fromEntries(
 		requests.map((request) => [
 			request.envVar,
@@ -424,7 +424,7 @@ export async function runAgentCommand(
 		return;
 	}
 
-	const requests = command.discobot?.credentialRequest ?? [];
+	const requests = command.discboeing?.credentialRequest ?? [];
 	if (requests.length === 0) {
 		await executeCommand(context, sessionId, command);
 		return;

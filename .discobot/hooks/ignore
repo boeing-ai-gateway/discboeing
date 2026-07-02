@@ -1,2 +1,0 @@
-# Generated templ output; hooks should run against source .templ files.
-discobot/**/*_templ.go

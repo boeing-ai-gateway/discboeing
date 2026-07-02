@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/providers/transport"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/modelsdev"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers/transport"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/modelsdev"
 )
 
 // ScriptExecutionMetadata stores execution details for a slash-command script.
@@ -1990,7 +1990,7 @@ func buildUserMessageMetadata(metadata json.RawMessage, turnID string, originalT
 		}
 	}
 	if turnID != "" {
-		payload["discobot"] = mergeDiscobotMetadata(payload["discobot"], map[string]any{
+		payload["discboeing"] = mergeDiscboeingMetadata(payload["discboeing"], map[string]any{
 			"turnId": turnID,
 		})
 	}
@@ -2016,7 +2016,7 @@ func buildUserMessageMetadata(metadata json.RawMessage, turnID string, originalT
 func buildMessageMetadata(cfg TurnConfig, turnID string, startedAt, finishedAt *time.Time) json.RawMessage {
 	payload := map[string]any{}
 	if turnID != "" {
-		payload["discobot"] = map[string]any{
+		payload["discboeing"] = map[string]any{
 			"turnId": turnID,
 		}
 	}
@@ -2040,7 +2040,7 @@ func buildMessageMetadata(cfg TurnConfig, turnID string, startedAt, finishedAt *
 	return data
 }
 
-func mergeDiscobotMetadata(current any, additions map[string]any) map[string]any {
+func mergeDiscboeingMetadata(current any, additions map[string]any) map[string]any {
 	merged := map[string]any{}
 	if currentMap, ok := current.(map[string]any); ok {
 		maps.Copy(merged, currentMap)

@@ -29,8 +29,8 @@ import {
   updateEnvFile,
 } from "../vz-watcher/watcher.js";
 
-const rootfsArchiveName = "discobot-rootfs.tar.zst";
-const versionedRootfsArchivePattern = /^discobot-rootfs-[0-9a-f]{12}\.tar\.zst$/;
+const rootfsArchiveName = "discboeing-rootfs.tar.zst";
+const versionedRootfsArchivePattern = /^discboeing-rootfs-[0-9a-f]{12}\.tar\.zst$/;
 
 interface Logger {
   log: (message: string) => void;
@@ -107,10 +107,10 @@ export class WslWatcher {
         runCommand: this.runCommand,
         projectRoot: this.projectRoot,
         target: "wsl-image",
-        temporaryTagPrefix: "discobot-wsl-watcher-extract",
+        temporaryTagPrefix: "discboeing-wsl-watcher-extract",
         artifacts: [
           {
-            source: "/discobot-rootfs.tar.zst",
+            source: "/discboeing-rootfs.tar.zst",
             destination: join(this.outputDir, rootfsArchiveName),
           },
         ],
@@ -143,7 +143,7 @@ export class WslWatcher {
     const digest = await computeFileDigest(rootfsArchivePath);
     const versionedRootfsArchivePath = join(
       this.outputDir,
-      `discobot-rootfs-${digest.slice(0, 12)}.tar.zst`,
+      `discboeing-rootfs-${digest.slice(0, 12)}.tar.zst`,
     );
 
     if (versionedRootfsArchivePath === rootfsArchivePath) {

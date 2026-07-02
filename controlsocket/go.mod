@@ -1,4 +1,4 @@
-module github.com/obot-platform/discobot/controlsocket
+module github.com/boeing-ai-gateway/discboeing/controlsocket
 
 go 1.26
 

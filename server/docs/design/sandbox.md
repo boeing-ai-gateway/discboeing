@@ -113,7 +113,7 @@ wrappers around the default provider.
    - Direct connection to Docker daemon
    - One container per session
    - Fast startup, good for Linux/Windows
-   - Starts a daemon-scoped privileged `discobot-host-inspect` container
+   - Starts a daemon-scoped privileged `discboeing-host-inspect` container
      from the sandbox image for host troubleshooting
 
 2. **VZ+Docker Provider**: VM isolation with container efficiency (macOS only)
@@ -140,7 +140,7 @@ wrappers around the default provider.
 4. **Shared Idle Runtime Monitor**: Generic host-runtime shutdown logic
    - Separate from the session-scoped sandbox `Provider` interface
    - Watches shared runtimes such as project VMs or the managed WSL distro
-   - Stops a runtime only after it has no running Discobot sandboxes for the configured idle period
+   - Stops a runtime only after it has no running Discboeing sandboxes for the configured idle period
 
 5. **Local Provider**: Direct process execution (development only)
    - No container/VM overhead
@@ -149,7 +149,7 @@ wrappers around the default provider.
 
 6. **exe.dev Provider**: Remote exe.dev VMs (opt-in)
    - Uses the exe.dev HTTPS command endpoint (`POST /exec`) for VM lifecycle
-   - Creates one exe.dev VM per Discobot session
+   - Creates one exe.dev VM per Discboeing session
    - Routes sandbox agent HTTP traffic through the VM's `*.exe.xyz` hostname
    - Enable by creating an exe.dev sandbox provider instance that references an
      exe.dev API credential
@@ -205,7 +205,7 @@ type Provider interface {
 ```go
 type Sandbox struct {
     ID        string            // Docker container ID
-    SessionID string            // Discobot session ID
+    SessionID string            // Discboeing session ID
     Status    string            // created, running, stopped
     Address   string            // HTTP address (host:port)
     Labels    map[string]string
@@ -298,7 +298,7 @@ func NewProvider(cfg *config.Config) (*Provider, error) {
 
 ```go
 func (p *Provider) sandboxName(sessionID string) string {
-    return fmt.Sprintf("discobot-session-%s", sessionID)
+    return fmt.Sprintf("discboeing-session-%s", sessionID)
 }
 ```
 
@@ -318,7 +318,7 @@ func (p *Provider) Create(
         Cmd:   opts.Cmd,
         Env:   opts.Env,
         Labels: map[string]string{
-            "discobot.session": sessionID,
+            "discboeing.session": sessionID,
         },
         ExposedPorts: nat.PortSet{
             "3002/tcp": struct{}{},
@@ -640,8 +640,8 @@ See [VZ README](../../internal/sandbox/vz/README.md) for complete image requirem
 ```go
 // Configure VM settings
 vmConfig := &vm.Config{
-    DataDir:       "/var/lib/discobot/vz",
-    ConsoleLogDir: "/var/log/discobot/vz",
+    DataDir:       "/var/lib/discboeing/vz",
+    ConsoleLogDir: "/var/log/discboeing/vz",
     KernelPath:    "/path/to/vmlinuz",
     InitrdPath:    "/path/to/initrd.img",
     BaseDiskPath:  "/path/to/base.img",
@@ -735,13 +735,13 @@ var (
 
 ## Sandbox Labels
 
-Labels are used to identify Discobot sandboxes:
+Labels are used to identify Discboeing sandboxes:
 
 ```go
 labels := map[string]string{
-    "discobot":         "true",
-    "discobot.session": sessionID,
-    "discobot.project": projectID,
+    "discboeing":         "true",
+    "discboeing.session": sessionID,
+    "discboeing.project": projectID,
 }
 ```
 
@@ -754,7 +754,7 @@ The sandbox provider's `Remove()` method accepts optional `RemoveOption` paramet
 - **Purpose**: Remove container for rebuild scenarios (e.g., image updates)
 - **Behavior**: Deletes the container but preserves data volumes
 - **Use case**: Image reconciliation, container recreation, failed container recovery
-- **Docker**: Removes container only, leaves `discobot-data-{sessionID}` volume intact
+- **Docker**: Removes container only, leaves `discboeing-data-{sessionID}` volume intact
 - **VZ**: Removes VM (always removes disk)
 
 ```go
@@ -770,7 +770,7 @@ if err := provider.Remove(ctx, sessionID); err != nil {
 - **Purpose**: Complete cleanup when deleting a session or explicitly purging retained data
 - **Behavior**: Deletes both container and all associated data volumes
 - **Use case**: Immediate permanent cleanup, explicit cleanup jobs
-- **Docker**: Removes container AND explicitly deletes the `discobot-data-{sessionID}` volume
+- **Docker**: Removes container AND explicitly deletes the `discboeing-data-{sessionID}` volume
 - **VZ**: Removes VM and all associated storage (same as default)
 
 ```go
@@ -783,7 +783,7 @@ if err := provider.Remove(ctx, sessionID, sandbox.RemoveVolumes()); err != nil {
 
 ### Session Deletion Retention Window
 
-When a session is deleted, Discobot stops the sandbox immediately but keeps the sandbox and its data for a configurable recovery window before final cleanup. The default is **1 minute**, controlled by `SESSION_SANDBOX_CLEANUP_DELAY`.
+When a session is deleted, Discboeing stops the sandbox immediately but keeps the sandbox and its data for a configurable recovery window before final cleanup. The default is **1 minute**, controlled by `SESSION_SANDBOX_CLEANUP_DELAY`.
 
 - The session record is removed right away, but the stopped sandbox is retained during the recovery window.
 - A delayed background job later removes the sandbox with `sandbox.RemoveVolumes()`, which performs the provider's normal full cleanup.
@@ -796,7 +796,7 @@ Docker containers use named data volumes for persistent storage:
 
 ```go
 // Volume naming
-dataVolName := fmt.Sprintf("discobot-data-%s", sessionID)
+dataVolName := fmt.Sprintf("discboeing-data-%s", sessionID)
 
 // Volume is mounted at /.data inside container
 Mounts: []mount.Mount{

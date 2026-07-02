@@ -112,11 +112,11 @@ func TestRunSkillExecutesVisibleScript(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(cwd, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(cwd, ".discobot", "scripts"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(cwd, ".discboeing", "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	scriptDir := filepath.Join(cwd, ".discobot", "scripts")
+	scriptDir := filepath.Join(cwd, ".discboeing", "scripts")
 	writeVisibleSkillScript(t, scriptDir, "hello")
 
 	result, err := runSkill(context.Background(), cwd, nil, "hello", `world "quoted" tail`)
@@ -135,11 +135,11 @@ func TestRunSkillSkipsHiddenScript(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(cwd, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(cwd, ".discobot", "scripts"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(cwd, ".discboeing", "scripts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	writeHiddenSkillScript(t, filepath.Join(cwd, ".discobot", "scripts"), "secret")
+	writeHiddenSkillScript(t, filepath.Join(cwd, ".discboeing", "scripts"), "secret")
 
 	_, err := runSkill(context.Background(), cwd, nil, "secret", "")
 	if err == nil {

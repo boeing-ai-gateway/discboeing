@@ -21,19 +21,19 @@ func TestConnectionRefusedHTMLReloadsOnceProxyStopsReturningStartupErrors(t *tes
 	}
 }
 
-func TestProxyHTTPRestoresDiscobotForwardedHeaders(t *testing.T) {
+func TestProxyHTTPRestoresDiscboeingForwardedHeaders(t *testing.T) {
 	var gotPath string
 	var gotForwardedHost string
 	var gotForwardedProto string
 	var gotForwardedFor string
-	var gotDiscobotForwardedHost string
+	var gotDiscboeingForwardedHost string
 
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
 		gotForwardedHost = r.Header.Get("X-Forwarded-Host")
 		gotForwardedProto = r.Header.Get("X-Forwarded-Proto")
 		gotForwardedFor = r.Header.Get("X-Forwarded-For")
-		gotDiscobotForwardedHost = r.Header.Get(discobotForwardedHostHeader)
+		gotDiscboeingForwardedHost = r.Header.Get(discboeingForwardedHostHeader)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer backend.Close()
@@ -53,10 +53,10 @@ func TestProxyHTTPRestoresDiscobotForwardedHeaders(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-For", "203.0.113.10")
 	req.Header.Set("X-Forwarded-Path", "/wrong")
-	req.Header.Set(discobotForwardedHostHeader, "session1234-svc-ui.localhost:3001")
-	req.Header.Set(discobotForwardedProtoHeader, "http")
-	req.Header.Set(discobotForwardedForHeader, "127.0.0.1")
-	req.Header.Set(discobotForwardedPathHeader, "/actual/path")
+	req.Header.Set(discboeingForwardedHostHeader, "session1234-svc-ui.localhost:3001")
+	req.Header.Set(discboeingForwardedProtoHeader, "http")
+	req.Header.Set(discboeingForwardedForHeader, "127.0.0.1")
+	req.Header.Set(discboeingForwardedPathHeader, "/actual/path")
 
 	rr := httptest.NewRecorder()
 	ProxyHTTP(port).ServeHTTP(rr, req)
@@ -76,7 +76,7 @@ func TestProxyHTTPRestoresDiscobotForwardedHeaders(t *testing.T) {
 	if gotForwardedFor != "127.0.0.1, 192.0.2.1" {
 		t.Fatalf("X-Forwarded-For = %q", gotForwardedFor)
 	}
-	if gotDiscobotForwardedHost != "" {
-		t.Fatalf("%s leaked to service: %q", discobotForwardedHostHeader, gotDiscobotForwardedHost)
+	if gotDiscboeingForwardedHost != "" {
+		t.Fatalf("%s leaked to service: %q", discboeingForwardedHostHeader, gotDiscboeingForwardedHost)
 	}
 }

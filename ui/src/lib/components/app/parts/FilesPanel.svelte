@@ -146,7 +146,7 @@
 		shiftWindowControlsForSidebar = false,
 	}: Props = $props();
 
-	const MONACO_THEME_PREFIX = "discobot";
+	const MONACO_THEME_PREFIX = "discboeing";
 	let monacoLoader: Promise<typeof import("monaco-editor")> | null = null;
 	let monacoConfigured = false;
 
@@ -1054,7 +1054,7 @@
 
 	<Resizable.PaneGroup
 		direction="horizontal"
-		autoSaveId="discobot-ui-files-panel-layout-right"
+		autoSaveId="discboeing-ui-files-panel-layout-right"
 		class="min-h-0 h-full flex-1"
 	>
 		<Resizable.Pane minSize={35} class="min-h-0">

@@ -6,19 +6,19 @@ import (
 	"testing"
 )
 
-func TestLoadScriptFile_ParsesDiscobotMetadataAndCredentialRequests(t *testing.T) {
+func TestLoadScriptFile_ParsesDiscboeingMetadataAndCredentialRequests(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "discobot-commit-remote")
+	path := filepath.Join(dir, "discboeing-commit-remote")
 	content := `#!/usr/bin/env bash
 #---
-# name: discobot-commit
+# name: discboeing-commit
 # description: Commit session changes by opening a PR upstream
-# discobot-ui: true
-# discobot-label: Commit
-# discobot-icon: git-commit
-# discobot-group: Git
-# discobot-order: 10
-# discobot-credential-request:
+# discboeing-ui: true
+# discboeing-label: Commit
+# discboeing-icon: git-commit
+# discboeing-group: Git
+# discboeing-order: 10
+# discboeing-credential-request:
 #   - env-var: GH_TOKEN
 #     name: GitHub credential
 #     justification: Authenticate PR creation.
@@ -31,26 +31,26 @@ printf 'ok\n'
 		t.Fatal(err)
 	}
 
-	script, ok, err := loadScriptFile(path, "discobot-commit-remote")
+	script, ok, err := loadScriptFile(path, "discboeing-commit-remote")
 	if err != nil {
 		t.Fatalf("loadScriptFile returned error: %v", err)
 	}
 	if !ok {
 		t.Fatal("expected script to load")
 	}
-	if script.Name != "discobot-commit" {
-		t.Fatalf("script name = %q, want discobot-commit", script.Name)
+	if script.Name != "discboeing-commit" {
+		t.Fatalf("script name = %q, want discboeing-commit", script.Name)
 	}
-	if !script.Discobot.UI {
-		t.Fatal("expected discobot ui metadata")
+	if !script.Discboeing.UI {
+		t.Fatal("expected discboeing ui metadata")
 	}
-	if script.Discobot.Icon != "git-commit" {
-		t.Fatalf("discobot icon = %q, want git-commit", script.Discobot.Icon)
+	if script.Discboeing.Icon != "git-commit" {
+		t.Fatalf("discboeing icon = %q, want git-commit", script.Discboeing.Icon)
 	}
-	if len(script.Discobot.CredentialRequest) != 1 {
-		t.Fatalf("credential requests = %d, want 1", len(script.Discobot.CredentialRequest))
+	if len(script.Discboeing.CredentialRequest) != 1 {
+		t.Fatalf("credential requests = %d, want 1", len(script.Discboeing.CredentialRequest))
 	}
-	request := script.Discobot.CredentialRequest[0]
+	request := script.Discboeing.CredentialRequest[0]
 	if request.EnvVar != "GH_TOKEN" {
 		t.Fatalf("credential env var = %q, want GH_TOKEN", request.EnvVar)
 	}
@@ -62,9 +62,9 @@ printf 'ok\n'
 func TestDiscoverScripts_SystemDir(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 
 	scriptsDir := filepath.Join(systemRoot, "scripts")
 	mkdirAll(t, scriptsDir)
@@ -91,21 +91,21 @@ echo ok
 	}
 }
 
-func TestDiscoverScripts_DiscobotSpecificOnly(t *testing.T) {
+func TestDiscoverScripts_DiscboeingSpecificOnly(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
 
-	discobotScriptsDir := filepath.Join(home, ".discobot", "scripts")
-	mkdirAll(t, discobotScriptsDir)
-	discobotPath := filepath.Join(discobotScriptsDir, "release")
-	writeFile(t, discobotPath, `#!/bin/sh
+	discboeingScriptsDir := filepath.Join(home, ".discboeing", "scripts")
+	mkdirAll(t, discboeingScriptsDir)
+	discboeingPath := filepath.Join(discboeingScriptsDir, "release")
+	writeFile(t, discboeingPath, `#!/bin/sh
 #---
 # name: release
-# description: Discobot script
+# description: Discboeing script
 #---
 echo ok
 `)
-	if err := os.Chmod(discobotPath, 0o755); err != nil {
+	if err := os.Chmod(discboeingPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,7 +128,7 @@ echo ignored
 		t.Fatal(err)
 	}
 	if len(scripts) != 1 {
-		t.Fatalf("expected only Discobot script, got %d", len(scripts))
+		t.Fatalf("expected only Discboeing script, got %d", len(scripts))
 	}
 	if scripts[0].Name != "release" {
 		t.Fatalf("script name = %q, want release", scripts[0].Name)
@@ -138,9 +138,9 @@ echo ignored
 func TestLookupScript_SystemDir(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 
 	scriptsDir := filepath.Join(systemRoot, "scripts")
 	mkdirAll(t, scriptsDir)
@@ -197,7 +197,7 @@ echo ignored
 
 func TestLookupScript_FindsFrontmatterNameOverride(t *testing.T) {
 	root := t.TempDir()
-	scriptsDir := filepath.Join(root, ".discobot", "scripts")
+	scriptsDir := filepath.Join(root, ".discboeing", "scripts")
 	mkdirAll(t, scriptsDir)
 	path := filepath.Join(scriptsDir, "commit-remote")
 	writeFile(t, path, `#!/bin/sh
@@ -225,7 +225,7 @@ echo ok
 
 func TestDiscoverScripts_UsesDirectExecutablesOnly(t *testing.T) {
 	root := t.TempDir()
-	scriptsDir := filepath.Join(root, ".discobot", "scripts")
+	scriptsDir := filepath.Join(root, ".discboeing", "scripts")
 
 	mkdirAll(t, scriptsDir)
 	path := filepath.Join(scriptsDir, "status.sh")

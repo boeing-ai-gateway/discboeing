@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/sys/windows"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/cli"
-	"github.com/obot-platform/discobot/hcs-go/internal/hcs"
-	"github.com/obot-platform/discobot/hcs-go/internal/winapi"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/hcs"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/winapi"
 )
 
 type NATConnection struct {

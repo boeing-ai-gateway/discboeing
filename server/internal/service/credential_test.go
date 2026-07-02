@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/keyvalidator"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/providers"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/keyvalidator"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/providers"
 )
 
 type credentialRoundTripFunc func(req *http.Request) (*http.Response, error)
@@ -225,7 +225,7 @@ func TestSetIDWithMetadata_DoesNotValidateAPIKey(t *testing.T) {
 	credSvc, err := NewCredentialServiceWithValidators(
 		st,
 		cfg,
-		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderDiscobot: validator}),
+		keyvalidator.NewRegistry(map[string]keyvalidator.Validator{ProviderDiscboeing: validator}),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create credential service: %v", err)
@@ -234,10 +234,10 @@ func TestSetIDWithMetadata_DoesNotValidateAPIKey(t *testing.T) {
 	_, err = credSvc.SetIDWithMetadata(
 		context.Background(),
 		"test-project",
-		ProviderDiscobot,
-		"Discobot ID",
+		ProviderDiscboeing,
+		"Discboeing ID",
 		"",
-		"discobot_123",
+		"discboeing_123",
 		CredentialVisibility{},
 		false,
 	)
@@ -315,10 +315,10 @@ func TestValidateAll_ReturnsStatusesForStoredCredentials(t *testing.T) {
 	idCred, err := credSvc.SetIDWithMetadata(
 		context.Background(),
 		"test-project",
-		ProviderDiscobot,
-		"Discobot ID",
+		ProviderDiscboeing,
+		"Discboeing ID",
 		"",
-		"discobot_123",
+		"discboeing_123",
 		CredentialVisibility{},
 		false,
 	)
@@ -342,7 +342,7 @@ func TestValidateAll_ReturnsStatusesForStoredCredentials(t *testing.T) {
 		t.Fatalf("expected anthropic key to be invalid, got %s", byID[apiKey.ID].Status)
 	}
 	if byID[idCred.ID].Status != CredentialValidationStatusUnsupported {
-		t.Fatalf("expected discobot id validation to be unsupported, got %s", byID[idCred.ID].Status)
+		t.Fatalf("expected discboeing id validation to be unsupported, got %s", byID[idCred.ID].Status)
 	}
 }
 
@@ -392,7 +392,7 @@ func TestValidateByID_InvalidAPIKeyReturnsInvalidStatus(t *testing.T) {
 	}
 }
 
-func TestGetAllDecrypted_DiscobotID_HasNoEnvVarMapping(t *testing.T) {
+func TestGetAllDecrypted_DiscboeingID_HasNoEnvVarMapping(t *testing.T) {
 	st := setupTestStore(t)
 	cfg := &config.Config{
 		EncryptionKey: []byte("test-key-32-bytes-long-123456789"),
@@ -406,12 +406,12 @@ func TestGetAllDecrypted_DiscobotID_HasNoEnvVarMapping(t *testing.T) {
 	ctx := context.Background()
 	projectID := "test-project"
 
-	envVars := providers.GetEnvVars(ProviderDiscobot)
+	envVars := providers.GetEnvVars(ProviderDiscboeing)
 	if len(envVars) != 0 {
-		t.Fatalf("Expected Discobot provider to have no env vars, got %d", len(envVars))
+		t.Fatalf("Expected Discboeing provider to have no env vars, got %d", len(envVars))
 	}
 
-	_, err = credSvc.SetID(ctx, projectID, ProviderDiscobot, "Discobot Token", "discobot-token-123")
+	_, err = credSvc.SetID(ctx, projectID, ProviderDiscboeing, "Discboeing Token", "discboeing-token-123")
 	if err != nil {
 		t.Fatalf("Failed to set API key: %v", err)
 	}

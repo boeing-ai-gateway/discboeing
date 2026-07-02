@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	internalgrep "github.com/obot-platform/discobot/agent-go/internal/grep"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	internalgrep "github.com/boeing-ai-gateway/discboeing/agent-go/internal/grep"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 // rgOnce guards the one-time ripgrep availability check.
@@ -22,10 +22,10 @@ var (
 )
 
 // isRgAvailable returns true if the rg binary is on PATH, checked exactly once.
-// Set DISCOBOT_NO_RIPGREP=1 to force the pure-Go fallback regardless.
+// Set DISCBOEING_NO_RIPGREP=1 to force the pure-Go fallback regardless.
 func isRgAvailable() bool {
 	rgOnce.Do(func() {
-		if os.Getenv("DISCOBOT_NO_RIPGREP") == "1" {
+		if os.Getenv("DISCBOEING_NO_RIPGREP") == "1" {
 			return
 		}
 		_, err := exec.LookPath("rg")

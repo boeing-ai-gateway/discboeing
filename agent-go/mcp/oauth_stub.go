@@ -9,7 +9,7 @@ import (
 	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"golang.org/x/oauth2"
 
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
 )
 
 // channelCodeFetcher is a stub when OAuth support is not compiled in.

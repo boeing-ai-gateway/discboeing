@@ -3,13 +3,13 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
 )
 
 const (
-	credentialsHeader  = "X-Discobot-Credentials"
-	gitUserNameHeader  = "X-Discobot-Git-User-Name"
-	gitUserEmailHeader = "X-Discobot-Git-User-Email"
+	credentialsHeader  = "X-Discboeing-Credentials"
+	gitUserNameHeader  = "X-Discboeing-Git-User-Name"
+	gitUserEmailHeader = "X-Discboeing-Git-User-Email"
 )
 
 // Credentials returns middleware that applies credential environment variables

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/portwatcher"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/portwatcher"
 )
 
 func TestWorkspacePortWatcherSerializesScans(t *testing.T) {

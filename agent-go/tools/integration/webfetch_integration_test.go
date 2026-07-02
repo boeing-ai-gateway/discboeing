@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/tools"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/tools"
 )
 
 func newExecutor(t *testing.T) *tools.Executor {

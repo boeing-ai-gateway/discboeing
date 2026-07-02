@@ -10,7 +10,7 @@
 			role: "user",
 			metadata: {
 				originalText: "Please inspect this repo and summarize what changed.",
-				discobot: { turnId: "sample-turn-1" },
+				discboeing: { turnId: "sample-turn-1" },
 			},
 			parts: [
 				{
@@ -31,7 +31,7 @@
 			metadata: {
 				model: "gpt-5.5",
 				reasoning: "medium",
-				discobot: { turnId: "sample-turn-1" },
+				discboeing: { turnId: "sample-turn-1" },
 			},
 			parts: [
 				{
@@ -49,7 +49,7 @@
 					output: {
 						content: [
 							"<script>",
-							"\tlet greeting = 'Hello Discobot';",
+							"\tlet greeting = 'Hello Discboeing';",
 							"<" + "/script>",
 							"",
 							"<h1>{greeting}</h1>",
@@ -66,7 +66,7 @@
 			id: "sample-user-2",
 			role: "user",
 			metadata: {
-				discobot: { turnId: "sample-turn-2" },
+				discboeing: { turnId: "sample-turn-2" },
 			},
 			parts: [
 				{
@@ -81,7 +81,7 @@
 			status: "streaming",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-2" },
+				discboeing: { turnId: "sample-turn-2" },
 			},
 			parts: [
 				{
@@ -130,7 +130,7 @@
 			id: "sample-user-3",
 			role: "user",
 			metadata: {
-				discobot: { turnId: "sample-turn-3" },
+				discboeing: { turnId: "sample-turn-3" },
 			},
 			parts: [
 				{
@@ -144,7 +144,7 @@
 			role: "assistant",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-3" },
+				discboeing: { turnId: "sample-turn-3" },
 			},
 			parts: [
 				{
@@ -211,7 +211,7 @@
 					toolCallId: "tool-gallery-lowercase-read",
 					state: "output-available",
 					input: { file_path: "/workspace/README.md" },
-					output: "# Discobot\n\nA coding agent manager.",
+					output: "# Discboeing\n\nA coding agent manager.",
 				},
 				{
 					type: "dynamic-tool",
@@ -244,7 +244,7 @@
 					input: {
 						file_path: "/workspace/src/App.svelte",
 						old_string: "Hello",
-						new_string: "Hello Discobot",
+						new_string: "Hello Discboeing",
 					},
 					output: "Updated /workspace/src/App.svelte",
 				},
@@ -305,7 +305,7 @@
 					toolCallId: "tool-gallery-apply-patch",
 					state: "output-available",
 					input:
-						"*** Begin Patch\n*** Update File: src/App.svelte\n@@\n-Hello\n+Hello Discobot\n*** End Patch",
+						"*** Begin Patch\n*** Update File: src/App.svelte\n@@\n-Hello\n+Hello Discboeing\n*** End Patch",
 					output: "Success. Updated the following files:\nM src/App.svelte",
 				},
 				{
@@ -314,15 +314,15 @@
 					toolCallId: "tool-gallery-web-search",
 					state: "output-available",
 					input: {
-						query: "Discobot web component renderer",
+						query: "Discboeing web component renderer",
 						type: "search",
 						allowed_domains: ["example.com"],
 					},
 					output: {
 						results: [
 							{
-								title: "Discobot renderer notes",
-								url: "https://example.com/discobot-renderer",
+								title: "Discboeing renderer notes",
+								url: "https://example.com/discboeing-renderer",
 								snippet: "A summary of the renderer comparison work.",
 							},
 						],
@@ -334,7 +334,7 @@
 					toolCallId: "tool-gallery-web-fetch",
 					state: "output-available",
 					input: {
-						url: "https://example.com/discobot-renderer",
+						url: "https://example.com/discboeing-renderer",
 						prompt: "Summarize the renderer notes.",
 					},
 					output: {
@@ -403,7 +403,7 @@
 			role: "user",
 			metadata: {
 				originalText: "Summarize the attached renderer notes.",
-				discobot: { turnId: "sample-turn-4" },
+				discboeing: { turnId: "sample-turn-4" },
 			},
 			parts: [
 				{
@@ -423,7 +423,7 @@
 			role: "assistant",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-4" },
+				discboeing: { turnId: "sample-turn-4" },
 			},
 			parts: [
 				{
@@ -447,7 +447,7 @@
 					name: "browser",
 					text: "Open the conversation comparison page, inspect the generated text and attachment parts, and report visual parity issues.",
 				},
-				discobot: { turnId: "sample-turn-5" },
+				discboeing: { turnId: "sample-turn-5" },
 			},
 			parts: [
 				{
@@ -461,7 +461,7 @@
 			role: "assistant",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-5" },
+				discboeing: { turnId: "sample-turn-5" },
 			},
 			parts: [
 				{
@@ -481,13 +481,13 @@
 					text: "The script generated a renderer smoke-test prompt from workspace state.",
 					script: {
 						scriptName: "renderer-smoke",
-						scriptPath: ".discobot/scripts/renderer-smoke.sh",
+						scriptPath: ".discboeing/scripts/renderer-smoke.sh",
 						exitCode: 0,
 						success: true,
 						stdout: "Generated renderer smoke-test prompt.",
 					},
 				},
-				discobot: { turnId: "sample-turn-6" },
+				discboeing: { turnId: "sample-turn-6" },
 			},
 			parts: [
 				{
@@ -501,7 +501,7 @@
 			role: "assistant",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-6" },
+				discboeing: { turnId: "sample-turn-6" },
 			},
 			parts: [
 				{
@@ -519,7 +519,7 @@
 					kind: "command",
 					name: "command",
 				},
-				discobot: { turnId: "sample-turn-7" },
+				discboeing: { turnId: "sample-turn-7" },
 			},
 			parts: [
 				{
@@ -533,7 +533,7 @@
 			role: "assistant",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-7" },
+				discboeing: { turnId: "sample-turn-7" },
 			},
 			parts: [
 				{
@@ -546,7 +546,7 @@
 			id: "sample-user-ask-question",
 			role: "user",
 			metadata: {
-				discobot: { turnId: "sample-turn-8" },
+				discboeing: { turnId: "sample-turn-8" },
 			},
 			parts: [
 				{
@@ -561,7 +561,7 @@
 			status: "streaming",
 			metadata: {
 				model: "gpt-5.5",
-				discobot: { turnId: "sample-turn-8" },
+				discboeing: { turnId: "sample-turn-8" },
 			},
 			parts: [
 				{
@@ -655,7 +655,7 @@
 					stepIndex: 2,
 					method: "browser_screenshot",
 					direction: "response",
-					payload: { title: "Discobot UI" },
+					payload: { title: "Discboeing UI" },
 					files: [
 						{
 							path: "/tmp/browser-step-2.png",

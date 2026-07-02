@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/cli"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
 )
 
 func TestBuildKernelCommandLineNoInitrd(t *testing.T) {

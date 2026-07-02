@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
 )
 
 type ProjectStreamSocketMessageJSON struct {
@@ -154,7 +154,7 @@ func (m *ProjectStreamSocketMessageJSON) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Client is a typed HTTP client for the Discobot server API.
+// Client is a typed HTTP client for the Discboeing server API.
 type Client struct {
 	Server string
 
@@ -195,7 +195,7 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
-// NewClient creates a Discobot API client rooted at baseURL.
+// NewClient creates a Discboeing API client rooted at baseURL.
 func NewClient(baseURL string, opts ...Option) (*Client, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		return nil, fmt.Errorf("base URL is required")
@@ -284,9 +284,9 @@ func (c *Client) resolve(path string, query any) string {
 func decodeError(resp *http.Response) error {
 	var apiErr serverapi.ErrorResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
-		return fmt.Errorf("discobot API %s: %s", resp.Status, apiErr.Error)
+		return fmt.Errorf("discboeing API %s: %s", resp.Status, apiErr.Error)
 	}
-	return fmt.Errorf("discobot API %s", resp.Status)
+	return fmt.Errorf("discboeing API %s", resp.Status)
 }
 
 func encodeQuery(query any) string {

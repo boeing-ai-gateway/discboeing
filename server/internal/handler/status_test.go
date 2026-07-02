@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	mocksandbox "github.com/obot-platform/discobot/server/internal/sandbox/mock"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/startup"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	mocksandbox "github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/mock"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/startup"
 )
 
 type statusReportingProvider struct {

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/internal/files"
-	"github.com/obot-platform/discobot/agent-go/internal/gitops"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/files"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/gitops"
 )
 
 const defaultSessionStreamPingInterval = 15 * time.Second
@@ -242,8 +242,8 @@ func (h *Handler) commandsSnapshot() (api.ListCommandsResponse, error) {
 	}
 
 	sort.SliceStable(commands, func(i, j int) bool {
-		if commands[i].Discobot.Order != commands[j].Discobot.Order {
-			return commands[i].Discobot.Order < commands[j].Discobot.Order
+		if commands[i].Discboeing.Order != commands[j].Discboeing.Order {
+			return commands[i].Discboeing.Order < commands[j].Discboeing.Order
 		}
 		return commands[i].Name < commands[j].Name
 	})

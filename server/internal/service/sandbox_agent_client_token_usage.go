@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
 )
 
 // GetThreadTokenUsage retrieves detailed token usage for a thread from the

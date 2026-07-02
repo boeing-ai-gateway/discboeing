@@ -17,7 +17,7 @@ server/__debug_bin*
 server/server
 
 # Binaries
-proxy/discobot-proxy
+proxy/discboeing-proxy
 agent/agent
 
 # Tauri build artifacts

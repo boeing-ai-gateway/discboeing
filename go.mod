@@ -1,4 +1,4 @@
-module github.com/obot-platform/discobot
+module github.com/boeing-ai-gateway/discboeing
 
 go 1.26
 
@@ -15,7 +15,7 @@ require (
 	github.com/glebarez/sqlite v1.11.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/uuid v1.6.0
-	github.com/obot-platform/discobot/modelsdev v0.0.0
+	github.com/boeing-ai-gateway/discboeing/modelsdev v0.0.0
 	github.com/tailscale/hujson v0.0.0-20260302212456-ecc657c15afd
 	github.com/things-go/go-socks5 v0.0.5
 	go.uber.org/zap v1.28.0
@@ -36,7 +36,7 @@ require (
 	github.com/google/go-containerregistry v0.19.0
 	github.com/joho/godotenv v1.5.1
 	github.com/klauspost/compress v1.18.6
-	github.com/obot-platform/discobot/agent-go v0.0.0
+	github.com/boeing-ai-gateway/discboeing/agent-go v0.0.0
 	github.com/ulikunitz/xz v0.5.15
 	golang.org/x/crypto v0.52.0
 	golang.org/x/sys v0.45.0
@@ -233,7 +233,7 @@ require (
 	github.com/nishanths/exhaustive v0.12.0 // indirect
 	github.com/nishanths/predeclared v0.2.2 // indirect
 	github.com/nunnatsa/ginkgolinter v0.21.2 // indirect
-	github.com/obot-platform/discobot/controlsocket v0.0.0
+	github.com/boeing-ai-gateway/discboeing/controlsocket v0.0.0
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
@@ -333,7 +333,7 @@ require (
 // Explicit version overrides to avoid ambiguous imports
 replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20251202230838-ff82c1b0f217
 
-replace github.com/obot-platform/discobot/modelsdev => ./modelsdev
+replace github.com/boeing-ai-gateway/discboeing/modelsdev => ./modelsdev
 
 tool (
 	github.com/go-delve/delve/cmd/dlv
@@ -342,6 +342,6 @@ tool (
 	github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 )
 
-replace github.com/obot-platform/discobot/controlsocket => ./controlsocket
+replace github.com/boeing-ai-gateway/discboeing/controlsocket => ./controlsocket
 
-replace github.com/obot-platform/discobot/agent-go => ./agent-go
+replace github.com/boeing-ai-gateway/discboeing/agent-go => ./agent-go

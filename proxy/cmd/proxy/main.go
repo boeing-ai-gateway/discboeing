@@ -10,11 +10,11 @@ import (
 	"strings"
 	"syscall"
 
-	proxyapi "github.com/obot-platform/discobot/proxy/internal/api"
-	"github.com/obot-platform/discobot/proxy/internal/cert"
-	"github.com/obot-platform/discobot/proxy/internal/config"
-	"github.com/obot-platform/discobot/proxy/internal/logger"
-	"github.com/obot-platform/discobot/proxy/internal/proxy"
+	proxyapi "github.com/boeing-ai-gateway/discboeing/proxy/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/cert"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/logger"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/proxy"
 )
 
 func main() {
@@ -152,9 +152,9 @@ func runInitCerts(args []string) error {
 		return fmt.Errorf("initialize CA: %w", err)
 	}
 	if generated {
-		fmt.Printf("discobot-proxy: proxy CA certificate generated at %s\n", certPath)
+		fmt.Printf("discboeing-proxy: proxy CA certificate generated at %s\n", certPath)
 	} else {
-		fmt.Printf("discobot-proxy: proxy CA certificate already exists at %s\n", certPath)
+		fmt.Printf("discboeing-proxy: proxy CA certificate already exists at %s\n", certPath)
 	}
 
 	var trustUser *cert.TrustUser

@@ -16,19 +16,19 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/obot-platform/discobot/agent-go/cmd/agent-api/cli"
-	"github.com/obot-platform/discobot/agent-go/cmd/agent-api/server"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/tools"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/cmd/agent-api/cli"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/cmd/agent-api/server"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/tools"
 
 	// Side-effect imports register provider factories so the registry can
-	// build them on demand when credentials arrive via X-Discobot-Credentials.
-	_ "github.com/obot-platform/discobot/agent-go/providers/anthropic"
-	_ "github.com/obot-platform/discobot/agent-go/providers/openai"
-	_ "github.com/obot-platform/discobot/agent-go/providers/openaicompatible"
+	// build them on demand when credentials arrive via X-Discboeing-Credentials.
+	_ "github.com/boeing-ai-gateway/discboeing/agent-go/providers/anthropic"
+	_ "github.com/boeing-ai-gateway/discboeing/agent-go/providers/openai"
+	_ "github.com/boeing-ai-gateway/discboeing/agent-go/providers/openaicompatible"
 )
 
-const runAsApplyPatchArg = "--discobot-run-as-apply-patch"
+const runAsApplyPatchArg = "--discboeing-run-as-apply-patch"
 
 func main() {
 	// Handle subcommands before flag parsing so they get clean args.
@@ -50,8 +50,8 @@ func main() {
 	_ = godotenv.Load()
 	cfg := config.Load()
 
-	// When invoked as "discobot-agent-api" (drop-in replacement), default to server mode.
-	if filepath.Base(os.Args[0]) == "discobot-agent-api" || *serverMode {
+	// When invoked as "discboeing-agent-api" (drop-in replacement), default to server mode.
+	if filepath.Base(os.Args[0]) == "discboeing-agent-api" || *serverMode {
 		server.Run(cfg)
 	} else if flags.PrintMode() {
 		os.Exit(cli.RunPrint(cfg, flags, flag.Args()))

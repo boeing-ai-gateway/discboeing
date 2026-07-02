@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -eu
 
-data_dir="${DISCOBOT_DATA_DIR:-$HOME/.discobot}"
-threads_dir="${DISCOBOT_THREADS_DIR:-$data_dir/threads}"
-current_thread_id="${DISCOBOT_SESSION_ID:-}"
+data_dir="${DISCBOEING_DATA_DIR:-$HOME/.discboeing}"
+threads_dir="${DISCBOEING_THREADS_DIR:-$data_dir/threads}"
+current_thread_id="${DISCBOEING_SESSION_ID:-}"
 
 if [ ! -d "$threads_dir" ]; then
 	echo "Threads directory not found: $threads_dir"

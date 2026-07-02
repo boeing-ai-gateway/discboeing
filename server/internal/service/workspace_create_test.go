@@ -206,8 +206,8 @@ func simulateLocalValidation(path string) error {
 			return err
 		}
 		initCommit := exec.Command("git",
-			"-c", "user.email=discobot@localhost",
-			"-c", "user.name=Discobot",
+			"-c", "user.email=discboeing@localhost",
+			"-c", "user.name=Discboeing",
 			"commit", "--allow-empty", "-m", "Initial commit",
 		)
 		initCommit.Dir = path

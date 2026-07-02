@@ -2,7 +2,7 @@
 
 package hcs
 
-import "github.com/obot-platform/discobot/hcs-go/internal/cli"
+import "github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
 
 type VMAccessGrant struct{}
 

@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	agentcontrol "github.com/obot-platform/discobot/agent-go/internal/controlsocket"
-	shared "github.com/obot-platform/discobot/controlsocket"
+	agentcontrol "github.com/boeing-ai-gateway/discboeing/agent-go/internal/controlsocket"
+	shared "github.com/boeing-ai-gateway/discboeing/controlsocket"
 )
 
 const gitChunkSize = 64 * 1024
@@ -161,13 +161,13 @@ func ConfigureGitRemote(ctx context.Context, workspace, remoteURL, sessionID str
 	if workspace == "" || remoteURL == "" || sessionID == "" {
 		return
 	}
-	_ = run(ctx, workspace, "git", "remote", "remove", "discobot")
-	if err := run(ctx, workspace, "git", "remote", "add", "discobot", remoteURL); err != nil {
-		log.Printf("configure discobot git remote: %v", err)
+	_ = run(ctx, workspace, "git", "remote", "remove", "discboeing")
+	if err := run(ctx, workspace, "git", "remote", "add", "discboeing", remoteURL); err != nil {
+		log.Printf("configure discboeing git remote: %v", err)
 		return
 	}
-	if err := run(ctx, workspace, "git", "config", "remote.discobot.push", "HEAD:refs/heads/discobot/"+sessionID); err != nil {
-		log.Printf("configure discobot push refspec: %v", err)
+	if err := run(ctx, workspace, "git", "config", "remote.discboeing.push", "HEAD:refs/heads/discboeing/"+sessionID); err != nil {
+		log.Printf("configure discboeing push refspec: %v", err)
 	}
 }
 

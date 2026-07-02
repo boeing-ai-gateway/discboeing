@@ -2,7 +2,7 @@
 # Wrapper script for air: writes .zed/debug.json, then execs the server binary so air signals the real process
 set -e
 
-BINARY="./build/discobot"
+BINARY="./build/discboeing"
 DEBUG_JSON="../.zed/debug.json"
 PID=$$
 
@@ -11,7 +11,7 @@ cat > "$DEBUG_JSON" <<EOF
 [
     {
         "adapter": "Delve",
-        "label": "Attach to Discobot Server (Delve)",
+        "label": "Attach to Discboeing Server (Delve)",
         "request": "attach",
         "mode": "local",
         "processId": $PID,

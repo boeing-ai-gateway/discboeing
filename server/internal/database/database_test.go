@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 const testEncryptionKey = "01234567890123456789012345678901"

@@ -1,6 +1,6 @@
 package serverapi
 
-import agentmessage "github.com/obot-platform/discobot/agent-go/message"
+import agentmessage "github.com/boeing-ai-gateway/discboeing/agent-go/message"
 
 // UnmarshalMessageChunk decodes a discriminated chat stream chunk using the
 // authoritative agent-go/message implementation.

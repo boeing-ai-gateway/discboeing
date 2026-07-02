@@ -13,8 +13,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 // DB wraps the GORM DB connection with additional context.
@@ -221,7 +221,7 @@ func (db *DB) Migrate() error {
 	// Note: AutoMigrate only adds columns, it never removes them.
 	//
 	// SQLite implements DROP COLUMN by rebuilding tables. That rebuild can fail on
-	// older Discobot schemas where foreign keys still reference legacy tables or
+	// older Discboeing schemas where foreign keys still reference legacy tables or
 	// columns (for example sessions.agent_id -> agents.id). Since those obsolete
 	// columns are harmless and compatibility is more important than cleanup during
 	// startup, skip destructive column cleanup entirely on SQLite.

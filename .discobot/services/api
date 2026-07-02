@@ -1,6 +1,0 @@
----
-name: Discobot API
-description: API service
-http: 3001
-path: /api/ui
----

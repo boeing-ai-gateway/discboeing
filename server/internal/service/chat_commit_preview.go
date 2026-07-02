@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
 )
 
 type CommitPullPreviewResponse struct {

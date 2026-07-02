@@ -2292,7 +2292,7 @@ export interface paths {
 		};
 		/**
 		 * List session workspace change commits
-		 * @description List Discobot workspace change commits for a session sandbox.
+		 * @description List Discboeing workspace change commits for a session sandbox.
 		 */
 		get: operations["listSessionWorkspaceChangeCommits"];
 		put?: never;
@@ -2685,7 +2685,7 @@ export interface components {
 		};
 		/** @description Request to submit or queue chat messages for a session thread. */
 		ChatRequest: {
-			/** @description Discobot UIMessage values accepted by the sandbox agent API. */
+			/** @description Discboeing UIMessage values accepted by the sandbox agent API. */
 			messages?: components["schemas"]["Message"][];
 			/** @description trigger value for the chat Request object. */
 			trigger?: string;
@@ -3879,7 +3879,7 @@ export interface components {
 			timestamp: string;
 			data: unknown;
 		};
-		/** @description Discobot UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage. */
+		/** @description Discboeing UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage. */
 		Message: {
 			id: string;
 			/** @enum {string} */
@@ -4054,7 +4054,7 @@ export interface components {
 			data: components["schemas"]["WorkspaceFilesEventData"];
 			transient?: boolean;
 		};
-		/** @description Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk. */
+		/** @description Discboeing stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk. */
 		MessageChunk: {
 			type: string;
 		} & {

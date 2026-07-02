@@ -15,10 +15,10 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/browser"
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/browser"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func (h *Handler) GetBrowserSession(w http.ResponseWriter, r *http.Request) {
@@ -59,7 +59,7 @@ func (h *Handler) ProxyBrowserCDP(w http.ResponseWriter, r *http.Request) {
 		if browser.IsChromiumNotFound(err) {
 			status = http.StatusServiceUnavailable
 		}
-		http.Error(w, "Discobot browser unavailable: "+err.Error(), status)
+		http.Error(w, "Discboeing browser unavailable: "+err.Error(), status)
 		return
 	}
 	upstreamConn, _, err := websocket.Dial(r.Context(), upstreamURL, &websocket.DialOptions{
@@ -67,7 +67,7 @@ func (h *Handler) ProxyBrowserCDP(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("browser[%s]: upstream websocket dial failed thread=%q upstream=%s: %v", sessionID, threadID, upstreamURL, err)
-		http.Error(w, "Discobot browser CDP proxy failed to connect to Chromium DevTools: "+err.Error(), http.StatusBadGateway)
+		http.Error(w, "Discboeing browser CDP proxy failed to connect to Chromium DevTools: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	browser.ConfigureCDPConn(upstreamConn)

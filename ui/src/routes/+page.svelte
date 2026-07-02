@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>Discobot UI</title>
+	<title>Discboeing UI</title>
 </svelte:head>
 
 {#if dev && compareConversation}

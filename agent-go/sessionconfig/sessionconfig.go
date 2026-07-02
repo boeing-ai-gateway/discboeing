@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 const DefaultMaxSubagentDepth = 4
@@ -46,9 +46,9 @@ type SessionConfig struct {
 	// top-level thread. Top-level threads are depth 0.
 	MaxSubagentDepth int
 
-	// Skills are discovered skill configurations from Discobot-native skill
+	// Skills are discovered skill configurations from Discboeing-native skill
 	// directories, shared .agents skill directories, provider fallback skill
-	// directories, Discobot system directories, and legacy command directories.
+	// directories, Discboeing system directories, and legacy command directories.
 	// They are listed in the system-reminder so the model knows which slash
 	// commands are available.
 	Skills []SkillConfig
@@ -59,7 +59,7 @@ type SessionConfig struct {
 	SkillDiscoveryWarnings []string
 
 	// Scripts are discovered executable slash-command scripts from project-level
-	// .discobot/scripts, user-level ~/.discobot/scripts, and Discobot system
+	// .discboeing/scripts, user-level ~/.discboeing/scripts, and Discboeing system
 	// script directories. Visible scripts are listed in the system reminders so
 	// the model knows which executable slash commands are available.
 	Scripts []ScriptConfig
@@ -67,13 +67,13 @@ type SessionConfig struct {
 	// ScriptDiscoveryWarnings are non-fatal script loading issues.
 	ScriptDiscoveryWarnings []string
 
-	// DiscobotServicesConfigured indicates whether project-level
-	// .discobot/services exists.
-	DiscobotServicesConfigured bool
+	// DiscboeingServicesConfigured indicates whether project-level
+	// .discboeing/services exists.
+	DiscboeingServicesConfigured bool
 
-	// DiscobotHooksConfigured indicates whether project-level .discobot/hooks
+	// DiscboeingHooksConfigured indicates whether project-level .discboeing/hooks
 	// exists.
-	DiscobotHooksConfigured bool
+	DiscboeingHooksConfigured bool
 }
 
 // Load discovers and loads session configuration from the given working directory.
@@ -94,8 +94,8 @@ func Load(cwd string) (*SessionConfig, error) {
 		return nil, err
 	}
 	cfg.MaxSubagentDepth = DefaultMaxSubagentDepth
-	cfg.DiscobotServicesConfigured = dirExists(filepath.Join(projectRoot, ".discobot", "services"))
-	cfg.DiscobotHooksConfigured = dirExists(filepath.Join(projectRoot, ".discobot", "hooks"))
+	cfg.DiscboeingServicesConfigured = dirExists(filepath.Join(projectRoot, ".discboeing", "services"))
+	cfg.DiscboeingHooksConfigured = dirExists(filepath.Join(projectRoot, ".discboeing", "hooks"))
 
 	// 2. Discover user instruction files (CLAUDE.md, AGENTS.md, rules).
 	entries, err := discoverInstructions(cwd)

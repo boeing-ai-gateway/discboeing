@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
 )
 
 // MaxFileSize is the maximum file size for read operations (10MB).

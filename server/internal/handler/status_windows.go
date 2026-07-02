@@ -3,7 +3,7 @@
 package handler
 
 import (
-	api "github.com/obot-platform/discobot/server/api"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
 
 	"os"
 	"path/filepath"

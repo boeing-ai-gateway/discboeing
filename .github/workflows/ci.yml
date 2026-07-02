@@ -130,9 +130,9 @@ jobs:
       - name: Prepare placeholder guest resources
         run: |
           mkdir -p electron/resources/vz electron/resources/wsl electron/resources/hcs
-          touch electron/resources/vz/_discobot_placeholder.txt
-          touch electron/resources/wsl/_discobot_placeholder.txt
-          touch electron/resources/hcs/_discobot_placeholder.txt
+          touch electron/resources/vz/_discboeing_placeholder.txt
+          touch electron/resources/wsl/_discboeing_placeholder.txt
+          touch electron/resources/hcs/_discboeing_placeholder.txt
 
       - name: Build Electron app
         env:

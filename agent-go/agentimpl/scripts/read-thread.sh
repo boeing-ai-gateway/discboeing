@@ -7,8 +7,8 @@ if [ "$#" -ne 1 ]; then
 fi
 
 thread_id="$1"
-data_dir="${DISCOBOT_DATA_DIR:-$HOME/.discobot}"
-threads_dir="${DISCOBOT_THREADS_DIR:-$data_dir/threads}"
+data_dir="${DISCBOEING_DATA_DIR:-$HOME/.discboeing}"
+threads_dir="${DISCBOEING_THREADS_DIR:-$data_dir/threads}"
 thread_dir="$threads_dir/$thread_id"
 config_path="$thread_dir/config.json"
 turn_path="$thread_dir/turn.json"

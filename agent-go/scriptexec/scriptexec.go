@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
 )
 
 type Execution struct {

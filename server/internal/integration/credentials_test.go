@@ -74,21 +74,21 @@ func TestCreateCredential_ID(t *testing.T) {
 
 	client := ts.AuthenticatedClient(user)
 	resp := client.Post("/api/projects/"+project.ID+"/credentials", map[string]string{
-		"provider": "discobot",
-		"name":     "My Discobot ID",
+		"provider": "discboeing",
+		"name":     "My Discboeing ID",
 		"authType": "id",
-		"apiKey":   "discobot-test-id-123",
+		"apiKey":   "discboeing-test-id-123",
 	})
 	AssertStatus(t, resp, http.StatusOK)
 
 	var cred map[string]any
 	ParseJSON(t, resp, &cred)
 
-	if cred["provider"] != "discobot" {
-		t.Errorf("Expected provider 'discobot', got %v", cred["provider"])
+	if cred["provider"] != "discboeing" {
+		t.Errorf("Expected provider 'discboeing', got %v", cred["provider"])
 	}
-	if cred["name"] != "My Discobot ID" {
-		t.Errorf("Expected name 'My Discobot ID', got %v", cred["name"])
+	if cred["name"] != "My Discboeing ID" {
+		t.Errorf("Expected name 'My Discboeing ID', got %v", cred["name"])
 	}
 	if cred["authType"] != "id" {
 		t.Errorf("Expected authType 'id', got %v", cred["authType"])

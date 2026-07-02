@@ -4,10 +4,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/scriptexec"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/scriptexec"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func TestScriptExecutionMetadata(t *testing.T) {
@@ -15,8 +15,8 @@ func TestScriptExecutionMetadata(t *testing.T) {
 
 	execution := scriptexec.Execution{
 		Script: sessionconfig.ScriptConfig{
-			Name: "discobot-commit",
-			Path: "/tmp/discobot-commit",
+			Name: "discboeing-commit",
+			Path: "/tmp/discboeing-commit",
 		},
 		Stdout:   "stdout",
 		Stderr:   "stderr",
@@ -26,8 +26,8 @@ func TestScriptExecutionMetadata(t *testing.T) {
 
 	got := scriptExecutionMetadata(execution)
 	want := &thread.ScriptExecutionMetadata{
-		ScriptName: "discobot-commit",
-		ScriptPath: "/tmp/discobot-commit",
+		ScriptName: "discboeing-commit",
+		ScriptPath: "/tmp/discboeing-commit",
 		ExitCode:   17,
 		Success:    true,
 		Stdout:     "stdout",
@@ -38,26 +38,26 @@ func TestScriptExecutionMetadata(t *testing.T) {
 	}
 }
 
-func TestDiscobotCommandMetadata(t *testing.T) {
+func TestDiscboeingCommandMetadata(t *testing.T) {
 	t.Parallel()
 
-	got := discobotCommandMetadata(sessionconfig.DiscobotCommandMetadata{
+	got := discboeingCommandMetadata(sessionconfig.DiscboeingCommandMetadata{
 		UI:          true,
 		Label:       "Commit",
 		ActiveLabel: "Committing",
 		Icon:        "git-commit",
 		Group:       "Git",
 		Order:       10,
-		CredentialRequest: []sessionconfig.DiscobotCredentialRequest{{
+		CredentialRequest: []sessionconfig.DiscboeingCredentialRequest{{
 			EnvVar:        "GH_TOKEN",
 			Name:          "GitHub credential",
 			Justification: "Authenticate push.",
-			ApprovedUses: []sessionconfig.DiscobotCredentialApprovedUse{{
+			ApprovedUses: []sessionconfig.DiscboeingCredentialApprovedUse{{
 				Description: "push with gh",
 			}},
 		}},
 	})
-	want := api.CommandDiscobotMetadata{
+	want := api.CommandDiscboeingMetadata{
 		UI:          true,
 		Label:       "Commit",
 		ActiveLabel: "Committing",
@@ -74,7 +74,7 @@ func TestDiscobotCommandMetadata(t *testing.T) {
 		}},
 	}
 	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("discobotCommandMetadata() = %#v, want %#v", got, want)
+		t.Fatalf("discboeingCommandMetadata() = %#v, want %#v", got, want)
 	}
 }
 

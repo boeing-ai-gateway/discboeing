@@ -1,5 +1,5 @@
 {
-	"name": "@discobot/ui-redesign",
+	"name": "@discboeing/ui-redesign",
 	"private": true,
 	"type": "module",
 	"scripts": {
@@ -16,7 +16,7 @@
 		"typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --compiler-warnings \"options_missing_custom_element:ignore\"",
 		"test:vitest": "vitest run",
 		"test:vitest:watch": "vitest",
-		"test:e2e:live": "DISCOBOT_LIVE_E2E=1 DISCOBOT_LIVE_E2E_API_ROOT=http://localhost:3001/api vitest run src/lib/context/test/session-events.e2e.vitest.ts"
+		"test:e2e:live": "DISCBOEING_LIVE_E2E=1 DISCBOEING_LIVE_E2E_API_ROOT=http://localhost:3001/api vitest run src/lib/context/test/session-events.e2e.vitest.ts"
 	},
 	"dependencies": {
 		"@fontsource/geist-sans": "^5.2.5",

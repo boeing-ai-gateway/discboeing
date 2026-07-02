@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 )
 
 // TestVZProvider_InitWithoutPaths tests async download initialization.

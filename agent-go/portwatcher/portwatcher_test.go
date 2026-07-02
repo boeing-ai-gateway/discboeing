@@ -11,7 +11,7 @@ import (
 func TestParseSSOutputKeepsOnlyLinesWithPID(t *testing.T) {
 	output := `LISTEN 0      4096   127.0.0.1:5900  0.0.0.0:*
 LISTEN 0      1      127.0.0.1:44949 0.0.0.0:* users:(("python3",pid=5141,fd=3))
-LISTEN 0      4096           *:3002        *:* users:(("discobot-agent-",pid=1903,fd=6))
+LISTEN 0      4096           *:3002        *:* users:(("discboeing-agent-",pid=1903,fd=6))
 LISTEN 0      4096        [::1]:8080     [::]:* users:(("node",pid=42,fd=9))`
 
 	entries := ParseSSOutput(output)
@@ -20,7 +20,7 @@ LISTEN 0      4096        [::1]:8080     [::]:* users:(("node",pid=42,fd=9))`
 	}
 
 	want := []Entry{
-		{LocalAddress: "*:3002", Port: 3002, Process: "discobot-agent-", Protocol: ProtocolUnknown, PID: 1903, FD: 6},
+		{LocalAddress: "*:3002", Port: 3002, Process: "discboeing-agent-", Protocol: ProtocolUnknown, PID: 1903, FD: 6},
 		{LocalAddress: "[::1]:8080", Port: 8080, Process: "node", Protocol: ProtocolUnknown, PID: 42, FD: 9},
 		{LocalAddress: "127.0.0.1:44949", Port: 44949, Process: "python3", Protocol: ProtocolUnknown, PID: 5141, FD: 3},
 	}

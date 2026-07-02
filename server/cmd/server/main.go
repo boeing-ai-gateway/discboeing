@@ -19,30 +19,30 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/conntrack"
-	"github.com/obot-platform/discobot/server/internal/database"
-	"github.com/obot-platform/discobot/server/internal/dispatcher"
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/handler"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/logfile"
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/routes"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/exedev"
-	"github.com/obot-platform/discobot/server/internal/sandbox/local"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/ssh"
-	"github.com/obot-platform/discobot/server/internal/startup"
-	"github.com/obot-platform/discobot/server/internal/store"
-	"github.com/obot-platform/discobot/server/internal/tlsconfig"
-	"github.com/obot-platform/discobot/server/internal/version"
-	"github.com/obot-platform/discobot/server/static"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/conntrack"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/database"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/dispatcher"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/handler"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/logfile"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/routes"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/exedev"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/local"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/ssh"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/startup"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/tlsconfig"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/version"
+	"github.com/boeing-ai-gateway/discboeing/server/static"
 )
 
 const gracefulShutdownTimeout = 10 * time.Minute
@@ -79,7 +79,7 @@ func main() {
 	}
 
 	// Log version
-	log.Printf("Discobot Server version %s", version.Get())
+	log.Printf("Discboeing Server version %s", version.Get())
 	log.Printf("Sandbox image: %s", cfg.SandboxImage)
 	if cfg.SandboxImageRemote != "" {
 		log.Printf("Remote sandbox image: %s", cfg.SandboxImageRemote)
@@ -391,7 +391,7 @@ func main() {
 	}
 
 	// Start sandbox service event handling to sync session states with sandbox states.
-	// This handles external changes (e.g., Docker containers deleted outside Discobot).
+	// This handles external changes (e.g., Docker containers deleted outside Discboeing).
 	if sandboxSvc != nil {
 		var sandboxServiceCtx context.Context
 		sandboxServiceCtx, sandboxServiceCancel = context.WithCancel(context.Background())
@@ -1594,7 +1594,7 @@ func main() {
 						Handler: h.ListWorkspaceChangeCommits,
 						Meta: routes.Meta{
 							Group:       "Hooks",
-							Description: "List Discobot workspace change commits",
+							Description: "List Discboeing workspace change commits",
 							Params:      []routes.Param{{Name: "projectId", Example: "local"}, {Name: "sessionId", Example: "abc123"}},
 						},
 					})

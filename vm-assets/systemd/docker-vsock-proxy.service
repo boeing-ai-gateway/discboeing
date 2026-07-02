@@ -1,6 +1,6 @@
 [Unit]
 Description=Docker VSOCK Proxy
-Documentation=https://github.com/obot-platform/discobot
+Documentation=https://github.com/boeing-platform/discboeing
 After=docker.service preload-image.service
 Requires=docker.service preload-image.service
 

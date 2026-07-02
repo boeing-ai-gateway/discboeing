@@ -15,10 +15,10 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 )
 
-const testRootfsArchiveName = "discobot-rootfs.tar.zst"
+const testRootfsArchiveName = "discboeing-rootfs.tar.zst"
 
 type wslDownloaderConfig struct {
 	ImageRef           string
@@ -46,7 +46,7 @@ func newWSLDownloader(cfg wslDownloaderConfig) *vm.ImageDownloader {
 func TestImageDownloaderCheckCache(t *testing.T) {
 	tempDir := t.TempDir()
 	downloader := newWSLDownloader(wslDownloaderConfig{
-		ImageRef: "ghcr.io/obot-platform/discobot-wsl:test",
+		ImageRef: "ghcr.io/boeing-ai-gateway/discboeing-wsl:test",
 		DataDir:  tempDir,
 	})
 
@@ -154,7 +154,7 @@ func TestImageDownloaderEnsureArtifactUsesLocalArchiveReportsProgress(t *testing
 func TestImageDownloaderEnsureArtifactUsesCacheReportsProgress(t *testing.T) {
 	tempDir := t.TempDir()
 	downloader := newWSLDownloader(wslDownloaderConfig{
-		ImageRef: "ghcr.io/obot-platform/discobot-wsl:test",
+		ImageRef: "ghcr.io/boeing-ai-gateway/discboeing-wsl:test",
 		DataDir:  tempDir,
 	})
 
@@ -187,13 +187,13 @@ func TestImageDownloaderEnsureArtifactUsesCacheReportsProgress(t *testing.T) {
 
 func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 	image := testImageWithLayer(t, map[string][]byte{
-		"usr/share/discobot/" + testRootfsArchiveName: []byte("downloaded-rootfs"),
+		"usr/share/discboeing/" + testRootfsArchiveName: []byte("downloaded-rootfs"),
 		"ignored.txt": []byte("ignored"),
 	})
 
 	tempDir := t.TempDir()
 	downloader := newWSLDownloader(wslDownloaderConfig{
-		ImageRef: "example.com/discobot/wsl:test",
+		ImageRef: "example.com/discboeing/wsl:test",
 		DataDir:  tempDir,
 		Image:    image,
 	})
@@ -206,7 +206,7 @@ func TestImageDownloaderDownloadCachesRootfsArtifact(t *testing.T) {
 		t.Fatalf("Download() error = %v", err)
 	}
 
-	wantDigest := vm.ComputeShortDigest("example.com/discobot/wsl:test")
+	wantDigest := vm.ComputeShortDigest("example.com/discboeing/wsl:test")
 	wantCacheDir := filepath.Join(tempDir, "images", wantDigest)
 	if artifact.Digest != wantDigest {
 		t.Fatalf("Download() digest = %q, want %q", artifact.Digest, wantDigest)
@@ -255,7 +255,7 @@ func TestImageDownloaderDownloadFailsWhenRootfsMissing(t *testing.T) {
 	})
 
 	downloader := newWSLDownloader(wslDownloaderConfig{
-		ImageRef: "example.com/discobot/wsl:test",
+		ImageRef: "example.com/discboeing/wsl:test",
 		DataDir:  t.TempDir(),
 		Image:    image,
 	})

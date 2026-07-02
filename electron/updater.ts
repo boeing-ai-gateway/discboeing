@@ -108,7 +108,7 @@ async function resolveGitHubPrereleaseFeed(endpoint: string): Promise<{
   const response = await fetch(endpoint, {
     headers: {
       Accept: "application/vnd.github+json",
-      "User-Agent": "Discobot Electron Updater",
+      "User-Agent": "Discboeing Electron Updater",
     },
   });
   if (!response.ok) {

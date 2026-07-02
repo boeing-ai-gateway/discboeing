@@ -23,7 +23,7 @@ func TestSPAHandlerServesInjectedIndexAtRoot(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.Code)
 	}
-	if !strings.Contains(resp.Body.String(), "window.__DISCOBOT_CONFIG__") {
+	if !strings.Contains(resp.Body.String(), "window.__DISCBOEING_CONFIG__") {
 		t.Fatalf("expected injected runtime config, got %q", resp.Body.String())
 	}
 	if !strings.Contains(resp.Body.String(), `"apiRoot":"/api"`) {
@@ -77,7 +77,7 @@ func TestSPAHandlerFallsBackForClientRoute(t *testing.T) {
 	if !strings.Contains(resp.Body.String(), "spa fallback") {
 		t.Fatalf("expected fallback body, got %q", resp.Body.String())
 	}
-	if !strings.Contains(resp.Body.String(), "window.__DISCOBOT_CONFIG__") {
+	if !strings.Contains(resp.Body.String(), "window.__DISCBOEING_CONFIG__") {
 		t.Fatalf("expected injected runtime config, got %q", resp.Body.String())
 	}
 }

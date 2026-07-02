@@ -20,7 +20,7 @@
 		width={size}
 	>
 		<title>Loader</title>
-		<g clip-path="url(#discobot-ai-loader-clip)">
+		<g clip-path="url(#discboeing-ai-loader-clip)">
 			<path d="M8 0V4" stroke="currentColor" stroke-width="1.5" />
 			<path
 				d="M8 16V12"
@@ -78,7 +78,7 @@
 			/>
 		</g>
 		<defs>
-			<clipPath id="discobot-ai-loader-clip">
+			<clipPath id="discboeing-ai-loader-clip">
 				<rect fill="white" height="16" width="16" />
 			</clipPath>
 		</defs>

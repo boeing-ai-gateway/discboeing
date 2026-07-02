@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
 )
 
-const builtinWorkspaceChangeCommitHookID = "discobot-workspace-change-commit"
+const builtinWorkspaceChangeCommitHookID = "discboeing-workspace-change-commit"
 
 func builtinWorkspaceChangeCommitHook() Hook {
 	return Hook{
@@ -64,7 +64,7 @@ func createWorkspaceChangeCommit(workspaceRoot string, env map[string]string, ch
 		return "", fmt.Errorf("read HEAD tree: %w", err)
 	}
 
-	tmpIndex, err := os.CreateTemp("", "discobot-workspace-change-index-*")
+	tmpIndex, err := os.CreateTemp("", "discboeing-workspace-change-index-*")
 	if err != nil {
 		return "", fmt.Errorf("create temporary git index: %w", err)
 	}
@@ -90,25 +90,25 @@ func createWorkspaceChangeCommit(workspaceRoot string, env map[string]string, ch
 	rawID := fmt.Sprintf("%s-%d", time.Now().UTC().Format("20060102T150405.000000000Z"), os.Getpid())
 	safeID := sanitizeWorkspaceChangeRefPart(rawID)
 	if sessionID == "" {
-		sessionID = env["DISCOBOT_SESSION_ID"]
+		sessionID = env["DISCBOEING_SESSION_ID"]
 	}
 	if sessionID == "" {
 		sessionID = "session"
 	}
 	safeSession := sanitizeWorkspaceChangeRefPart(sessionID)
-	ref := fmt.Sprintf("refs/discobot/workspace-change-commits/%s/%s", safeSession, safeID)
+	ref := fmt.Sprintf("refs/discboeing/workspace-change-commits/%s/%s", safeSession, safeID)
 
 	commitEnv := map[string]string{
-		"GIT_AUTHOR_NAME":     envWithDefault(env, "GIT_AUTHOR_NAME", "Discobot Workspace Change"),
-		"GIT_AUTHOR_EMAIL":    envWithDefault(env, "GIT_AUTHOR_EMAIL", "discobot-workspace-change@localhost"),
-		"GIT_COMMITTER_NAME":  envWithDefault(env, "GIT_COMMITTER_NAME", "Discobot Workspace Change"),
-		"GIT_COMMITTER_EMAIL": envWithDefault(env, "GIT_COMMITTER_EMAIL", "discobot-workspace-change@localhost"),
+		"GIT_AUTHOR_NAME":     envWithDefault(env, "GIT_AUTHOR_NAME", "Discboeing Workspace Change"),
+		"GIT_AUTHOR_EMAIL":    envWithDefault(env, "GIT_AUTHOR_EMAIL", "discboeing-workspace-change@localhost"),
+		"GIT_COMMITTER_NAME":  envWithDefault(env, "GIT_COMMITTER_NAME", "Discboeing Workspace Change"),
+		"GIT_COMMITTER_EMAIL": envWithDefault(env, "GIT_COMMITTER_EMAIL", "discboeing-workspace-change@localhost"),
 	}
 	changedFileList := strings.Join(changedFiles, " ")
 	if changedFileList == "" {
-		changedFileList = env["DISCOBOT_CHANGED_FILES"]
+		changedFileList = env["DISCBOEING_CHANGED_FILES"]
 	}
-	message := fmt.Sprintf("Discobot workspace change commit %s\n\nSession: %s\nBase: %s\nChanged files: %s\n", safeID, sessionID, base, changedFileList)
+	message := fmt.Sprintf("Discboeing workspace change commit %s\n\nSession: %s\nBase: %s\nChanged files: %s\n", safeID, sessionID, base, changedFileList)
 	commit, err := workspaceChangeGitOutput(workspaceRoot, commitEnv, []byte(message), "commit-tree", snapshotTree, "-p", base, "-F", "-")
 	if err != nil {
 		return "", fmt.Errorf("create workspace change commit: %w", err)

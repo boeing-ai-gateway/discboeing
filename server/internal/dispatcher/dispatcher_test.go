@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/database"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/database"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 type dispatcherTestEnv struct {

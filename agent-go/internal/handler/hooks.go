@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/internal/hooks"
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/hooks"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
 )
 
 // HooksStatus handles GET /hooks/status — returns hook evaluation status.
@@ -269,9 +269,9 @@ func manualSessionHookSudoEnv(hook hooks.Hook, token string) map[string]string {
 	}
 	return map[string]string{
 		sudoauth.TokenEnvVar:             token,
-		"DISCOBOT_SUDO_RUNTIME":          "bootstrap",
-		"DISCOBOT_SUDO_COMMAND":          hook.Path,
-		"DISCOBOT_SUDO_BOOTSTRAP_REASON": "manual session hook rerun " + hook.Name,
+		"DISCBOEING_SUDO_RUNTIME":          "bootstrap",
+		"DISCBOEING_SUDO_COMMAND":          hook.Path,
+		"DISCBOEING_SUDO_BOOTSTRAP_REASON": "manual session hook rerun " + hook.Name,
 	}
 }
 

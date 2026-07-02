@@ -1,4 +1,4 @@
-# Discobot Server API Documentation
+# Discboeing Server API Documentation
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ export ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef012345678
 go run ./cmd/server/main.go
 
 # Run with PostgreSQL
-export DATABASE_DSN="postgres://user:pass@localhost:5432/discobot?sslmode=disable"
+export DATABASE_DSN="postgres://user:pass@localhost:5432/discboeing?sslmode=disable"
 go run ./cmd/server/main.go
 ```
 
@@ -67,14 +67,14 @@ server/
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `PORT` | No | 8080 | Server port |
-| `DATABASE_DSN` | No | sqlite3://./discobot.db | Database connection string |
+| `DATABASE_DSN` | No | sqlite3://./discboeing.db | Database connection string |
 | `AUTH_ENABLED` | No | false | Enable authentication (requires OIDC setup) |
 | `ENCRYPTION_KEY` | When auth enabled | dev default | 32-byte hex-encoded key for credential encryption |
 | `CORS_ORIGINS` | No | Computed from HTTP/HTTPS ports plus local dev UI ports | Comma-separated allowed origins; supports `{HTTP_PORT}` and `{HTTPS_PORT}` placeholders |
 | `WORKSPACE_DIR` | No | ./workspaces | Directory for workspace files |
-| `OIDC_ISSUER_URL` | No | - | OIDC issuer URL for Discobot login |
-| `OIDC_CLIENT_ID` | No | - | OIDC client ID for Discobot login |
-| `OIDC_CLIENT_SECRET` | No | - | OIDC client secret for Discobot login |
+| `OIDC_ISSUER_URL` | No | - | OIDC issuer URL for Discboeing login |
+| `OIDC_CLIENT_ID` | No | - | OIDC client ID for Discboeing login |
+| `OIDC_CLIENT_SECRET` | No | - | OIDC client secret for Discboeing login |
 | `OIDC_SCOPES` | No | openid,email,profile | Comma-separated OIDC scopes |
 
 ### Anonymous User Mode (Default)
@@ -132,7 +132,7 @@ The database schema does NOT use cascading deletes (`ON DELETE CASCADE`). All re
 3. Provider redirects back to `/auth/callback` with code
 4. Server exchanges code for tokens, verifies the ID token, and reads user claims
 5. Server creates/updates user in DB, creates session
-6. Session token stored in `discobot_session` cookie (HttpOnly, 30 days)
+6. Session token stored in `discboeing_session` cookie (HttpOnly, 30 days)
 7. Session token is hashed (SHA256) before storage in DB
 
 ### Multi-tenancy
@@ -179,7 +179,7 @@ The database schema does NOT use cascading deletes (`ON DELETE CASCADE`). All re
 
 ## API Routes
 
-All API routes require authentication via session cookie (`discobot_session`) unless noted.
+All API routes require authentication via session cookie (`discboeing_session`) unless noted.
 
 ### Auth Routes (No Auth Required)
 
@@ -367,7 +367,7 @@ TEST_POSTGRES=1 go test ./internal/handler/...
 ```
 
 This will:
-1. Remove any existing `discobot-test-postgres` container
+1. Remove any existing `discboeing-test-postgres` container
 2. Start a fresh PostgreSQL 16 container on port 5433
 3. Run all tests
 4. On success: remove the container
@@ -375,12 +375,12 @@ This will:
 
 To connect to a failed test database:
 ```bash
-psql postgres://discobot:discobot@localhost:5433/discobot_test?sslmode=disable
+psql postgres://discboeing:discboeing@localhost:5433/discboeing_test?sslmode=disable
 ```
 
 To manually remove the container:
 ```bash
-docker rm -f discobot-test-postgres
+docker rm -f discboeing-test-postgres
 ```
 
 ### Test Architecture

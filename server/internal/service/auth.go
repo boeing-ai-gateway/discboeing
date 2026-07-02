@@ -21,10 +21,10 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/oauth2"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/encryption"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/encryption"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // AuthService handles authentication operations
@@ -502,8 +502,8 @@ func (s *AuthService) getOrCreateOIDCClientRegistration(ctx context.Context) (*o
 		return nil, err
 	}
 	reqBody := map[string]any{
-		"client_name":                "Discobot",
-		"discobot_installation_id":   installationID,
+		"client_name":                "Discboeing",
+		"discboeing_installation_id":   installationID,
 		"application_type":           "web",
 		"grant_types":                []string{"authorization_code"},
 		"response_types":             []string{"code"},

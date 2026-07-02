@@ -204,7 +204,7 @@ test("parseChatStreamMessageValue attaches source URLs to WebSearch output", asy
 				toolCallId: "search-1",
 				toolName: "WebSearch",
 				state: "output-available",
-				input: { query: "Discobot GitHub" },
+				input: { query: "Discboeing GitHub" },
 				output: {
 					type: "web_search_call",
 					status: "completed",
@@ -212,9 +212,9 @@ test("parseChatStreamMessageValue attaches source URLs to WebSearch output", asy
 			},
 			{
 				type: "source-url",
-				sourceId: "https://github.com/obot-platform/discobot",
-				url: "https://github.com/obot-platform/discobot",
-				title: "Discobot",
+				sourceId: "https://github.com/boeing-ai-gateway/discboeing",
+				url: "https://github.com/boeing-ai-gateway/discboeing",
+				title: "Discboeing",
 			},
 		],
 	});
@@ -228,8 +228,8 @@ test("parseChatStreamMessageValue attaches source URLs to WebSearch output", asy
 			status: "completed",
 			results: [
 				{
-					title: "Discobot",
-					url: "https://github.com/obot-platform/discobot",
+					title: "Discboeing",
+					url: "https://github.com/boeing-ai-gateway/discboeing",
 				},
 			],
 		},
@@ -246,7 +246,7 @@ test("parseChatStreamMessageValue attaches text URLs to WebSearch output", async
 				toolCallId: "search-1",
 				toolName: "WebSearch",
 				state: "output-available",
-				input: { query: "Discobot GitHub" },
+				input: { query: "Discboeing GitHub" },
 				output: {
 					type: "web_search_call",
 					status: "completed",
@@ -254,7 +254,7 @@ test("parseChatStreamMessageValue attaches text URLs to WebSearch output", async
 			},
 			{
 				type: "text",
-				text: "https://github.com/obot-platform/discobot",
+				text: "https://github.com/boeing-ai-gateway/discboeing",
 				state: "done",
 			},
 		],
@@ -269,8 +269,8 @@ test("parseChatStreamMessageValue attaches text URLs to WebSearch output", async
 			status: "completed",
 			results: [
 				{
-					title: "https://github.com/obot-platform/discobot",
-					url: "https://github.com/obot-platform/discobot",
+					title: "https://github.com/boeing-ai-gateway/discboeing",
+					url: "https://github.com/boeing-ai-gateway/discboeing",
 				},
 			],
 		},
@@ -282,18 +282,18 @@ test("parseChatStreamChunk accepts source-url chunks", async () => {
 		JSON.stringify({
 			type: "source-url",
 			sourceType: "url",
-			sourceId: "https://github.com/obot-platform/discobot",
-			url: "https://github.com/obot-platform/discobot",
-			title: "Discobot",
+			sourceId: "https://github.com/boeing-ai-gateway/discboeing",
+			url: "https://github.com/boeing-ai-gateway/discboeing",
+			title: "Discboeing",
 		}),
 	);
 
 	assert.deepEqual(parsed, {
 		type: "source-url",
 		sourceType: "url",
-		sourceId: "https://github.com/obot-platform/discobot",
-		url: "https://github.com/obot-platform/discobot",
-		title: "Discobot",
+		sourceId: "https://github.com/boeing-ai-gateway/discboeing",
+		url: "https://github.com/boeing-ai-gateway/discboeing",
+		title: "Discboeing",
 	});
 });
 

@@ -78,7 +78,7 @@ The persisted prompt payload is encrypted at rest while the submission is pendin
 ### State Diagram
 
 ```
-    ┌─────────┐     commit()     ┌──────────┐  /discobot-commit   ┌────────────┐
+    ┌─────────┐     commit()     ┌──────────┐  /discboeing-commit   ┌────────────┐
     │  none   │ ───────────────► │ pending  │ ──────────────────► │ committing │
     └─────────┘                  └──────────┘                     └──────┬─────┘
          ▲                                                               │
@@ -97,14 +97,14 @@ The persisted prompt payload is encrypted at rest while the submission is pendin
 | ------------ | ------------------------------------------------------------------------- |
 | `""` (empty) | No commit in progress (default state)                                     |
 | `pending`    | Commit requested, job enqueued, waiting to send to agent                  |
-| `committing` | Operation command (`/discobot-commit`) sent to agent, waiting for patches |
+| `committing` | Operation command (`/discboeing-commit`) sent to agent, waiting for patches |
 | `completed`  | Commit completed successfully                                             |
 | `failed`     | Commit failed. Check `commitError` for details.                           |
 
-Toolbar command actions are discovered from agent command metadata. Discobot
-command frontmatter marks UI-visible commands with `discobot-ui: true`, and can
-also provide `discobot-label`, `discobot-active-label`, `discobot-icon`,
-`discobot-order`, and `discobot-group` metadata to drive button labels,
+Toolbar command actions are discovered from agent command metadata. Discboeing
+command frontmatter marks UI-visible commands with `discboeing-ui: true`, and can
+also provide `discboeing-label`, `discboeing-active-label`, `discboeing-icon`,
+`discboeing-order`, and `discboeing-group` metadata to drive button labels,
 running-state labels, toolbar icons (using Lucide icon names), ordering, and
 dropdown grouping. The running indicator itself is driven by the selected
 thread's `activeCommand`; empty or omitted values mean no command is running.
@@ -159,9 +159,9 @@ state. Those labels are not backend session lifecycle statuses.
 
 ### 1. User Clicks Commit Button
 
-The commit button now sends `/discobot-commit` to the active thread. There is no public session commit API anymore.
+The commit button now sends `/discboeing-commit` to the active thread. There is no public session commit API anymore.
 For local workspaces, that slash command runs inside the sandbox, prepares local commit(s), and then uses the `RequestCommitPull` approval flow.
-For git-URL workspaces cloned in the sandbox, `/discobot-commit` instead prepares commit(s), pushes a branch, and opens an upstream pull request directly.
+For git-URL workspaces cloned in the sandbox, `/discboeing-commit` instead prepares commit(s), pushes a branch, and opens an upstream pull request directly.
 
 The server-side session commit job is still used after a `RequestCommitPull` approval is accepted:
 
@@ -170,7 +170,7 @@ The server-side session commit job is still used after a `RequestCommitPull` app
 - The UI presents approve/reject controls to the user
 - `POST /api/projects/{projectId}/sessions/{sessionId}/threads/{threadId}/answer/{questionId}` submits the decision
 - When the server receives an approved `RequestCommitPull` answer, it enqueues the session commit job
-- `PerformCommit` requests that exact prepared series and applies it without re-sending `/discobot-commit` when commits are already present
+- `PerformCommit` requests that exact prepared series and applies it without re-sending `/discboeing-commit` when commits are already present
 
 ### 2. Job Execution (PerformCommit)
 
@@ -206,7 +206,7 @@ func PerformCommit(ctx, projectID, sessionID) error {
 
     // Step 2: Ask the sandbox to prepare commits if needed.
     if session.CommitStatus == "pending" {
-        err := sendChatMessage(sessionID, "/discobot-commit")
+        err := sendChatMessage(sessionID, "/discboeing-commit")
         if err != nil {
             setCommitFailed(session, "Failed to send commit command: " + err.Error())
             return nil
@@ -265,7 +265,7 @@ func setCommitFailed(session, errorMsg) {
 
 ### Rebase Flow
 
-Rebase is now a sandbox-local git action triggered through `/discobot-rebase`.
+Rebase is now a sandbox-local git action triggered through `/discboeing-rebase`.
 It no longer uses a server endpoint, background job, or session commit state.
 The sandbox repository is expected to track its origin branch so the command can
 fetch the tracked remote and rebase onto the configured upstream directly,
@@ -328,7 +328,7 @@ The job is designed to handle server restarts safely:
 
 | Job restarts when...         | State                                      | Action                                                                               |
 | ---------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Before sending to agent      | `pending`, `appliedCommit=""`              | Resolve current `targetRef`, try existing patches, send `/discobot-commit` if needed |
+| Before sending to agent      | `pending`, `appliedCommit=""`              | Resolve current `targetRef`, try existing patches, send `/discboeing-commit` if needed |
 | After sending, before apply  | `committing`, `appliedCommit=""`           | Resolve current `targetRef`, fetch patches, apply                                    |
 | After apply, before complete | `committing`, `appliedCommit` set          | Verify commit exists, mark `completed`                                               |
 | Already done                 | `completed`                                | No-op                                                                                |

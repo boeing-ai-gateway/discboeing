@@ -9,9 +9,9 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 // ListProjects returns all projects for the current user

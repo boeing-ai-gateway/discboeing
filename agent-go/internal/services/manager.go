@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
 )
 
 // subscriber receives live output events from a managed service.
@@ -95,7 +95,7 @@ func (mgr *Manager) SetEnvSnapshot(fn func() map[string]string) {
 
 // desktopService is the built-in VNC desktop service.
 var desktopService = ServiceInfo{
-	ID:      "discobot-desktop",
+	ID:      "discboeing-desktop",
 	Name:    "Desktop",
 	HTTP:    6080,
 	Path:    "",
@@ -105,7 +105,7 @@ var desktopService = ServiceInfo{
 
 // vscodeService is the built-in code-server service.
 var vscodeService = ServiceInfo{
-	ID:          "discobot-vscode",
+	ID:          "discboeing-vscode",
 	Name:        "VS Code",
 	Description: "Browser-based VS Code workspace",
 	HTTP:        13337,

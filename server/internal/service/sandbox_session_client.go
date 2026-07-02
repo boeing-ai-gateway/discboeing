@@ -8,9 +8,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/conntrack"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/conntrack"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
 )
 
 // SessionInitializer breaks the circular dependency between SandboxService and SessionService.
@@ -304,7 +304,7 @@ func (c *SessionClient) GetCommits(ctx context.Context, req GetCommitsRequest) (
 	})
 }
 
-// ListWorkspaceChangeCommits retrieves Discobot workspace change commits from the sandbox.
+// ListWorkspaceChangeCommits retrieves Discboeing workspace change commits from the sandbox.
 func (c *SessionClient) ListWorkspaceChangeCommits(ctx context.Context) (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
 	return withReconciliation(ctx, c, func() (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
 		return c.inner.ListWorkspaceChangeCommits(ctx, c.sessionID)

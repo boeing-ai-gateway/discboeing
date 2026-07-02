@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import os from "node:os";
 
 const selectedPlatform =
-  process.env.DISCOBOT_DEV_RUNTIME_PLATFORM || os.platform();
+  process.env.DISCBOEING_DEV_RUNTIME_PLATFORM || os.platform();
 const shouldPrintCommand = process.argv.includes("--print-command");
 const isWindows = process.platform === "win32";
 

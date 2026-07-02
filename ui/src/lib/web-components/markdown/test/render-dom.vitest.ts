@@ -40,7 +40,7 @@ test("renderMarkdownTree removes Mermaid body artifacts after failures", async (
 
 	await waitForRender();
 
-	expect(document.body.querySelector('[id^="ddiscobot-mermaid-"]')).toBeNull();
+	expect(document.body.querySelector('[id^="ddiscboeing-mermaid-"]')).toBeNull();
 	expect(document.body.textContent).not.toContain("Syntax error in text");
 	expect(container.textContent).toContain("Unable to render Mermaid diagram.");
 	expect(container.textContent).toContain("Mermaid syntax error");

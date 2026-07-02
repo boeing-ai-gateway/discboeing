@@ -2,15 +2,15 @@ package sessionconfig
 
 import "path/filepath"
 
-var discobotSystemRoots = []string{
-	"/opt/discobot",
-	"/usr/local/share/discobot",
-	"/usr/share/discobot",
+var discboeingSystemRoots = []string{
+	"/opt/discboeing",
+	"/usr/local/share/discboeing",
+	"/usr/share/discboeing",
 }
 
-func discobotSystemPaths(rel string) []string {
-	paths := make([]string, 0, len(discobotSystemRoots))
-	for _, root := range discobotSystemRoots {
+func discboeingSystemPaths(rel string) []string {
+	paths := make([]string, 0, len(discboeingSystemRoots))
+	for _, root := range discboeingSystemRoots {
 		paths = append(paths, filepath.Join(root, rel))
 	}
 	return paths

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // ListProjectCacheVolumes lists provider cache volumes for a project when supported.

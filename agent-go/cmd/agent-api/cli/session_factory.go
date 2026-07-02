@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/clisession"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/clisession"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
 )
 
 func newRemoteSession(cfg *config.Config) clisession.Session {

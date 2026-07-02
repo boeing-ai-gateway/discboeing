@@ -9,7 +9,7 @@ import (
 
 	regexp "github.com/grafana/regexp"
 
-	"github.com/obot-platform/discobot/agent-go/internal/grep/internal/lineutil"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/grep/internal/lineutil"
 )
 
 const maxPoolBufSize = 1 << 20 // 1MB - don't pool buffers larger than this

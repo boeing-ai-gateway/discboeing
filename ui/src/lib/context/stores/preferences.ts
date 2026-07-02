@@ -23,8 +23,8 @@ export const TOP_BAR_ICON_ONLY_STORAGE_KEY = "header.top-bar.icon-only";
 export const AUTO_SCROLL_ON_STREAM_STORAGE_KEY = "chat.auto-scroll";
 export const RECENT_THREADS_VISIBLE_LIMIT_STORAGE_KEY =
 	"recent.threads.visible.limit";
-export const PROMPT_HISTORY_STORAGE_KEY = "discobot:composer-history";
-export const PINNED_PROMPTS_STORAGE_KEY = "discobot:composer-history:pinned";
+export const PROMPT_HISTORY_STORAGE_KEY = "discboeing:composer-history";
+export const PINNED_PROMPTS_STORAGE_KEY = "discboeing:composer-history:pinned";
 export const DEFAULT_PREFERRED_IDE: PreferredIde = "zed";
 export const DEFAULT_RECENT_THREADS_VISIBLE_LIMIT = 1;
 export const RECENT_THREADS_VISIBLE_LIMIT_PRESETS = [1, 4, 8, 12] as const;

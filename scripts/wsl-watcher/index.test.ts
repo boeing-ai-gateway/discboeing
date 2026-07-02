@@ -8,7 +8,7 @@ import type { CommandRunner } from "../vz-watcher/watcher.js";
 import { WslWatcher } from "./index.js";
 
 test("doBuild publishes a digest-named archive and rotates it when content changes", async () => {
-	const rootDir = await mkdtemp(join(tmpdir(), "discobot-wsl-watcher-"));
+	const rootDir = await mkdtemp(join(tmpdir(), "discboeing-wsl-watcher-"));
 	const envFilePath = join(rootDir, "server", ".env");
 	const outputDir = join(rootDir, "build", "wsl");
 
@@ -46,11 +46,11 @@ test("doBuild publishes a digest-named archive and rotates it when content chang
 	assert.ok(firstPath, "expected first WSL rootfs path to be written to .env");
 	assert.match(
 		basename(firstPath),
-		/^discobot-rootfs-[0-9a-f]{12}\.tar\.zst$/,
+		/^discboeing-rootfs-[0-9a-f]{12}\.tar\.zst$/,
 		"expected first rootfs archive filename to include a digest",
 	);
 	await stat(firstPath);
-	await assert.rejects(stat(join(outputDir, "discobot-rootfs.tar.zst")));
+	await assert.rejects(stat(join(outputDir, "discboeing-rootfs.tar.zst")));
 
 	await watcher.doBuild();
 
@@ -72,7 +72,7 @@ test("doBuild publishes a digest-named archive and rotates it when content chang
 		assert.equal(call.command, "docker");
 		assert.equal(call.cwd, rootDir);
 		assert.deepEqual(call.args.slice(0, 4), ["build", "--target", "wsl-image", "-t"]);
-		assert.match(call.args[4] ?? "", /^discobot-wsl-watcher-extract:/);
+		assert.match(call.args[4] ?? "", /^discboeing-wsl-watcher-extract:/);
 		assert.equal(call.args[5], ".");
 	}
 
@@ -80,7 +80,7 @@ test("doBuild publishes a digest-named archive and rotates it when content chang
 	assert.equal(createCalls.length, 2, "expected one docker create per watcher build");
 	assert.deepEqual(
 		createCalls.map((call) => call.args.slice(1)),
-		buildCalls.map((call) => [call.args[4], "/__discobot_artifact__"]),
+		buildCalls.map((call) => [call.args[4], "/__discboeing_artifact__"]),
 		"expected docker create to use the image built for each watcher build with an explicit artifact-only command",
 	);
 
@@ -89,10 +89,10 @@ test("doBuild publishes a digest-named archive and rotates it when content chang
 	for (const [index, call] of cpCalls.entries()) {
 		assert.equal(call.command, "docker");
 		assert.equal(call.cwd, rootDir);
-		assert.equal(call.args[1], `container-${index + 1}:/discobot-rootfs.tar.zst`);
+		assert.equal(call.args[1], `container-${index + 1}:/discboeing-rootfs.tar.zst`);
 		assert.equal(
 			call.args[2],
-			"build/wsl/discobot-rootfs.tar.zst",
+			"build/wsl/discboeing-rootfs.tar.zst",
 			"expected docker cp to use a project-relative path for WSL-routed Docker",
 		);
 	}

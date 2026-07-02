@@ -57,26 +57,26 @@ func TestGrep_PatternStartingWithDashWorksWithRipgrep(t *testing.T) {
 // TestGrep_HiddenDirAsRoot_PureGo verifies the pure-Go fallback searches inside
 // a hidden directory when it is the explicit search path.
 func TestGrep_HiddenDirAsRoot_PureGo(t *testing.T) {
-	t.Setenv("DISCOBOT_NO_RIPGREP", "1")
+	t.Setenv("DISCBOEING_NO_RIPGREP", "1")
 
 	cwd := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cwd, ".discobot", "hooks"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(cwd, ".discboeing", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cwd, ".discobot", "hooks", "setup.sh"), []byte("# TODO: setup\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cwd, ".discboeing", "hooks", "setup.sh"), []byte("# TODO: setup\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	e := New(cwd, t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Grep", map[string]any{
 		"pattern": "TODO",
-		"path":    ".discobot",
+		"path":    ".discboeing",
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
 	if !strings.Contains(out, "TODO") {
-		t.Fatalf("expected match inside .discobot, got: %q", out)
+		t.Fatalf("expected match inside .discboeing, got: %q", out)
 	}
 }
 
@@ -88,22 +88,22 @@ func TestGrep_HiddenDirAsRoot_Rg(t *testing.T) {
 	}
 
 	cwd := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cwd, ".discobot", "hooks"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(cwd, ".discboeing", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(cwd, ".discobot", "hooks", "setup.sh"), []byte("# TODO: setup\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(cwd, ".discboeing", "hooks", "setup.sh"), []byte("# TODO: setup\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	e := New(cwd, t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Grep", map[string]any{
 		"pattern": "TODO",
-		"path":    ".discobot",
+		"path":    ".discboeing",
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
 	if !strings.Contains(out, "TODO") {
-		t.Fatalf("expected match inside .discobot, got: %q", out)
+		t.Fatalf("expected match inside .discboeing, got: %q", out)
 	}
 }

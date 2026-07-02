@@ -5,9 +5,9 @@ import (
 	"os"
 	"runtime"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/startup"
-	"github.com/obot-platform/discobot/server/internal/version"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/startup"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/version"
 )
 
 // GetServerConfig returns public server configuration

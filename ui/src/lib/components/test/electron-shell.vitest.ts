@@ -75,7 +75,7 @@ test("electron preload exposes the desktop bridge through the preload API", () =
 
 	assert.match(
 		source,
-		/contextBridge\.exposeInMainWorld\("__DISCOBOT_DESKTOP__"/,
+		/contextBridge\.exposeInMainWorld\("__DISCBOEING_DESKTOP__"/,
 	);
 	assert.match(source, /kind: "electron"/);
 	assert.match(source, /desktop:window-minimize/);
@@ -98,10 +98,10 @@ test("electron preload exposes the desktop bridge through the preload API", () =
 test("electron server bootstrap mirrors the desktop sidecar contract", () => {
 	const source = readSource(ELECTRON_SERVER_MODULE);
 
-	assert.match(source, /DISCOBOT_DESKTOP_RUNTIME: "electron"/);
-	assert.match(source, /DISCOBOT_DESKTOP_SECRET: state\.secret/);
+	assert.match(source, /DISCBOEING_DESKTOP_RUNTIME: "electron"/);
+	assert.match(source, /DISCBOEING_DESKTOP_SECRET: state\.secret/);
 	assert.match(source, /STDIN_KEEPALIVE: "true"/);
-	assert.match(source, /app:\/\/discobot/);
+	assert.match(source, /app:\/\/discboeing/);
 	assert.match(source, /http:\/\/localhost:3100/);
 });
 

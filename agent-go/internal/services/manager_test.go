@@ -256,7 +256,7 @@ func TestStartServiceReloadsWorkspaceEnvOnEachLaunch(t *testing.T) {
 	outputPath := filepath.Join(workspaceRoot, "workspace-env.txt")
 	t.Setenv("HOME", homeDir)
 
-	envDir := filepath.Join(workspaceRoot, ".discobot")
+	envDir := filepath.Join(workspaceRoot, ".discboeing")
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll(envDir) failed: %v", err)
 	}

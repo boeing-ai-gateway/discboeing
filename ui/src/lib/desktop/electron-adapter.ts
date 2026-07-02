@@ -24,7 +24,7 @@ function getElectronBridge(): DesktopRendererBridge | null {
 	if (typeof window === "undefined") {
 		return null;
 	}
-	return window.__DISCOBOT_DESKTOP__ ?? null;
+	return window.__DISCBOEING_DESKTOP__ ?? null;
 }
 
 export function detectElectronRuntime(): boolean {

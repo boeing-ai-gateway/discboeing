@@ -52,12 +52,12 @@ func getConsoleLogDir() string {
         homeDir, _ := os.UserHomeDir()
         stateHome = filepath.Join(homeDir, ".local", "state")
     }
-    return filepath.Join(stateHome, "discobot", "vz")
+    return filepath.Join(stateHome, "discboeing", "vz")
 }
 
 // Configure VM settings
 vmConfig := vm.Config{
-    DataDir:       "/var/lib/discobot/vz",     // VM data directory
+    DataDir:       "/var/lib/discboeing/vz",     // VM data directory
     ConsoleLogDir: getConsoleLogDir(),         // Console logs (XDG-compliant)
     KernelPath:    "/path/to/vmlinuz",         // Linux kernel
     InitrdPath:    "/path/to/initrd",          // Initial ramdisk (optional)
@@ -185,11 +185,11 @@ Metadata is shared via VirtioFS, mounted read-only in the guest:
 
 ```bash
 # In VM init script
-mkdir -p /run/discobot/metadata
-mount -t virtiofs discobot-meta /run/discobot/metadata
+mkdir -p /run/discboeing/metadata
+mount -t virtiofs discboeing-meta /run/discboeing/metadata
 ```
 
-The agent reads configuration from `/run/discobot/metadata/metadata.json`:
+The agent reads configuration from `/run/discboeing/metadata/metadata.json`:
 
 ```json
 {
@@ -231,7 +231,7 @@ Each project VM uses a **dual-disk setup**:
 
 ### Project Resource Updates
 
-Discobot exposes a project-scoped resources API for the VZ provider:
+Discboeing exposes a project-scoped resources API for the VZ provider:
 
 - `GET /api/projects/{projectId}/resources`
 - `POST /api/projects/{projectId}/resources`
@@ -248,7 +248,7 @@ Disk growth resizes the sparse host disk image before the next boot.
 ### Host Inspection Container
 
 Each project VM also starts a Docker-managed troubleshooting container named
-`discobot-host-inspect` from the sandbox image. It runs privileged with host
+`discboeing-host-inspect` from the sandbox image. It runs privileged with host
 PID, network, IPC, UTS, and cgroup namespaces inside the VM and blocks until
 Docker stops it, trapping `SIGTERM`, `SIGINT`, and `SIGQUIT` for a clean exit.
 
@@ -267,8 +267,8 @@ if stateHome == "" {
     homeDir, _ := os.UserHomeDir()
     stateHome = filepath.Join(homeDir, ".local", "state")
 }
-vmConfig.ConsoleLogDir = filepath.Join(stateHome, "discobot", "vz")
-// Results in: ~/.local/state/discobot/vz/project-{projectID}/console.log
+vmConfig.ConsoleLogDir = filepath.Join(stateHome, "discboeing", "vz")
+// Results in: ~/.local/state/discboeing/vz/project-{projectID}/console.log
 ```
 
 Console logs include:
@@ -369,7 +369,7 @@ VM data is persisted across multiple locations:
     └── console.log               # VM console output
 ```
 
-Example with XDG compliance: `~/.local/state/discobot/vz/project-{projectID}/console.log`
+Example with XDG compliance: `~/.local/state/discboeing/vz/project-{projectID}/console.log`
 
 ### Lifecycle
 On server restart:
@@ -395,7 +395,7 @@ The binary must be signed with virtualization entitlements:
 ```
 
 ```bash
-codesign --entitlements vz.entitlements -s - ./discobot-server
+codesign --entitlements vz.entitlements -s - ./discboeing-server
 ```
 
 ## Limitations

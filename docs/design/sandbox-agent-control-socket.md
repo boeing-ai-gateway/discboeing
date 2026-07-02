@@ -2,7 +2,7 @@
 
 ## Summary
 
-Discobot maintains one persistent sandbox agent control WebSocket for each
+Discboeing maintains one persistent sandbox agent control WebSocket for each
 running agent sandbox. The server initiates the connection to the agent-api
 WebSocket endpoint inside the sandbox; the agent accepts that connection and
 uses it as the shared server-agent control socket.
@@ -24,7 +24,7 @@ the existing sandbox HTTP/SSE endpoints.
 - Use a single persistent server-agent WebSocket per sandbox.
 - Support multiple logical feature streams over that socket.
 - Keep the user's workspace repository as the source of truth.
-- Avoid a Discobot-owned bare repository or repo synchronization layer.
+- Avoid a Discboeing-owned bare repository or repo synchronization layer.
 - Avoid Git hooks for branch authorization.
 - Let the sandbox use normal Git commands: `clone`, `fetch`, `pull`, and `push`.
 - Restrict sandbox pushes to a session-specific branch.
@@ -139,12 +139,12 @@ The sandbox agent listens on localhost inside the sandbox, for example:
 http://127.0.0.1:<port>/workspace.git
 ```
 
-The agent configures the sandbox checkout with a Discobot remote whose push
+The agent configures the sandbox checkout with a Discboeing remote whose push
 refspec targets the session branch:
 
 ```bash
-git remote add discobot http://127.0.0.1:<port>/workspace.git
-git config remote.discobot.push HEAD:refs/heads/discobot/<session-id>
+git remote add discboeing http://127.0.0.1:<port>/workspace.git
+git config remote.discboeing.push HEAD:refs/heads/discboeing/<session-id>
 ```
 
 For each local HTTP request, the Git feature opens a stream named `git:<id>`.
@@ -201,7 +201,7 @@ configuration injected through environment variables:
 ```text
 http.receivepack=true
 receive.hideRefs=refs/
-receive.hideRefs=!refs/heads/discobot/<session-id>
+receive.hideRefs=!refs/heads/discboeing/<session-id>
 receive.denyDeletes=true
 receive.denyNonFastForwards=true
 ```
@@ -211,7 +211,7 @@ hidden ref by `git push` are rejected. Hiding `refs/` and then un-hiding the
 session branch means the sandbox can only update:
 
 ```text
-refs/heads/discobot/<session-id>
+refs/heads/discboeing/<session-id>
 ```
 
 The injected config is scoped to the `git http-backend` process for the current
@@ -226,16 +226,16 @@ narrower read access.
 With the push policy above, the sandbox can modify only:
 
 - objects uploaded as part of the push, and
-- `refs/heads/discobot/<session-id>`.
+- `refs/heads/discboeing/<session-id>`.
 
 It should not be able to update `main`, tags, `HEAD`, Git config, hooks, the
 index, or working tree files through Git smart HTTP. Uploaded objects are still
-untrusted input and may be inspected by Discobot before being applied or
+untrusted input and may be inspected by Discboeing before being applied or
 surfaced in privileged flows.
 
 ## Checked-out branch behavior
 
-Because the sandbox is only allowed to push to its dedicated Discobot branch, it
+Because the sandbox is only allowed to push to its dedicated Discboeing branch, it
 should not push to the branch checked out in the user's workspace. This avoids
 Git's normal refusal to update the currently checked-out branch in a non-bare
 repository.
@@ -273,5 +273,5 @@ part of the dedicated-branch policy.
 - What branch naming should be used for sessions with user-visible names,
   deleted sessions, or recreated sandboxes?
 - How should the UI present the session branch and any pushed changes?
-- Should Discobot validate the pushed branch after receive and mark it trusted,
+- Should Discboeing validate the pushed branch after receive and mark it trusted,
   rejected, or pending review?

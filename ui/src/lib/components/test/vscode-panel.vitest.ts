@@ -13,7 +13,7 @@ const EDITOR_CONTROL_MODULE = path.resolve(
 );
 const VSCODE_THEME_EXTENSION = path.resolve(
 	import.meta.dirname,
-	"../../../../../container-assets/code-server/extensions/discobot.discobot-theme/dist/web-extension.js",
+	"../../../../../container-assets/code-server/extensions/discboeing.discboeing-theme/dist/web-extension.js",
 );
 
 const DOCKERFILE = path.resolve(
@@ -23,7 +23,7 @@ const DOCKERFILE = path.resolve(
 
 const VSCODE_SYSTEMD_SERVICE = path.resolve(
 	import.meta.dirname,
-	"../../../../../container-assets/systemd/discobot-vscode-backend.service",
+	"../../../../../container-assets/systemd/discboeing-vscode-backend.service",
 );
 
 function readDockerfileSource() {
@@ -59,11 +59,11 @@ test("vscode panel syncs the theme file for the embedded editor", () => {
 	assert.match(panelSource, /syncEditorTheme\(sessionId, resolvedTheme\)/);
 	assert.match(
 		controlSource,
-		/export const VSCODE_THEME_FILE_PATH = "~\/\.discobot\/editor\/\.vscode-theme\.json";/,
+		/export const VSCODE_THEME_FILE_PATH = "~\/\.discboeing\/editor\/\.vscode-theme\.json";/,
 	);
 	assert.match(
 		controlSource,
-		/export const VSCODE_CONTROL_FILE_PATH =\s*"~\/\.discobot\/editor\/\.vscode-control\.json";/,
+		/export const VSCODE_CONTROL_FILE_PATH =\s*"~\/\.discboeing\/editor\/\.vscode-control\.json";/,
 	);
 	assert.match(
 		controlSource,
@@ -105,7 +105,7 @@ test("vscode theme extension consumes open-file control commands", () => {
 
 	assert.match(
 		source,
-		/const editorStateDirRelativeToHome = "\.discobot\/editor";/,
+		/const editorStateDirRelativeToHome = "\.discboeing\/editor";/,
 	);
 	assert.match(source, /const controlFilePath = "\.vscode-control\.json";/);
 	assert.match(
@@ -130,11 +130,11 @@ test("dockerfile does not ship stale code-server extension registry", () => {
 
 	assert.match(
 		source,
-		/code-server --install-extension svelte\.svelte-vscode --extensions-dir \/opt\/discobot\/code-server-defaults\/extensions \\\n\s+&& rm -f \/opt\/discobot\/code-server-defaults\/extensions\/extensions\.json \\/,
+		/code-server --install-extension svelte\.svelte-vscode --extensions-dir \/opt\/discboeing\/code-server-defaults\/extensions \\\n\s+&& rm -f \/opt\/discboeing\/code-server-defaults\/extensions\/extensions\.json \\/,
 	);
 	assert.match(
 		source,
-		/COPY --chown=1000:1000 container-assets\/code-server\/ \/opt\/discobot\/code-server-defaults\//,
+		/COPY --chown=1000:1000 container-assets\/code-server\/ \/opt\/discboeing\/code-server-defaults\//,
 	);
 });
 
@@ -143,18 +143,18 @@ test("vscode service forces an extension rescan after seeding bundled theme", ()
 
 	assert.match(
 		source,
-		/rm -rf \/home\/discobot\/\.local\/share\/discobot-code-server\/extensions\/discobot\.discobot-theme && cp -r \/opt\/discobot\/code-server-defaults\/extensions\/discobot\.discobot-theme/,
+		/rm -rf \/home\/discboeing\/\.local\/share\/discboeing-code-server\/extensions\/discboeing\.discboeing-theme && cp -r \/opt\/discboeing\/code-server-defaults\/extensions\/discboeing\.discboeing-theme/,
 	);
 	assert.match(
 		source,
-		/rm -f \/home\/discobot\/\.local\/share\/discobot-code-server\/extensions\/extensions\.json/,
+		/rm -f \/home\/discboeing\/\.local\/share\/discboeing-code-server\/extensions\/extensions\.json/,
 	);
 	assert.match(
 		source,
-		/\/home\/discobot\/\.local\/share\/discobot-code-server\/extensions\/\.obsolete/,
+		/\/home\/discboeing\/\.local\/share\/discboeing-code-server\/extensions\/\.obsolete/,
 	);
 	assert.match(
 		source,
-		/\/home\/discobot\/\.local\/share\/discobot-code-server\/CachedProfilesData\/__default__profile__\/extensions\.user\.cache/,
+		/\/home\/discboeing\/\.local\/share\/discboeing-code-server\/CachedProfilesData\/__default__profile__\/extensions\.user\.cache/,
 	);
 });

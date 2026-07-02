@@ -46,7 +46,7 @@ if (files.length === 0) {
 	process.exit(0);
 }
 
-const tempDir = mkdtempSync(join(tmpdir(), "discobot-powershell-"));
+const tempDir = mkdtempSync(join(tmpdir(), "discboeing-powershell-"));
 const fileListPath = join(tempDir, "files.json");
 writeFileSync(fileListPath, JSON.stringify(files), "utf8");
 

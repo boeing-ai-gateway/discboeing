@@ -1,6 +1,6 @@
 # Server Architecture
 
-This document describes the architecture of the Discobot Go server, which provides REST APIs and manages workspace/session/sandbox lifecycle.
+This document describes the architecture of the Discboeing Go server, which provides REST APIs and manages workspace/session/sandbox lifecycle.
 
 ## Overview
 
@@ -388,7 +388,7 @@ recreates them instead of restarting stale containers.
 
 ```go
 type SandboxOptions struct {
-    Image       string            // e.g., "discobot-agent-api:latest"
+    Image       string            // e.g., "discboeing-agent-api:latest"
     Binds       []string          // Volume mounts
     Env         []string          // Environment variables
     NetworkMode string            // Docker network

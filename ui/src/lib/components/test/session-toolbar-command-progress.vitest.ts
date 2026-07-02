@@ -11,15 +11,15 @@ const SESSION_TOOLBAR_COMPONENT = path.resolve(
 );
 const COMMIT_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/discobot/scripts/discobot-commit",
+	"../../../../../container-assets/discboeing/scripts/discboeing-commit",
 );
 const COMMIT_REMOTE_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/discobot/scripts/discobot-commit-remote",
+	"../../../../../container-assets/discboeing/scripts/discboeing-commit-remote",
 );
 const REBASE_COMMAND = path.resolve(
 	TEST_DIR,
-	"../../../../../container-assets/discobot/scripts/discobot-rebase",
+	"../../../../../container-assets/discboeing/scripts/discboeing-rebase",
 );
 
 function readSessionToolbarSource() {
@@ -67,7 +67,7 @@ test("session toolbar only renders command icons when command metadata specifies
 test("session toolbar groups dropdown commands from command metadata", () => {
 	const source = readSessionToolbarSource();
 
-	assert.match(source, /command\.discobot\?\.group\?\.trim\(\) \|\| null/);
+	assert.match(source, /command\.discboeing\?\.group\?\.trim\(\) \|\| null/);
 	assert.match(source, /<DropdownMenuSeparator \/>/);
 	assert.match(source, /{#if group\.label}/);
 	assert.doesNotMatch(source, /Git actions/);
@@ -88,12 +88,12 @@ test("commit and rebase bundled scripts specify the expected lucide icons and Gi
 	const commitRemote = readCommandSource(COMMIT_REMOTE_COMMAND);
 	const rebase = readCommandSource(REBASE_COMMAND);
 
-	assert.match(commit, /discobot-icon: git-commit/);
-	assert.match(commitRemote, /discobot-icon: git-commit/);
-	assert.match(rebase, /discobot-icon: git-branch/);
-	assert.match(commit, /discobot-group: Git/);
-	assert.match(commitRemote, /discobot-group: Git/);
-	assert.match(rebase, /discobot-group: Git/);
+	assert.match(commit, /discboeing-icon: git-commit/);
+	assert.match(commitRemote, /discboeing-icon: git-commit/);
+	assert.match(rebase, /discboeing-icon: git-branch/);
+	assert.match(commit, /discboeing-group: Git/);
+	assert.match(commitRemote, /discboeing-group: Git/);
+	assert.match(rebase, /discboeing-group: Git/);
 });
 
 test("session toolbar falls back to the active command name while command metadata is still loading", () => {

@@ -19,15 +19,15 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
-	"github.com/obot-platform/discobot/agent-go/internal/clisession"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/thread"
-	"github.com/obot-platform/discobot/agent-go/tools"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agentimpl"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/clisession"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/tools"
 )
 
 // Flags holds parsed CLI flag values for terminal mode.
@@ -48,7 +48,7 @@ type Flags struct {
 // Must be called before flag.Parse().
 func AddFlags() *Flags {
 	model := new(string)
-	flag.StringVar(model, "model", "", "Model to use, e.g. anthropic/claude-opus-4-6 (overrides DISCOBOT_MODEL env var)")
+	flag.StringVar(model, "model", "", "Model to use, e.g. anthropic/claude-opus-4-6 (overrides DISCBOEING_MODEL env var)")
 	flag.StringVar(model, "m", "", "Alias for --model")
 
 	printMode := new(bool)
@@ -100,7 +100,7 @@ func (f *Flags) JSONOutput() bool {
 //
 // It builds the same infrastructure stack as the HTTP server but drives the
 // agent via a stdin readline loop. Credentials are read from OS environment
-// variables (e.g. ANTHROPIC_API_KEY) — no X-Discobot-Credentials header is
+// variables (e.g. ANTHROPIC_API_KEY) — no X-Discboeing-Credentials header is
 // needed in terminal mode.
 func Run(cfg *config.Config, flags *Flags) {
 	// Enable bracketed paste mode for the session.
@@ -201,8 +201,8 @@ func Run(cfg *config.Config, flags *Flags) {
 	mcpCfg := agentimpl.NewMCPConfig(
 		oauthBase,
 		cfg.SessionID,
-		cfg.DiscobotServerURL,
-		cfg.DiscobotProjectID,
+		cfg.DiscboeingServerURL,
+		cfg.DiscboeingProjectID,
 	)
 	a := agentimpl.NewDefaultAgent(store, reg, exec, cfg.AgentCwd, mcpCfg)
 	var session clisession.Session = clisession.NewLocal(a, store, cfg.AgentCwd)
@@ -218,7 +218,7 @@ func Run(cfg *config.Config, flags *Flags) {
 	// ── Startup recovery ──────────────────────────────────────────────────────
 	threadID := selectInitialThreadID(cfg, *flags.newThread, *flags.resume)
 
-	// Load persisted command history from .discobot/history (sibling of ThreadsDir).
+	// Load persisted command history from .discboeing/history (sibling of ThreadsDir).
 	hist := loadCmdHistory(filepath.Join(filepath.Dir(cfg.ThreadsDir), "history"))
 
 	// ── Resolve prompt defaults from flags ───────────────────────────────────

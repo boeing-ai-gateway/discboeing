@@ -1,20 +1,20 @@
 #!/bin/bash
 # Mount host home directory via VirtioFS at the path specified in kernel cmdline.
-# Reads discobot.homedir=<path> from /proc/cmdline.
+# Reads discboeing.homedir=<path> from /proc/cmdline.
 set -e
 
-# Parse discobot.homedir= from kernel command line
+# Parse discboeing.homedir= from kernel command line
 HOMEDIR=""
 for param in $(< /proc/cmdline); do
     case "$param" in
-        discobot.homedir=*)
-            HOMEDIR="${param#discobot.homedir=}"
+        discboeing.homedir=*)
+            HOMEDIR="${param#discboeing.homedir=}"
             ;;
     esac
 done
 
 if [ -z "$HOMEDIR" ]; then
-    echo "No discobot.homedir= found in kernel cmdline, skipping VirtioFS mount"
+    echo "No discboeing.homedir= found in kernel cmdline, skipping VirtioFS mount"
     exit 0
 fi
 

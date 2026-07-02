@@ -130,8 +130,8 @@ func generateCA(certPath, keyPath string) error {
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"Discobot Proxy"},
-			CommonName:   "Discobot Proxy CA",
+			Organization: []string{"Discboeing Proxy"},
+			CommonName:   "Discboeing Proxy CA",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour), // 10 years

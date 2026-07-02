@@ -15,11 +15,11 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$RootfsArchivePath,
 
-    [string]$StartupScriptPath = (Join-Path $PSScriptRoot "..\server\internal\sandbox\wsl\assets\discobot-wsl-startup.ps1"),
+    [string]$StartupScriptPath = (Join-Path $PSScriptRoot "..\server\internal\sandbox\wsl\assets\discboeing-wsl-startup.ps1"),
 
     [string]$HostOutputDir = (Join-Path $PSScriptRoot "..\build\wsl-startup-hyperv-test"),
 
-    [string]$GuestWorkDir = "C:\DiscobotWslStartupTest",
+    [string]$GuestWorkDir = "C:\DiscboeingWslStartupTest",
 
     [switch]$TestUpgrade,
 
@@ -118,9 +118,9 @@ function Invoke-GuestStartupScript {
             [string]$RootfsPathParam
         )
 
-        $startupScript = Join-Path $GuestWorkDirParam "discobot-wsl-startup.ps1"
+        $startupScript = Join-Path $GuestWorkDirParam "discboeing-wsl-startup.ps1"
         $resultPath = Join-Path $GuestWorkDirParam $ResultNameParam
-        $distroName = "discobot-smoke-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+        $distroName = "discboeing-smoke-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
         $distroNamePath = Join-Path $GuestWorkDirParam "distro-name.txt"
         function Set-Utf8NoBomFile {
             param(
@@ -220,7 +220,7 @@ if ($null -eq $GuestCredential) {
 }
 
 $vm = Get-VM -Name $VMName -ErrorAction Stop
-$checkpointName = "discobot-wsl-startup-test-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+$checkpointName = "discboeing-wsl-startup-test-$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
 $session = $null
 $summary = [ordered]@{
     vmName         = $VMName
@@ -250,11 +250,11 @@ try {
     } -ArgumentList $GuestWorkDir
 
     Write-Host "Copying startup script and rootfs tar into guest..."
-    Copy-Item -LiteralPath $startupScript -Destination (Join-Path $GuestWorkDir "discobot-wsl-startup.ps1") -ToSession $session -Force
+    Copy-Item -LiteralPath $startupScript -Destination (Join-Path $GuestWorkDir "discboeing-wsl-startup.ps1") -ToSession $session -Force
     $guestRootfsPath = Join-Path $GuestWorkDir "rootfs-import.tar"
     Copy-Item -LiteralPath $rootfsArchive -Destination $guestRootfsPath -ToSession $session -Force
 
-    $imageRef = "discobot-smoke:initial"
+    $imageRef = "discboeing-smoke:initial"
     $check = Invoke-GuestStartupScript -Session $session -Mode "check" -ImageRef $imageRef -ResultName "check-initial.json"
     $summary.phases += $check
     if ($check.ExitCode -eq 42) {
@@ -277,7 +277,7 @@ try {
     Assert-ExitCode -Result $verify -Expected 0
 
     if ($TestUpgrade) {
-        $upgradeRef = "discobot-smoke:upgrade"
+        $upgradeRef = "discboeing-smoke:upgrade"
         $upgradeCheck = Invoke-GuestStartupScript -Session $session -Mode "check" -ImageRef $upgradeRef -ResultName "check-upgrade.json"
         $summary.phases += $upgradeCheck
         Assert-ExitCode -Result $upgradeCheck -Expected 10

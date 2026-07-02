@@ -15,7 +15,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 type embeddedToolDefinition struct {
@@ -35,12 +35,12 @@ var (
 const windowsShellToolName = "PowerShell"
 
 const (
-	discobotRealSudoPath = "/usr/lib/discobot/sudo.real"
-	sudoGuidance         = "Commands that invoke `sudo` require explicit user approval through RequestUserCredential. Request a sudo approval credential with envVar `DISCOBOT_SUDO_TOKEN` and an approved use describing the exact privileged action, then retry the Bash command with the returned `credentialUses` binding."
+	discboeingRealSudoPath = "/usr/lib/discboeing/sudo.real"
+	sudoGuidance         = "Commands that invoke `sudo` require explicit user approval through RequestUserCredential. Request a sudo approval credential with envVar `DISCBOEING_SUDO_TOKEN` and an approved use describing the exact privileged action, then retry the Bash command with the returned `credentialUses` binding."
 )
 
-var statDiscobotRealSudo = func() bool {
-	info, err := os.Stat(discobotRealSudoPath)
+var statDiscboeingRealSudo = func() bool {
+	info, err := os.Stat(discboeingRealSudoPath)
 	return err == nil && !info.IsDir()
 }
 
@@ -121,7 +121,7 @@ func adaptToolForRuntime(goos string, tool providers.ToolDefinition) providers.T
 	if err != nil {
 		panic("sessionconfig: apply runtime tool override: " + err.Error())
 	}
-	if strings.TrimSpace(strings.ToLower(goos)) != "windows" && adapted.Name == "Bash" && statDiscobotRealSudo() {
+	if strings.TrimSpace(strings.ToLower(goos)) != "windows" && adapted.Name == "Bash" && statDiscboeingRealSudo() {
 		adapted.Description = strings.TrimSpace(adapted.Description) + "\n\n" + sudoGuidance
 	}
 	return adapted

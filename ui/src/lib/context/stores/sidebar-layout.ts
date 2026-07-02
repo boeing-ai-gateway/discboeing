@@ -1,6 +1,6 @@
 import { readStorage } from "$lib/local-storage";
 
-const SIDEBAR_LAYOUT_STORAGE_KEY = "paneforge:discobot-ui-sidebar-layout";
+const SIDEBAR_LAYOUT_STORAGE_KEY = "paneforge:discboeing-ui-sidebar-layout";
 
 export const sidebarLayoutStore = {
 	hasSavedDesktopLayout(): boolean {

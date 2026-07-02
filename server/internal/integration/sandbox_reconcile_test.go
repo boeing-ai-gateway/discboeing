@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/database"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/docker"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/database"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/docker"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // Small, fast images for testing
@@ -246,7 +246,7 @@ func (s *testSandboxSetup) createSandboxWithImage(t *testing.T, sessionID, image
 
 	opts := sandbox.CreateOptions{
 		Labels: map[string]string{
-			"discobot.session.id": sessionID,
+			"discboeing.session.id": sessionID,
 		},
 	}
 
@@ -524,7 +524,7 @@ func TestReconcileSessionStates_MarksFailedSandboxAsError(t *testing.T) {
 
 	// Kill the container to simulate a failure (non-zero exit code)
 	// We'll use docker kill which will cause an exit code != 0
-	killCmd := exec.Command("docker", "kill", fmt.Sprintf("discobot-session-%s", session.ID))
+	killCmd := exec.Command("docker", "kill", fmt.Sprintf("discboeing-session-%s", session.ID))
 	if output, err := killCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to kill container: %v\nOutput: %s", err, output)
 	}
@@ -736,7 +736,7 @@ func TestProvider_GetReturnsNotFoundAfterExternalContainerDeletion(t *testing.T)
 
 	// Externally delete the container using docker rm -f (simulates external deletion)
 	t.Log("Externally deleting container with docker rm -f...")
-	containerName := fmt.Sprintf("discobot-session-%s", session.ID)
+	containerName := fmt.Sprintf("discboeing-session-%s", session.ID)
 	rmCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
 	if output, err := rmCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to remove container: %v\nOutput: %s", err, output)
@@ -786,7 +786,7 @@ func TestProvider_GetSecretReturnsNotFoundAfterExternalContainerDeletion(t *test
 	opts := sandbox.CreateOptions{
 		SharedSecret: "test-secret-12345",
 		Labels: map[string]string{
-			"discobot.session.id": session.ID,
+			"discboeing.session.id": session.ID,
 		},
 	}
 
@@ -811,7 +811,7 @@ func TestProvider_GetSecretReturnsNotFoundAfterExternalContainerDeletion(t *test
 
 	// Externally delete the container
 	t.Log("Externally deleting container with docker rm -f...")
-	containerName := fmt.Sprintf("discobot-session-%s", session.ID)
+	containerName := fmt.Sprintf("discboeing-session-%s", session.ID)
 	rmCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
 	if output, err := rmCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to remove container: %v\nOutput: %s", err, output)
@@ -852,7 +852,7 @@ func TestReconcileSessionStates_HandlesExternallyDeletedContainer(t *testing.T) 
 
 	// Externally delete the container (simulates someone running docker rm -f)
 	t.Log("Externally deleting container with docker rm -f...")
-	containerName := fmt.Sprintf("discobot-session-%s", session.ID)
+	containerName := fmt.Sprintf("discboeing-session-%s", session.ID)
 	rmCmd := exec.CommandContext(ctx, "docker", "rm", "-f", containerName)
 	if output, err := rmCmd.CombinedOutput(); err != nil {
 		t.Fatalf("Failed to remove container: %v\nOutput: %s", err, output)

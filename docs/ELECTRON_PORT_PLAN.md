@@ -1,6 +1,6 @@
 # Electron Desktop App
 
-Discobot now supports Electron as its only desktop shell. The previous desktop
+Discboeing now supports Electron as its only desktop shell. The previous desktop
 shell has been removed.
 
 ## Runtime layout
@@ -14,7 +14,7 @@ electron/
 ├── updater.ts       # Electron updater bridge
 ├── window-state.ts  # Window state persistence
 ├── assets/          # App icons and macOS entitlements
-├── binaries/        # Built discobot-server sidecar binaries
+├── binaries/        # Built discboeing-server sidecar binaries
 └── resources/       # Bundled VZ/WSL guest runtime assets
 ```
 

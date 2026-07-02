@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func runWebFetch(t *testing.T, e *Executor, input map[string]string) message.ToolResultOutput {
@@ -67,8 +67,8 @@ func TestWebFetch_UsesBrowserLikeUserAgent(t *testing.T) {
 	if !strings.Contains(gotUserAgent, "Mozilla/5.0") {
 		t.Errorf("expected browser-like User-Agent, got %q", gotUserAgent)
 	}
-	if !strings.Contains(gotUserAgent, "Discobot/1.0") {
-		t.Errorf("expected Discobot identifier in User-Agent, got %q", gotUserAgent)
+	if !strings.Contains(gotUserAgent, "Discboeing/1.0") {
+		t.Errorf("expected Discboeing identifier in User-Agent, got %q", gotUserAgent)
 	}
 }
 
@@ -147,7 +147,7 @@ func TestWebFetch_SendsPromptToTavilyAndAnswersWithCurrentModel(t *testing.T) {
 			t.Fatalf("expected chunks_per_source=3, got %+v", req.ChunksPerSource)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"results":[{"url":"https://example.com/article","raw_content":"Discobot release 1.2 shipped today."}]}`))
+		_, _ = w.Write([]byte(`{"results":[{"url":"https://example.com/article","raw_content":"Discboeing release 1.2 shipped today."}]}`))
 	}))
 	defer server.Close()
 	tavilyExtractURL = server.URL

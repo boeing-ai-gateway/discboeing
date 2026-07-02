@@ -4,7 +4,7 @@ Use this checklist after copying the source tree to a Windows machine. Linux val
 
 ## Current Linux-side status
 
-Validated in the Discobot Linux sandbox:
+Validated in the Discboeing Linux sandbox:
 
 ```text
 dotnet build                         passes, 0 warnings/errors

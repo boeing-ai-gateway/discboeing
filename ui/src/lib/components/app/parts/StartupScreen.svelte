@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DiscobotBrand from "$lib/components/app/parts/DiscobotBrand.svelte";
+	import DiscboeingBrand from "$lib/components/app/parts/DiscboeingBrand.svelte";
 	import { Badge } from "$lib/components/ui/badge";
 	import {
 		Card,
@@ -98,7 +98,7 @@
 				: "max-w-sm gap-3 px-6 py-6",
 		)}
 	>
-		<DiscobotBrand heightClass={showShellPreview ? "h-[2.5rem]" : "h-5"} />
+		<DiscboeingBrand heightClass={showShellPreview ? "h-[2.5rem]" : "h-5"} />
 
 		{#if detailsOpen}
 			<div class="flex flex-wrap items-center justify-center gap-2">

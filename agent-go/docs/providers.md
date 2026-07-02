@@ -164,10 +164,10 @@ These require dedicated providers only if their extra features (search filters, 
 
 ```sh
 go build -tags=e2e_mock_llm ./cmd/agent-api
-DISCOBOT_MODEL=e2e-mock-llm/mock ./agent-api -server
+DISCBOEING_MODEL=e2e-mock-llm/mock ./agent-api -server
 ```
 
-The provider ID is `e2e-mock-llm` and its default model is `mock`. It is not compiled or registered in normal builds. The build-tagged provider embeds JSON fixtures from `agent-go/llm-responses/*.json`; tests can override the fixture directory at runtime with `DISCOBOT_E2E_MOCK_LLM_RESPONSES_DIR=/path/to/fixtures`.
+The provider ID is `e2e-mock-llm` and its default model is `mock`. It is not compiled or registered in normal builds. The build-tagged provider embeds JSON fixtures from `agent-go/llm-responses/*.json`; tests can override the fixture directory at runtime with `DISCBOEING_E2E_MOCK_LLM_RESPONSES_DIR=/path/to/fixtures`.
 
 Fixture files are merged in filename order. Each file maps input text to deterministic responses:
 

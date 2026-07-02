@@ -14,15 +14,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/database"
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/database"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/mock"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // testSessionInitializer is a no-op SessionInitializer for tests.
@@ -44,7 +44,7 @@ type testEnv struct {
 
 func addedFilePatch(message, authorName, authorEmail, path, content string) string {
 	repoDir := os.TempDir()
-	patchRepo, err := os.MkdirTemp(repoDir, "discobot-perform-commit-patch-*")
+	patchRepo, err := os.MkdirTemp(repoDir, "discboeing-perform-commit-patch-*")
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +74,7 @@ func addedFilePatch(message, authorName, authorEmail, path, content string) stri
 }
 
 func modifiedReadmePatch(message, authorName, authorEmail, content string) string {
-	patchRepo, err := os.MkdirTemp(os.TempDir(), "discobot-perform-commit-patch-*")
+	patchRepo, err := os.MkdirTemp(os.TempDir(), "discboeing-perform-commit-patch-*")
 	if err != nil {
 		panic(err)
 	}
@@ -690,7 +690,7 @@ func TestPerformCommit_WorkspaceChangedWithPatches(t *testing.T) {
 		t.Fatalf("PerformCommit failed: %v", err)
 	}
 
-	// Verify: should NOT have sent /discobot-commit (skipped step 2 due to optimistic path)
+	// Verify: should NOT have sent /discboeing-commit (skipped step 2 due to optimistic path)
 	if handler.getChatRequestCount() != 0 {
 		t.Errorf("Expected 0 chat requests (optimistic path should skip prompt), got %d", handler.getChatRequestCount())
 	}
@@ -913,7 +913,7 @@ func TestPerformCommit_WorkspaceChangedGetCommitsError(t *testing.T) {
 
 // TestPerformCommit_WorkspaceUnchangedWithExistingPatches tests that the optimistic
 // patch check runs even when workspace commit hasn't changed, allowing us to skip
-// the /discobot-commit prompt if the agent already has patches ready.
+// the /discboeing-commit prompt if the agent already has patches ready.
 func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 	env := newTestEnv(t)
 	defer env.cleanup()
@@ -953,7 +953,7 @@ func TestPerformCommit_WorkspaceUnchangedWithExistingPatches(t *testing.T) {
 		t.Fatalf("PerformCommit failed: %v", err)
 	}
 
-	// KEY ASSERTION: should NOT have sent /discobot-commit because optimistic check
+	// KEY ASSERTION: should NOT have sent /discboeing-commit because optimistic check
 	// found existing patches and applied them directly
 	if handler.getChatRequestCount() != 0 {
 		t.Errorf("Expected 0 chat requests (optimistic path should skip prompt), got %d", handler.getChatRequestCount())
@@ -1180,7 +1180,7 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 
 	const requestedCommit = "3b408234aefc"
 	const requestedBase = "3526056ae5f926d742c49a686531fb0a33315853"
-	const requestedDirectory = "/tmp/discobot-commit-worktree"
+	const requestedDirectory = "/tmp/discboeing-commit-worktree"
 
 	var (
 		mu           sync.Mutex
@@ -1279,7 +1279,7 @@ func TestPerformCommit_RequestCommitPullUsesPreparedSandboxCommits(t *testing.T)
 	mu.Unlock()
 
 	if gotChatRequests != 0 {
-		t.Fatalf("expected prepared commit pull to skip /discobot-commit prompt, got %d chat requests", gotChatRequests)
+		t.Fatalf("expected prepared commit pull to skip /discboeing-commit prompt, got %d chat requests", gotChatRequests)
 	}
 	if len(gotRequests) != 1 {
 		t.Fatalf("expected exactly one commits request, got %#v", gotRequests)
@@ -1307,7 +1307,7 @@ func TestPerformCommit_RequestCommitPullApplyFailureSuggestsRebase(t *testing.T)
 	currentHead := env.addCommitToWorkspace(t, workspace.Path, "README.md", "# Host\n")
 
 	const requestedCommit = "3b408234aefc"
-	const requestedDirectory = "/tmp/discobot-commit-worktree"
+	const requestedDirectory = "/tmp/discboeing-commit-worktree"
 
 	handler := &trackingHandler{
 		onCommits: func(w http.ResponseWriter, _ *http.Request) {
@@ -1406,7 +1406,7 @@ func TestPerformCommit_RequestCommitPullUnavailablePreparedCommitsMarksFailed(t 
 	sessionSvc := NewSessionService(env.store, env.gitService, sandboxSvc, env.eventBroker, nil)
 
 	err = sessionSvc.PerformCommit(context.Background(), project.ID, session.ID, CommitSessionOptions{
-		RequestedDirectory:  "/tmp/discobot-commit-worktree",
+		RequestedDirectory:  "/tmp/discboeing-commit-worktree",
 		RequestedBaseCommit: "3526056ae5f926d742c49a686531fb0a33315853",
 		RequestedCommitHash: "3b408234aefc",
 	})
@@ -1418,7 +1418,7 @@ func TestPerformCommit_RequestCommitPullUnavailablePreparedCommitsMarksFailed(t 
 	gotChatRequests := chatRequests
 	mu.Unlock()
 	if gotChatRequests != 0 {
-		t.Fatalf("expected prepared commit pull failure to skip /discobot-commit prompt, got %d chat requests", gotChatRequests)
+		t.Fatalf("expected prepared commit pull failure to skip /discboeing-commit prompt, got %d chat requests", gotChatRequests)
 	}
 
 	updatedSession, err := env.store.GetSessionByID(context.Background(), session.ID)

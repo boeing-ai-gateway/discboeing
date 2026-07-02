@@ -37,14 +37,14 @@ import (
 	"github.com/docker/go-connections/nat"
 	dockercontext "github.com/docker/go-sdk/context"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sysinfo"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sysinfo"
 )
 
 const (
 	// labelSecret is the label key for storing the raw shared secret.
-	labelSecret = "discobot.secret"
+	labelSecret = "discboeing.secret"
 
 	// containerPort is the fixed port exposed by all sandboxes.
 	containerPort = 3002
@@ -56,10 +56,10 @@ const (
 	dataVolumePath = "/.data"
 
 	// dataVolumePrefix is the prefix for data volume names.
-	dataVolumePrefix = "discobot-data-"
+	dataVolumePrefix = "discboeing-data-"
 
-	sessionEnvWrapperCmd     = "discobot-session-env"
-	hostInspectContainerName = "discobot-host-inspect"
+	sessionEnvWrapperCmd     = "discboeing-session-env"
+	hostInspectContainerName = "discboeing-host-inspect"
 
 	httpClientTargetCacheTTL = 10 * time.Second
 )
@@ -274,7 +274,7 @@ func (p *Provider) Definition() sandbox.ProviderDefinition {
 
 // containerName generates a consistent container name from session ID.
 func containerName(sessionID string) string {
-	return fmt.Sprintf("discobot-session-%s", sessionID)
+	return fmt.Sprintf("discboeing-session-%s", sessionID)
 }
 
 // volumeName returns the Docker volume name for a session's data volume.
@@ -295,7 +295,7 @@ func inspectionContainerConfig(image string) (*containerTypes.Config, *container
 		Image:  image,
 		Cmd:    inspectionContainerCommand(),
 		Tty:    true,
-		Labels: map[string]string{"discobot.host.inspect": "true", "discobot.managed": "true"},
+		Labels: map[string]string{"discboeing.host.inspect": "true", "discboeing.managed": "true"},
 	}
 
 	hostConfig := &containerTypes.HostConfig{
@@ -541,8 +541,8 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 	_, err := p.client.VolumeCreate(ctx, volumeTypes.CreateOptions{
 		Name: dataVolName,
 		Labels: map[string]string{
-			"discobot.session.id": sessionID,
-			"discobot.managed":    "true",
+			"discboeing.session.id": sessionID,
+			"discboeing.managed":    "true",
 		},
 	})
 	if err != nil {
@@ -551,8 +551,8 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 
 	// Prepare labels - store the raw secret as a label
 	labels := map[string]string{
-		"discobot.session.id": sessionID,
-		"discobot.managed":    "true",
+		"discboeing.session.id": sessionID,
+		"discboeing.managed":    "true",
 	}
 	if opts.SharedSecret != "" {
 		labels[labelSecret] = opts.SharedSecret
@@ -575,7 +575,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 		Image:        image,
 		Env:          env,
 		Labels:       labels,
-		Hostname:     "discobot",
+		Hostname:     "discboeing",
 		Tty:          true,
 		OpenStdin:    true,
 		AttachStdin:  true,
@@ -675,7 +675,7 @@ func (p *Provider) Create(ctx context.Context, state []byte, sessionID string, o
 	}}
 
 	// Enable privileged mode for running Docker daemon inside container
-	// The container runs its own Docker daemon (started by discobot-sandbox-init if dockerd is available)
+	// The container runs its own Docker daemon (started by discboeing-sandbox-init if dockerd is available)
 	hostConfig.Privileged = true
 
 	// Always expose port 3002 with a random host port
@@ -843,10 +843,10 @@ func (p *Provider) doEnsureImage() {
 
 // IsLocalImage checks if an image is a local image that cannot be pulled from a registry.
 // Local images include:
-// - Images with discobot-local/ prefix (locally built images)
+// - Images with discboeing-local/ prefix (locally built images)
 // - Bare digest references (sha256:...)
 func IsLocalImage(image string) bool {
-	return strings.HasPrefix(image, "discobot-local/") || strings.HasPrefix(image, "sha256:")
+	return strings.HasPrefix(image, "discboeing-local/") || strings.HasPrefix(image, "sha256:")
 }
 
 func isLocalImage(image string) bool {
@@ -960,10 +960,10 @@ func (p *Provider) CurrentImageID(ctx context.Context) (string, error) {
 // CleanupUnusedImages removes labeled sandbox images that are no longer referenced
 // by the configured image or by any managed sandbox container.
 func (p *Provider) CleanupUnusedImages(ctx context.Context) error {
-	// List all images with the discobot sandbox label
+	// List all images with the discboeing sandbox label
 	images, err := p.client.ImageList(ctx, imageTypes.ListOptions{
 		Filters: filters.NewArgs(
-			filters.Arg("label", "io.discobot.sandbox-image=true"),
+			filters.Arg("label", "io.discboeing.sandbox-image=true"),
 		),
 	})
 	if err != nil {
@@ -979,7 +979,7 @@ func (p *Provider) CleanupUnusedImages(ctx context.Context) error {
 	containers, err := p.client.ContainerList(ctx, containerTypes.ListOptions{
 		All: true,
 		Filters: filters.NewArgs(
-			filters.Arg("label", "discobot.managed=true"),
+			filters.Arg("label", "discboeing.managed=true"),
 		),
 	})
 	if err != nil {
@@ -1353,13 +1353,13 @@ func (p *Provider) shellExists(ctx context.Context, containerID string, shell st
 	return inspect.ExitCode == 0
 }
 
-// List returns all sandboxes managed by discobot.
+// List returns all sandboxes managed by discboeing.
 func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 	// List all containers with our label
 	containers, err := p.client.ContainerList(ctx, containerTypes.ListOptions{
 		All: true, // Include stopped containers
 		Filters: filters.NewArgs(
-			filters.Arg("label", "discobot.managed=true"),
+			filters.Arg("label", "discboeing.managed=true"),
 		),
 	})
 	if err != nil {
@@ -1369,7 +1369,7 @@ func (p *Provider) List(ctx context.Context) ([]*sandbox.Sandbox, error) {
 	result := make([]*sandbox.Sandbox, 0, len(containers))
 	for _, c := range containers {
 		// Extract session ID from labels
-		sessionID := c.Labels["discobot.session.id"]
+		sessionID := c.Labels["discboeing.session.id"]
 		if sessionID == "" {
 			continue
 		}
@@ -1648,7 +1648,7 @@ func (p *Provider) Watch(ctx context.Context) (<-chan sandbox.StateEvent, error)
 		// Set up Docker events filter for our managed containers
 		filterArgs := filters.NewArgs(
 			filters.Arg("type", string(events.ContainerEventType)),
-			filters.Arg("label", "discobot.managed=true"),
+			filters.Arg("label", "discboeing.managed=true"),
 		)
 
 		// Watch Docker events
@@ -1725,7 +1725,7 @@ func (p *Provider) processDockerEvents(ctx context.Context, eventCh chan<- sandb
 // Returns nil if the event should be ignored.
 func (p *Provider) translateDockerEvent(msg events.Message) *sandbox.StateEvent {
 	// Extract session ID from container labels
-	sessionID := msg.Actor.Attributes["discobot.session.id"]
+	sessionID := msg.Actor.Attributes["discboeing.session.id"]
 	if sessionID == "" {
 		// Not one of our containers or missing session ID
 		return nil

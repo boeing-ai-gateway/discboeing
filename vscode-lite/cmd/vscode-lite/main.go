@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/obot-platform/discobot/vscode-lite/internal/lsp"
-	"github.com/obot-platform/discobot/vscode-lite/internal/server"
-	"github.com/obot-platform/discobot/vscode-lite/internal/vfs"
+	"github.com/boeing-ai-gateway/discboeing/vscode-lite/internal/lsp"
+	"github.com/boeing-ai-gateway/discboeing/vscode-lite/internal/server"
+	"github.com/boeing-ai-gateway/discboeing/vscode-lite/internal/vfs"
 )
 
 func main() {

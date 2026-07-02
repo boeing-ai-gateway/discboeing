@@ -37,7 +37,7 @@ function notFound(path: string): JsonResponse {
   };
 }
 
-export class FakeDiscobotApi {
+export class FakeDiscboeingApi {
   readonly projectId = "local";
   workspaces = new Map<string, Workspace>();
   sessions = new Map<string, Session>();

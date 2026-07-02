@@ -142,7 +142,7 @@ test("runtime keeps the download flow consistent in Electron", () => {
 test("electron-specific bridge access is centralized in the electron adapter", () => {
 	const source = readSource(ELECTRON_ADAPTER_MODULE);
 
-	assert.match(source, /window\.__DISCOBOT_DESKTOP__/);
+	assert.match(source, /window\.__DISCBOEING_DESKTOP__/);
 	assert.match(source, /requireBridgeMethod/);
 	assert.match(source, /kind === "electron"/);
 	assert.match(source, /navigator\.userAgent/);

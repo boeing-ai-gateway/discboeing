@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
 )
 
 func TestParseCommitPullPreview(t *testing.T) {
@@ -108,7 +108,7 @@ func TestGetRequestCommitPullPreview_UsesRequestedDirectoryBaseAndCommit(t *test
 	const (
 		threadID         = "thread-1"
 		questionID       = "approval-1"
-		requestedDir     = "/tmp/discobot-commit-worktree"
+		requestedDir     = "/tmp/discboeing-commit-worktree"
 		requestedBase    = "3526056ae5f926d742c49a686531fb0a33315853"
 		requestedHead    = "5078ce9fa81e548c99f9682d26a66aff83876608"
 		requestedSubject = "fix(ui): avoid duplicate credential keys"

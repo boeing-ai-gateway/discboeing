@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 const credentialUseValidationTimeout = 20 * time.Second

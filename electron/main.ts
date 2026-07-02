@@ -258,7 +258,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
       {
         show: false,
         autoHideMenuBar: true,
-        title: "Discobot",
+        title: "Discboeing",
         icon: appIconPath(),
         backgroundColor: "#0b0b0d",
         titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",

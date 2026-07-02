@@ -205,7 +205,7 @@ internal static class ProgramEntry
         Console.WriteLine($"gvproxy command: {GvProxyProcess.CommandLine(options)}");
         Console.WriteLine($"Launcher bridge: {GvProxyProcess.HvSocketListenUri(options)} -> tcp://127.0.0.1:<auto>");
         Console.WriteLine($"Hyper-V socket service GUID: {options.GvproxyServiceId:D}");
-        Console.WriteLine($"Guest static config: discobot=ip={options.UsernetIp},netmask={options.UsernetNetmask},gateway={options.UsernetGateway},dns={options.UsernetDns}");
+        Console.WriteLine($"Guest static config: discboeing=ip={options.UsernetIp},netmask={options.UsernetNetmask},gateway={options.UsernetGateway},dns={options.UsernetDns}");
         Console.WriteLine("Windows host prerequisite, run once from elevated PowerShell if the service key does not exist:");
         Console.WriteLine($"  $service = New-Item -Force -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Virtualization\\GuestCommunicationServices' -Name '{options.GvproxyServiceId:D}'");
         Console.WriteLine("  $service.SetValue('ElementName', 'gvisor-tap-vsock')");

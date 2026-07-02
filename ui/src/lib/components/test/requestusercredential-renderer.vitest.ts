@@ -76,7 +76,7 @@ test("optimized tool renderer auto-expands pending credential requests", () => {
 test("sudo credential requests use approval-only UI", () => {
 	const source = readRequestUserCredentialRendererSource();
 
-	assert.match(source, /const SUDO_TOKEN_ENV_VAR = "DISCOBOT_SUDO_TOKEN";/);
+	assert.match(source, /const SUDO_TOKEN_ENV_VAR = "DISCBOEING_SUDO_TOKEN";/);
 	assert.match(source, /Approve sudo access/);
 	assert.match(source, /No credential value is needed/);
 	assert.match(source, /Internal sudo approval token/);

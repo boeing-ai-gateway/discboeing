@@ -19,10 +19,10 @@ import (
 
 	"github.com/Code-Hex/vz/v3"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
-	"github.com/obot-platform/discobot/server/internal/sysinfo"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sysinfo"
 )
 
 const (
@@ -699,7 +699,7 @@ func (m *VMManager) buildAndStartVM(rootDiskPath, dataDiskPath, _ string, resour
 
 	// Pass host home directory path to guest via kernel cmdline
 	if m.config.HomeDir != "" {
-		cmdLine = append(cmdLine, fmt.Sprintf("discobot.homedir=%s", m.config.HomeDir))
+		cmdLine = append(cmdLine, fmt.Sprintf("discboeing.homedir=%s", m.config.HomeDir))
 	}
 
 	// Create boot loader

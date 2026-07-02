@@ -1,6 +1,6 @@
-# Discobot Server
+# Discboeing Server
 
-The Discobot Server is a Go backend that provides REST APIs for workspace management, session orchestration, and sandbox lifecycle management.
+The Discboeing Server is a Go backend that provides REST APIs for workspace management, session orchestration, and sandbox lifecycle management.
 
 ## Overview
 
@@ -89,16 +89,16 @@ golangci-lint run
 | `HTTPS_TLS_KEY_FILE` | — | PEM private key path when `HTTPS_TLS_MODE=static` |
 | `HTTPS_ACME_EMAIL` | — | Optional ACME contact email when `HTTPS_TLS_MODE=acme` |
 | `CORS_ORIGINS` | computed | Comma-separated allowed origins; supports `{HTTP_PORT}` and `{HTTPS_PORT}` placeholders |
-| `DATABASE_DSN` | `discobot.db` | Database connection string |
+| `DATABASE_DSN` | `discboeing.db` | Database connection string |
 | `AUTH_ENABLED` | `false` | Enable authentication |
 | `PUBLIC_HOSTNAME` | `localhost:{PORT}` | Public hostname or URL used for OIDC redirect URIs |
-| `OIDC_ISSUER_URL` | (empty) | OIDC issuer URL for Discobot login |
+| `OIDC_ISSUER_URL` | (empty) | OIDC issuer URL for Discboeing login |
 | `OIDC_CLIENT_ID` | (empty) | OIDC client ID, or `dynamic` to use dynamic client registration |
 | `OIDC_CLIENT_SECRET` | (empty) | OIDC client secret (not needed when using dynamic registration) |
-| `OIDC_SCOPES` | `openid,email,profile` | OIDC scopes for Discobot login |
+| `OIDC_SCOPES` | `openid,email,profile` | OIDC scopes for Discboeing login |
 | `WORKSPACE_DIR` | `/tmp/workspaces` | Base directory for workspaces |
-| `SANDBOX_IMAGE` | `ghcr.io/obot-platform/discobot:main` | Default sandbox image for local runtimes such as Docker |
-| `SANDBOX_IMAGE_REMOTE` | (empty) | Remotely pullable sandbox image for non-local runtimes; when empty, non-local providers fall back to `ghcr.io/obot-platform/discobot:main` |
+| `SANDBOX_IMAGE` | `ghcr.io/boeing-ai-gateway/discboeing:main` | Default sandbox image for local runtimes such as Docker |
+| `SANDBOX_IMAGE_REMOTE` | (empty) | Remotely pullable sandbox image for non-local runtimes; when empty, non-local providers fall back to `ghcr.io/boeing-ai-gateway/discboeing:main` |
 | `THREAD_STATUS_SYNC_INTERVAL` | `10s` | Poll interval for non-terminal session thread summaries |
 | `CACHE_ENABLED` | `true` | Enable project-scoped cache volumes |
 | `ENCRYPTION_KEY` | (required) | Key for credential encryption |

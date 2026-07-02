@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import { FakeDiscobotApi } from "./fake-api";
+import { FakeDiscboeingApi } from "./fake-api";
 
 function jsonHeaders(route: Route) {
   return {
@@ -12,12 +12,12 @@ function jsonHeaders(route: Route) {
   };
 }
 
-export async function installApiRoutes(page: Page, api: FakeDiscobotApi) {
+export async function installApiRoutes(page: Page, api: FakeDiscboeingApi) {
   await page.route("**/api/**", async (route) => fulfillApiRoute(route, api));
   await page.route("**/auth/**", async (route) => fulfillApiRoute(route, api));
 }
 
-async function fulfillApiRoute(route: Route, api: FakeDiscobotApi) {
+async function fulfillApiRoute(route: Route, api: FakeDiscboeingApi) {
   const request = route.request();
   const url = new URL(request.url());
   const { status = 200, body } = api.handle(request.method(), url);

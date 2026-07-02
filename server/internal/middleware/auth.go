@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 type contextKey string
@@ -20,8 +20,8 @@ const (
 	UserEmailKey contextKey = "userEmail"
 )
 
-const sessionCookieName = "discobot_session"
-const desktopSecretCookieName = "discobot_secret"
+const sessionCookieName = "discboeing_session"
+const desktopSecretCookieName = "discboeing_secret"
 
 // DesktopShellAuth middleware validates the desktop shell secret from cookie or
 // query string.

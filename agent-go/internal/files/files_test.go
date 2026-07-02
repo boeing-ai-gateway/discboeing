@@ -38,38 +38,38 @@ func TestTildePathsResolveUnderHome(t *testing.T) {
 	t.Setenv("HOME", homeRoot)
 	t.Setenv("USERPROFILE", homeRoot)
 
-	write, fileErr := WriteFile("~/.discobot/editor/control.json", `{"type":"openFile"}`, "utf8", workspaceRoot)
+	write, fileErr := WriteFile("~/.discboeing/editor/control.json", `{"type":"openFile"}`, "utf8", workspaceRoot)
 	if fileErr != nil {
 		t.Fatalf("WriteFile() error = %v", fileErr)
 	}
-	if write.Path != "~/.discobot/editor/control.json" {
+	if write.Path != "~/.discboeing/editor/control.json" {
 		t.Fatalf("WriteFile() path = %q", write.Path)
 	}
 
-	homeFile := filepath.Join(homeRoot, ".discobot", "editor", "control.json")
+	homeFile := filepath.Join(homeRoot, ".discboeing", "editor", "control.json")
 	if _, err := os.Stat(homeFile); err != nil {
 		t.Fatalf("expected home file to exist: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(workspaceRoot, ".discobot", "editor", "control.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(workspaceRoot, ".discboeing", "editor", "control.json")); !os.IsNotExist(err) {
 		t.Fatalf("expected workspace file to be absent, got err %v", err)
 	}
 
-	read, fileErr := ReadFile("~/.discobot/editor/control.json", workspaceRoot)
+	read, fileErr := ReadFile("~/.discboeing/editor/control.json", workspaceRoot)
 	if fileErr != nil {
 		t.Fatalf("ReadFile() error = %v", fileErr)
 	}
-	if read.Path != "~/.discobot/editor/control.json" {
+	if read.Path != "~/.discboeing/editor/control.json" {
 		t.Fatalf("ReadFile() path = %q", read.Path)
 	}
 	if read.Content != `{"type":"openFile"}` {
 		t.Fatalf("ReadFile() content = %q", read.Content)
 	}
 
-	list, fileErr := ListDirectory("~/.discobot/editor", workspaceRoot, true)
+	list, fileErr := ListDirectory("~/.discboeing/editor", workspaceRoot, true)
 	if fileErr != nil {
 		t.Fatalf("ListDirectory() error = %v", fileErr)
 	}
-	if list.Path != "~/.discobot/editor" {
+	if list.Path != "~/.discboeing/editor" {
 		t.Fatalf("ListDirectory() path = %q", list.Path)
 	}
 	if len(list.Entries) != 1 || list.Entries[0].Name != "control.json" {

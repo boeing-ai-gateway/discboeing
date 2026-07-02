@@ -14,8 +14,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
 )
 
 const agentDataDir = "/.data"
@@ -231,7 +231,7 @@ func isGitURL(source string) bool {
 }
 
 func ensureGitMirrorCache(ctx context.Context, cloneSource string, creds []credentials.EnvVar) (string, error) {
-	cacheBase := persistentCachePath("/home/discobot/.cache/discobot/git")
+	cacheBase := persistentCachePath("/home/discboeing/.cache/discboeing/git")
 	if err := os.MkdirAll(cacheBase, 0777); err != nil {
 		return "", fmt.Errorf("failed to create git cache directory: %w", err)
 	}

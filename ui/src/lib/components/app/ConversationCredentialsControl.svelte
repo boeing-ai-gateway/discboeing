@@ -83,7 +83,7 @@
 			return;
 		}
 		window.dispatchEvent(
-			new CustomEvent("discobot:session-credentials-changed", {
+			new CustomEvent("discboeing:session-credentials-changed", {
 				detail: { sessionId, source: componentId },
 			}),
 		);
@@ -440,20 +440,20 @@
 			void loadAssignments();
 		};
 		window.addEventListener(
-			"discobot:session-credentials-changed",
+			"discboeing:session-credentials-changed",
 			handleSessionCredentialsChanged,
 		);
 		window.addEventListener(
-			"discobot:credentials-changed",
+			"discboeing:credentials-changed",
 			handleCredentialsChanged,
 		);
 		return () => {
 			window.removeEventListener(
-				"discobot:session-credentials-changed",
+				"discboeing:session-credentials-changed",
 				handleSessionCredentialsChanged,
 			);
 			window.removeEventListener(
-				"discobot:credentials-changed",
+				"discboeing:credentials-changed",
 				handleCredentialsChanged,
 			);
 		};

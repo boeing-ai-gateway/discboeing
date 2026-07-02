@@ -120,9 +120,9 @@ Testing expectations:
 | `parts/DiffReviewFileRenderer.svelte` | Pure / no context | Diff e2e pending | Props-only. |
 | `parts/DiffReviewPanel.svelte` | Pure / no context | Diff e2e pending | Props-only. |
 | `parts/DiffReviewSelectionCommentPopover.svelte` | Pure / no context | Diff e2e pending | Props-only. |
-| `parts/DiscobotBrand.svelte` | Pure / no context | App boot e2e smoke | Props-only. |
-| `parts/DiscobotLogo.svelte` | Pure / no context | App boot e2e smoke | Props-only. |
-| `parts/DiscobotWordmark.svelte` | Pure / no context | App boot e2e smoke | Props-only. |
+| `parts/DiscboeingBrand.svelte` | Pure / no context | App boot e2e smoke | Props-only. |
+| `parts/DiscboeingLogo.svelte` | Pure / no context | App boot e2e smoke | Props-only. |
+| `parts/DiscboeingWordmark.svelte` | Pure / no context | App boot e2e smoke | Props-only. |
 | `parts/DockWindowChrome.svelte` | Pure / no context | Dock e2e pending | Props-only. |
 | `parts/FilesPanel.svelte` | Migrated | `pnpm typecheck` | Props-only file panel with local exported panel-shape types backed by API/ng data. |
 | `parts/FilesPanelTabs.svelte` | Pure / no context | Files e2e pending | Props-only. |

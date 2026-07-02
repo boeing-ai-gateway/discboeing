@@ -5,8 +5,8 @@ After=xvfb.service
 
 [Service]
 Type=simple
-User=discobot
-Group=discobot
+User=discboeing
+Group=discboeing
 NoNewPrivileges=true
 ProtectSystem=full
 ProtectHome=read-only

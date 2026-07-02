@@ -21,10 +21,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/service"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 var githubShorthandPattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})/[A-Za-z0-9._-]+$`)
@@ -603,7 +603,7 @@ func splitGitHubOwnerRepoPrefix(query string) (owner string, repoPrefix string, 
 func setGitHubRequestHeaders(req *http.Request, githubToken string) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", "discobot-server")
+	req.Header.Set("User-Agent", "discboeing-server")
 	if githubToken != "" {
 		req.Header.Set("Authorization", "Bearer "+githubToken)
 	}

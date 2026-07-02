@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/internal/files"
-	"github.com/obot-platform/discobot/agent-go/internal/gitops"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/files"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/gitops"
 )
 
 // GetDiff handles GET /diff — returns workspace diff.

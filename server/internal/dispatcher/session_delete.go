@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 // SessionDeleteExecutor handles session_delete jobs.

@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+#---
+# name: discboeing-rebase
+# description: Rebase session changes onto the tracked upstream branch
+# discboeing-ui: true
+# discboeing-label: Rebase
+# discboeing-icon: git-branch
+# discboeing-group: Git
+# discboeing-order: 20
+#---
+set -euo pipefail
+
+cd /home/discboeing/workspace
+
+print_section() {
+	local title=$1
+	shift
+	echo "## ${title}"
+	echo '```text'
+	if "$@"; then
+		:
+	else
+		local status=$?
+		echo "(command exited with status ${status})"
+	fi
+	echo '```'
+	echo
+}
+
+run_and_print_section() {
+	local command_text=$1
+	shift
+	echo "## ${command_text}"
+	echo '```text'
+	echo "$ ${command_text}"
+	if "$@" 2>&1; then
+		:
+	else
+		local status=$?
+		echo
+		echo "(command exited with status ${status})"
+		echo '```'
+		echo
+		return "$status"
+	fi
+	echo '```'
+	echo
+}
+
+upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)
+user_instructions=${1-}
+if [[ -z "$upstream" ]]; then
+	echo "Discboeing rebase could not start because no upstream branch is configured for the current branch." >&2
+	echo >&2
+	print_section "git status --short --branch" git status --short --branch >&2 || true
+	exit 1
+fi
+
+remote_name=${upstream%%/*}
+
+run_and_print_section "git fetch ${remote_name}" git fetch "$remote_name"
+
+if ! run_and_print_section "GIT_EDITOR=true git rebase --autostash ${upstream}" env GIT_EDITOR=true git rebase --autostash "$upstream"; then
+	echo "Discboeing rebase failed while rebasing onto ${upstream}." >&2
+	echo "If there are conflicts, explain them clearly to the user, resolve them, then continue with GIT_EDITOR=true git rebase --continue. If the user wants to stop, use git rebase --abort." >&2
+	echo >&2
+	print_section "git status --short --branch" git status --short --branch >&2 || true
+	print_section "git diff --name-only --diff-filter=U" git diff --name-only --diff-filter=U >&2 || true
+	exit 1
+fi
+
+cat <<EOF
+Discboeing rebase completed successfully.
+
+This slash command already fetched ${remote_name}, rebased the current branch
+onto ${upstream}, and gathered the post-rebase git state for you.
+EOF
+
+if [[ -n "$user_instructions" ]]; then
+	cat <<EOF
+
+Additional user instructions:
+${user_instructions}
+EOF
+fi
+
+cat <<EOF
+
+Summarize the result for the user and mention any important follow-up if needed.
+Follow any additional user instructions above when you prepare that response.
+
+EOF
+
+print_section "git status --short --branch" git status --short --branch
+print_section "git log --oneline -5" git log --oneline -5

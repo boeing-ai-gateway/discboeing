@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 func TestToolOutputDetail_DefaultTool(t *testing.T) {

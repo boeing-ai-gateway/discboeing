@@ -44,7 +44,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/obot-platform/discobot
+        - github.com/boeing-ai-gateway/discboeing
   exclusions:
     generated: lax
     paths:

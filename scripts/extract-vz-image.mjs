@@ -7,7 +7,7 @@
  * electron/resources/vz/ for bundling into the macOS app.
  *
  * Usage: node scripts/extract-vz-image.mjs [image-ref] [arch]
- *   image-ref: Docker image reference (defaults to ghcr.io/obot-platform/discobot-vz:main)
+ *   image-ref: Docker image reference (defaults to ghcr.io/boeing-platform/discboeing-vz:main)
  *   arch: Architecture (amd64 or arm64, defaults to host arch)
  */
 
@@ -21,7 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 const resourcesDir = join(projectRoot, "electron", "resources", "vz");
 
-const imageRef = process.argv[2] || "ghcr.io/obot-platform/discobot-vz:main";
+const imageRef = process.argv[2] || "ghcr.io/boeing-platform/discboeing-vz:main";
 const arch = process.argv[3] || (process.arch === "arm64" ? "arm64" : "amd64");
 
 mkdirSync(resourcesDir, { recursive: true });
@@ -53,12 +53,12 @@ console.log(`Extracting VZ image files for ${arch}...`);
 console.log(`Image: ${imageRef}`);
 console.log(`Output directory: ${resourcesDir}`);
 
-const extractFiles = ["vmlinuz", "kernel-version", "discobot-rootfs.squashfs"];
+const extractFiles = ["vmlinuz", "kernel-version", "discboeing-rootfs.squashfs"];
 const outputFiles =
 	arch === "arm64"
-		? ["vmlinux", "kernel-version", "discobot-rootfs.squashfs"]
+		? ["vmlinux", "kernel-version", "discboeing-rootfs.squashfs"]
 		: extractFiles;
-const tempDir = mkdtempSync(join(os.tmpdir(), "discobot-vz-image-"));
+const tempDir = mkdtempSync(join(os.tmpdir(), "discboeing-vz-image-"));
 const tempTarPath = join(tempDir, "image.tar");
 
 try {

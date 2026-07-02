@@ -20,13 +20,13 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/store"
-	"github.com/obot-platform/discobot/server/internal/terminal"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/mock"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/terminal"
 )
 
 // mockPTY implements sandbox.PTY for testing terminal behavior

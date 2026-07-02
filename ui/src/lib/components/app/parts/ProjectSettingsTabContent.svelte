@@ -249,7 +249,7 @@
 			return "Saved.";
 		}
 		if (result.provider === "wsl") {
-			return "Saved. Restart Discobot to apply the disk resize on next startup.";
+			return "Saved. Restart Discboeing to apply the disk resize on next startup.";
 		}
 		return "Saved. Restart the runtime by opening a new session to apply the change.";
 	}

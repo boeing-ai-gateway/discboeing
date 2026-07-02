@@ -1,6 +1,6 @@
 # UI Architecture
 
-This document describes the architecture of the Discobot frontend, a SvelteKit application built with Vite that provides an IDE-like chat interface for AI coding agents.
+This document describes the architecture of the Discboeing frontend, a SvelteKit application built with Vite that provides an IDE-like chat interface for AI coding agents.
 
 ## Overview
 
@@ -111,7 +111,7 @@ tests can stay on `node:test`.
 
 ### 4. Chat Streaming
 
-The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) processes Discobot chat stream data frames:
+The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) processes Discboeing chat stream data frames:
 
 - Buffers `history-start`/`history-message`/`history-end` replay events
 - Applies `chunk`/`done` events to materialize live AI messages
@@ -119,9 +119,9 @@ The thread chat stream reducer (`ui/src/lib/thread/conversation-stream.ts`) proc
 
 Mounted thread workspaces subscribe through a single app-scoped project WebSocket, which multiplexes chat streams, project events, and service logs across multiple sessions and avoids holding separate SSE connections per mounted workspace or service panel. The shell only preloads the active session plus recent sessions the user has already opened, so sidebar recents can remain visible without eagerly creating session or thread contexts for untouched sessions.
 
-The dock reserves `discobot-desktop` and `discobot-vscode` as first-class panes. Both are backed by the existing per-session service proxy, but the VS Code pane is rendered separately from generic service previews so it can use a looser iframe policy and its own toolbar. The desktop pane opens its noVNC websocket with `x` and `y` query parameters that reflect the current panel size; Discobot's authenticated service proxy authorizes that browser request before it reaches the sandbox. Inside the sandbox, the VNC websocket wrapper validates those dimensions, buckets them to a bounded set of RandR modes, resizes the Xdummy display through RandR, and then proxies the connection to localhost-only x11vnc. The editor entry point is disabled by default and can be exposed from Settings, which lets the UI hide the editor button entirely without changing service discovery.
+The dock reserves `discboeing-desktop` and `discboeing-vscode` as first-class panes. Both are backed by the existing per-session service proxy, but the VS Code pane is rendered separately from generic service previews so it can use a looser iframe policy and its own toolbar. The desktop pane opens its noVNC websocket with `x` and `y` query parameters that reflect the current panel size; Discboeing's authenticated service proxy authorizes that browser request before it reaches the sandbox. Inside the sandbox, the VNC websocket wrapper validates those dimensions, buckets them to a bounded set of RandR modes, resizes the Xdummy display through RandR, and then proxies the connection to localhost-only x11vnc. The editor entry point is disabled by default and can be exposed from Settings, which lets the UI hide the editor button entirely without changing service discovery.
 
-The sandbox image seeds code-server profile defaults from `container-assets/code-server/` into `/home/discobot/.local/share/discobot-code-server/` on first launch. The cache volume now preserves `/home/discobot/.local/share/discobot-code-server/User` and `/home/discobot/.local/share/discobot-code-server/extensions` by default so editor settings and installed extensions carry across sessions, while workspace `.vscode/` settings still apply as normal workspace-level overrides. When `code-server` is present in the sandbox PATH, the agent exposes `discobot-vscode` as a built-in passive service, and the `VSCodePanel` writes the resolved light/dark mode to `~/.discobot/editor/.vscode-theme.json` so the bundled theme extension can watch that home-scoped file and keep the embedded editor aligned with the surrounding UI. The same home-scoped editor directory also carries one-shot control commands such as `~/.discobot/editor/.vscode-control.json` for opening workspace files in the embedded editor without adding repository-visible files.
+The sandbox image seeds code-server profile defaults from `container-assets/code-server/` into `/home/discboeing/.local/share/discboeing-code-server/` on first launch. The cache volume now preserves `/home/discboeing/.local/share/discboeing-code-server/User` and `/home/discboeing/.local/share/discboeing-code-server/extensions` by default so editor settings and installed extensions carry across sessions, while workspace `.vscode/` settings still apply as normal workspace-level overrides. When `code-server` is present in the sandbox PATH, the agent exposes `discboeing-vscode` as a built-in passive service, and the `VSCodePanel` writes the resolved light/dark mode to `~/.discboeing/editor/.vscode-theme.json` so the bundled theme extension can watch that home-scoped file and keep the embedded editor aligned with the surrounding UI. The same home-scoped editor directory also carries one-shot control commands such as `~/.discboeing/editor/.vscode-control.json` for opening workspace files in the embedded editor without adding repository-visible files.
 
 Reasoning is level-based and sourced from each model's `reasoningLevels`/`defaultReasoning` metadata.
 

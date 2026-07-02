@@ -7,8 +7,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/cli"
-	"github.com/obot-platform/discobot/hcs-go/internal/winapi"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/winapi"
 )
 
 type VMAccessGrant struct {

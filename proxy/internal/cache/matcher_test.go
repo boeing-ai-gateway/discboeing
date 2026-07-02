@@ -41,7 +41,7 @@ func TestMatcher_ContentAware_ShouldCache(t *testing.T) {
 		{
 			name:     "ghcr.io blob with OCI accept - should cache",
 			method:   "GET",
-			url:      "https://ghcr.io/v2/obot-platform/discobot/blobs/sha256:bd9ddc54bea929a22b334e73e026d4136e5b73f5cc29942896c72e4ece69b13d",
+			url:      "https://ghcr.io/v2/boeing-ai-gateway/discboeing/blobs/sha256:bd9ddc54bea929a22b334e73e026d4136e5b73f5cc29942896c72e4ece69b13d",
 			accept:   dockerAccept,
 			expected: true,
 		},
@@ -232,7 +232,7 @@ func TestMatcher_ContentAware_GitHubRegistryFlow(t *testing.T) {
 	digest := "sha256:bd9ddc54bea929a22b334e73e026d4136e5b73f5cc29942896c72e4ece69b13d"
 
 	// Step 1: initial request to ghcr.io
-	req1, _ := http.NewRequest("GET", "https://ghcr.io/v2/obot-platform/discobot/blobs/"+digest, nil)
+	req1, _ := http.NewRequest("GET", "https://ghcr.io/v2/boeing-ai-gateway/discboeing/blobs/"+digest, nil)
 	req1.Header.Set("Accept", dockerAccept)
 	if !matcher.ShouldCache(req1) {
 		t.Error("initial ghcr.io request should be cacheable")

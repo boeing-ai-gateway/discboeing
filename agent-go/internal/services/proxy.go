@@ -13,10 +13,10 @@ import (
 )
 
 const (
-	discobotForwardedForHeader   = "X-Discobot-Forwarded-For"
-	discobotForwardedHostHeader  = "X-Discobot-Forwarded-Host"
-	discobotForwardedPathHeader  = "X-Discobot-Forwarded-Path"
-	discobotForwardedProtoHeader = "X-Discobot-Forwarded-Proto"
+	discboeingForwardedForHeader   = "X-Discboeing-Forwarded-For"
+	discboeingForwardedHostHeader  = "X-Discboeing-Forwarded-Host"
+	discboeingForwardedPathHeader  = "X-Discboeing-Forwarded-Path"
+	discboeingForwardedProtoHeader = "X-Discboeing-Forwarded-Proto"
 )
 
 // ProxyHTTP creates an HTTP reverse proxy handler for a service port.
@@ -36,15 +36,15 @@ func ProxyHTTP(port int) http.Handler {
 			req.URL.Host = target.Host
 			req.Host = target.Host
 
-			// Use Discobot's preserved forwarded path when present. The
+			// Use Discboeing's preserved forwarded path when present. The
 			// external VM proxy may have replaced the standard X-Forwarded-*
 			// headers before this request reached agent-go.
-			if fwdPath := firstHeader(req, discobotForwardedPathHeader, "X-Forwarded-Path"); fwdPath != "" {
+			if fwdPath := firstHeader(req, discboeingForwardedPathHeader, "X-Forwarded-Path"); fwdPath != "" {
 				req.URL.Path = fwdPath
 			}
 
 			// Set forwarding headers
-			if xff := firstHeader(req, discobotForwardedForHeader, "X-Forwarded-For"); xff != "" {
+			if xff := firstHeader(req, discboeingForwardedForHeader, "X-Forwarded-For"); xff != "" {
 				req.Header.Set("X-Forwarded-For", xff)
 			} else {
 				if xri := req.Header.Get("X-Real-Ip"); xri != "" {
@@ -53,7 +53,7 @@ func ProxyHTTP(port int) http.Handler {
 					req.Header.Set("X-Forwarded-For", "127.0.0.1")
 				}
 			}
-			forwardedHost := firstHeader(req, discobotForwardedHostHeader, "X-Forwarded-Host")
+			forwardedHost := firstHeader(req, discboeingForwardedHostHeader, "X-Forwarded-Host")
 			if forwardedHost == "" {
 				forwardedHost = originalHost
 			}
@@ -62,16 +62,16 @@ func ProxyHTTP(port int) http.Handler {
 			}
 			req.Header.Set("X-Forwarded-Host", forwardedHost)
 
-			forwardedProto := firstHeader(req, discobotForwardedProtoHeader, "X-Forwarded-Proto")
+			forwardedProto := firstHeader(req, discboeingForwardedProtoHeader, "X-Forwarded-Proto")
 			if forwardedProto == "" {
 				forwardedProto = "http"
 			}
 			req.Header.Set("X-Forwarded-Proto", forwardedProto)
 
-			req.Header.Del(discobotForwardedForHeader)
-			req.Header.Del(discobotForwardedHostHeader)
-			req.Header.Del(discobotForwardedPathHeader)
-			req.Header.Del(discobotForwardedProtoHeader)
+			req.Header.Del(discboeingForwardedForHeader)
+			req.Header.Del(discboeingForwardedHostHeader)
+			req.Header.Del(discboeingForwardedPathHeader)
+			req.Header.Del(discboeingForwardedProtoHeader)
 
 			// Do NOT manually strip hop-by-hop headers here.
 			// httputil.ReverseProxy does this automatically AFTER the Director

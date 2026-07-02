@@ -13,8 +13,8 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/charlievieth/fastwalk"
 
-	"github.com/obot-platform/discobot/agent-go/internal/grep/filetypes"
-	"github.com/obot-platform/discobot/agent-go/internal/grep/internal/gitignore"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/grep/filetypes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/grep/internal/gitignore"
 )
 
 func walk(ctx context.Context, opts GrepOptions, s *searcher) (*Results, error) {

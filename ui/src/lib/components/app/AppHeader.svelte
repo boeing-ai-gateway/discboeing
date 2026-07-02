@@ -4,8 +4,8 @@
 	import RefreshCwIcon from "@lucide/svelte/icons/refresh-cw";
 	import SettingsIcon from "@lucide/svelte/icons/settings";
 	import AppMacWindowSpacer from "$lib/components/app/AppMacWindowSpacer.svelte";
-	import DiscobotBrand from "$lib/components/app/parts/DiscobotBrand.svelte";
-	import DiscobotLogo from "$lib/components/app/parts/DiscobotLogo.svelte";
+	import DiscboeingBrand from "$lib/components/app/parts/DiscboeingBrand.svelte";
+	import DiscboeingLogo from "$lib/components/app/parts/DiscboeingLogo.svelte";
 	import RightWindowControls from "$lib/components/app/parts/RightWindowControls.svelte";
 	import SessionToolbarStack from "$lib/components/app/SessionToolbarStack.svelte";
 	import SettingsDialog from "$lib/components/app/SettingsDialog.svelte";
@@ -42,7 +42,7 @@
 
 	<div class="relative z-20 flex min-w-0 items-center gap-2 pl-4 pr-3">
 		{#if appEnvironment.isMobile}
-			<DiscobotLogo size={24} />
+			<DiscboeingLogo size={24} />
 			{#if onToggleSidebar}
 				<Button
 					variant="ghost"
@@ -57,7 +57,7 @@
 			{/if}
 		{:else}
 			<AppMacWindowSpacer />
-			<DiscobotBrand heightClass="h-6" />
+			<DiscboeingBrand heightClass="h-6" />
 		{/if}
 	</div>
 

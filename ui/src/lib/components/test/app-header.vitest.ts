@@ -59,7 +59,7 @@ test("app header shows the mobile Sessions toggle to the right of the logo", () 
 
 	assert.match(
 		source,
-		/\{#if appEnvironment\.isMobile\}[\s\S]*<DiscobotLogo size=\{24\} \/>/,
+		/\{#if appEnvironment\.isMobile\}[\s\S]*<DiscboeingLogo size=\{24\} \/>/,
 	);
 	assert.match(
 		source,
@@ -73,7 +73,7 @@ test("app header does not show desktop sessions controls next to the brand", () 
 
 	assert.match(
 		source,
-		/<AppMacWindowSpacer \/>[\s\S]*<DiscobotBrand heightClass="h-6" \/>/,
+		/<AppMacWindowSpacer \/>[\s\S]*<DiscboeingBrand heightClass="h-6" \/>/,
 	);
 	assert.doesNotMatch(source, /\w*Desktop\w*Sidebar\w*Toggle\w*\?: boolean/);
 	assert.doesNotMatch(

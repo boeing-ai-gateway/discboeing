@@ -13,8 +13,8 @@ package <id>
 import (
     "context"
     "iter"
-    "github.com/obot-platform/discobot/agent-go/message"
-    "github.com/obot-platform/discobot/agent-go/providers"
+    "github.com/boeing-ai-gateway/discboeing/agent-go/message"
+    "github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 const providerID = "<id>"
@@ -41,7 +41,7 @@ Config provides `cfg.APIKey()` and `cfg.BaseURL()`. Require `api_key`; use a sen
 Add to `cmd/agent-api/main.go`:
 
 ```go
-import _ "github.com/obot-platform/discobot/agent-go/providers/<id>"
+import _ "github.com/boeing-ai-gateway/discboeing/agent-go/providers/<id>"
 ```
 
 This ensures `init()` runs. The provider is auto-configured at startup via env var `{UPPER_ID}_API_KEY` (e.g., `ANTHROPIC_API_KEY`). Optional: `{UPPER_ID}_BASE_URL`.
@@ -202,12 +202,12 @@ Disable provider-side data retention. Most providers store request/response data
 
 ## Step 9: Models metadata
 
-Discobot does not query provider model-listing endpoints at runtime. Model
-availability comes from the embedded `modelsdev` dataset plus Discobot's
+Discboeing does not query provider model-listing endpoints at runtime. Model
+availability comes from the embedded `modelsdev` dataset plus Discboeing's
 overlay metadata.
 
 ```go
-import "github.com/obot-platform/discobot/agent-go/providers/modelsdev"
+import "github.com/boeing-ai-gateway/discboeing/agent-go/providers/modelsdev"
 
 for _, md := range modelsdev.AllForProvider(providerID) {
     if md.ToolCall {

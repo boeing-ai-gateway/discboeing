@@ -101,7 +101,7 @@ type ResponseCapture struct {
 const (
 	defaultUpgradeStreamQueueSize = 256
 
-	streamRecordFormatRawFrames = "discobot-upgrade-stream-v1"
+	streamRecordFormatRawFrames = "discboeing-upgrade-stream-v1"
 
 	streamFrameTypeData    = 1
 	streamFrameTypeSummary = 2

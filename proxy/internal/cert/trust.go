@@ -58,7 +58,7 @@ func InstallTrust(certPath string, trustUser *TrustUser) error {
 // InstallSystemTrust installs the CA certificate in the system trust store.
 // It supports Debian/Ubuntu/Alpine and Fedora/RHEL-style trust tooling.
 func InstallSystemTrust(certPath string) error {
-	fmt.Printf("discobot-proxy: installing proxy CA certificate in system trust store...\n")
+	fmt.Printf("discboeing-proxy: installing proxy CA certificate in system trust store...\n")
 
 	if _, err := exec.LookPath("update-ca-certificates"); err == nil {
 		return installCertDebianStyle(certPath)
@@ -68,9 +68,9 @@ func InstallSystemTrust(certPath string) error {
 		return installCertFedoraStyle(certPath)
 	}
 
-	fmt.Printf("discobot-proxy: warning: no certificate update tool found (update-ca-certificates or update-ca-trust)\n")
-	fmt.Printf("discobot-proxy: warning: proxy CA certificate not installed in system trust store\n")
-	fmt.Printf("discobot-proxy: warning: HTTPS interception may not work for some clients\n")
+	fmt.Printf("discboeing-proxy: warning: no certificate update tool found (update-ca-certificates or update-ca-trust)\n")
+	fmt.Printf("discboeing-proxy: warning: proxy CA certificate not installed in system trust store\n")
+	fmt.Printf("discboeing-proxy: warning: HTTPS interception may not work for some clients\n")
 	return nil
 }
 
@@ -82,7 +82,7 @@ func installCertDebianStyle(certPath string) error {
 		return fmt.Errorf("create ca-certificates dir: %w", err)
 	}
 
-	destPath := filepath.Join(destDir, "discobot-proxy-ca.crt")
+	destPath := filepath.Join(destDir, "discboeing-proxy-ca.crt")
 	data, err := os.ReadFile(filepath.Clean(certPath))
 	if err != nil {
 		return fmt.Errorf("read certificate: %w", err)
@@ -101,7 +101,7 @@ func installCertDebianStyle(certPath string) error {
 		return fmt.Errorf("verify system CA bundle %s: %w", bundlePath, err)
 	}
 	if !installed {
-		fmt.Printf("discobot-proxy: proxy CA certificate missing from %s after update; forcing full rebuild\n", bundlePath)
+		fmt.Printf("discboeing-proxy: proxy CA certificate missing from %s after update; forcing full rebuild\n", bundlePath)
 		if err := runUpdateCACertificates("--fresh"); err != nil {
 			return err
 		}
@@ -114,7 +114,7 @@ func installCertDebianStyle(certPath string) error {
 		}
 	}
 
-	fmt.Printf("discobot-proxy: proxy CA certificate installed in system trust store (Debian/Ubuntu/Alpine)\n")
+	fmt.Printf("discboeing-proxy: proxy CA certificate installed in system trust store (Debian/Ubuntu/Alpine)\n")
 	return nil
 }
 
@@ -186,7 +186,7 @@ func installCertFedoraStyle(certPath string) error {
 		return fmt.Errorf("create ca-trust dir: %w", err)
 	}
 
-	destPath := filepath.Join(destDir, "discobot-proxy-ca.crt")
+	destPath := filepath.Join(destDir, "discboeing-proxy-ca.crt")
 	data, err := os.ReadFile(filepath.Clean(certPath))
 	if err != nil {
 		return fmt.Errorf("read certificate: %w", err)
@@ -203,7 +203,7 @@ func installCertFedoraStyle(certPath string) error {
 		return fmt.Errorf("run update-ca-trust: %w", err)
 	}
 
-	fmt.Printf("discobot-proxy: proxy CA certificate installed in system trust store (Fedora/RHEL)\n")
+	fmt.Printf("discboeing-proxy: proxy CA certificate installed in system trust store (Fedora/RHEL)\n")
 	return nil
 }
 
@@ -219,7 +219,7 @@ func InstallUserNSSDB(certPath string, trustUser *TrustUser) error {
 		certutilAvailable = false
 	}
 	if !certutilAvailable {
-		fmt.Printf("discobot-proxy: warning: certutil not found; skipping Chromium/NSS trust setup\n")
+		fmt.Printf("discboeing-proxy: warning: certutil not found; skipping Chromium/NSS trust setup\n")
 		return nil
 	}
 
@@ -244,9 +244,9 @@ func InstallUserNSSDB(certPath string, trustUser *TrustUser) error {
 		}
 	}
 
-	_ = exec.Command("certutil", "-d", nssDB, "-D", "-n", "discobot-proxy-ca").Run()
+	_ = exec.Command("certutil", "-d", nssDB, "-D", "-n", "discboeing-proxy-ca").Run()
 
-	addCmd := exec.Command("certutil", "-d", nssDB, "-A", "-t", "C,,", "-n", "discobot-proxy-ca", "-i", filepath.Clean(certPath))
+	addCmd := exec.Command("certutil", "-d", nssDB, "-A", "-t", "C,,", "-n", "discboeing-proxy-ca", "-i", filepath.Clean(certPath))
 	addCmd.Stdout = os.Stdout
 	addCmd.Stderr = os.Stderr
 	if err := addCmd.Run(); err != nil {
@@ -257,7 +257,7 @@ func InstallUserNSSDB(certPath string, trustUser *TrustUser) error {
 		return fmt.Errorf("set ownership on NSS DB %s: %w", nssDBDir, err)
 	}
 
-	fmt.Printf("discobot-proxy: proxy CA certificate installed in NSS DB for %s at %s\n", trustUser.Username, nssDBDir)
+	fmt.Printf("discboeing-proxy: proxy CA certificate installed in NSS DB for %s at %s\n", trustUser.Username, nssDBDir)
 	return nil
 }
 

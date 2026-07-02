@@ -1,0 +1,25 @@
+[Unit]
+Description=Discboeing container initialization (workspace, overlayfs, certs)
+DefaultDependencies=no
+After=local-fs.target systemd-tmpfiles-setup.service
+Wants=systemd-tmpfiles-setup.service
+Before=discboeing-proxy.service docker.service discboeing-agent-api.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+RemainAfterExit=yes
+
+# Forward Docker container environment variables to this service.
+# Docker sets env vars on PID 1 (systemd) via /proc/1/environ (null-separated).
+# Convert to newline-separated file so all discboeing services can use EnvironmentFile=.
+ExecStartPre=/bin/bash -c 'mkdir -p /run/discboeing && tr "\\0" "\\n" < /proc/1/environ > /run/discboeing/container-env'
+EnvironmentFile=-/run/discboeing/container-env
+
+ExecStart=/opt/discboeing/bin/discboeing-sandbox-init setup
+
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

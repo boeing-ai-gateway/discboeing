@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 )
 
 // NewProvider creates a new VZ+Docker hybrid provider.

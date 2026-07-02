@@ -1,6 +1,6 @@
 # Implementation Plan
 
-This document outlines the step-by-step implementation plan for the Discobot Proxy.
+This document outlines the step-by-step implementation plan for the Discboeing Proxy.
 
 ## Overview
 
@@ -12,7 +12,7 @@ The proxy will be implemented in phases, with each phase building on the previou
 
 ```bash
 cd proxy
-go mod init github.com/darren/discobot/proxy
+go mod init github.com/darren/discboeing/proxy
 ```
 
 **Files:**

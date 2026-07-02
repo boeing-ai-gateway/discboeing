@@ -7,7 +7,7 @@ PartOf=xvfb.service
 
 [Service]
 Type=simple
-User=discobot
+User=discboeing
 Environment=DISPLAY=:0
 ExecStart=/usr/bin/openbox-session
 Restart=on-failure

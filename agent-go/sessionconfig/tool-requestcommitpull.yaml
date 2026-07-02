@@ -1,8 +1,8 @@
 name: RequestCommitPull
 description: |-
-  Ask Discobot to pull commit(s) you already prepared in the sandbox and apply them to the host workspace.
+  Ask Discboeing to pull commit(s) you already prepared in the sandbox and apply them to the host workspace.
 
-  Use this after you have created one or more git commits in the sandbox and want Discobot to import them back into the parent workspace.
+  Use this after you have created one or more git commits in the sandbox and want Discboeing to import them back into the parent workspace.
 inputSchema:
   type: object
   additionalProperties: false
@@ -12,4 +12,4 @@ inputSchema:
       description: Optional additional notes that may be important for the end user to know about the prepared sandbox changes.
     baseCommit:
       type: string
-      description: Optional base commit SHA for the prepared patch series. When set, Discobot uses this exact base when previewing and pulling the prepared commits.
+      description: Optional base commit SHA for the prepared patch series. When set, Discboeing uses this exact base when previewing and pulling the prepared commits.

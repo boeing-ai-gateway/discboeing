@@ -28,8 +28,8 @@
 		const normalizedQuery = query.trim().toLowerCase();
 		return [...commands]
 			.sort((left, right) => {
-				const leftOrder = left.discobot?.order ?? 0;
-				const rightOrder = right.discobot?.order ?? 0;
+				const leftOrder = left.discboeing?.order ?? 0;
+				const rightOrder = right.discboeing?.order ?? 0;
 				if (leftOrder !== rightOrder) {
 					return leftOrder - rightOrder;
 				}

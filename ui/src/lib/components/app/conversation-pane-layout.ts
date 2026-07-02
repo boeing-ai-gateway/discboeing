@@ -170,11 +170,11 @@ export function isCompactionMessage(message: ChatMessage): boolean {
 		message.metadata && typeof message.metadata === "object"
 			? (message.metadata as Record<string, unknown>)
 			: null;
-	const discobot =
-		metadata?.discobot && typeof metadata.discobot === "object"
-			? (metadata.discobot as Record<string, unknown>)
+	const discboeing =
+		metadata?.discboeing && typeof metadata.discboeing === "object"
+			? (metadata.discboeing as Record<string, unknown>)
 			: null;
-	return discobot?.kind === "compaction";
+	return discboeing?.kind === "compaction";
 }
 
 function getStableTurnId(message: ChatMessage): string | null {
@@ -182,12 +182,12 @@ function getStableTurnId(message: ChatMessage): string | null {
 		message.metadata && typeof message.metadata === "object"
 			? (message.metadata as Record<string, unknown>)
 			: null;
-	const discobot =
-		metadata?.discobot && typeof metadata.discobot === "object"
-			? (metadata.discobot as Record<string, unknown>)
+	const discboeing =
+		metadata?.discboeing && typeof metadata.discboeing === "object"
+			? (metadata.discboeing as Record<string, unknown>)
 			: null;
-	return typeof discobot?.turnId === "string" && discobot.turnId.trim() !== ""
-		? discobot.turnId
+	return typeof discboeing?.turnId === "string" && discboeing.turnId.trim() !== ""
+		? discboeing.turnId
 		: null;
 }
 

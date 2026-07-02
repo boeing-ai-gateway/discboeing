@@ -24,8 +24,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/obot-platform/discobot/agent-go/internal/files"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/files"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 const devToolsStartupTimeout = 10 * time.Second
@@ -68,10 +68,10 @@ type Manager struct {
 }
 
 const (
-	EnvCDPURL          = "DISCOBOT_BROWSER_CDP_URL"
+	EnvCDPURL          = "DISCBOEING_BROWSER_CDP_URL"
 	EnvHarnessCDPURL   = "BROWSER_HARNESS_CDP_URL"
 	EnvBrowserUseCDPWS = "BU_CDP_WS"
-	EnvBrowserThreadID = "DISCOBOT_BROWSER_THREAD_ID"
+	EnvBrowserThreadID = "DISCBOEING_BROWSER_THREAD_ID"
 )
 
 func NewManager(sessionID string, dataDir string, port int) (*Manager, error) {

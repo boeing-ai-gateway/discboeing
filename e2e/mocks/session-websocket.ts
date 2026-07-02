@@ -21,7 +21,7 @@ export type MockProjectSocketMessage = {
   error?: string;
 };
 
-export const mockWebSocketRequestsBinding = "__discobotMockWebSocketRequests";
+export const mockWebSocketRequestsBinding = "__discboeingMockWebSocketRequests";
 
 export async function installSessionWebSocketMock(
   page: Page,

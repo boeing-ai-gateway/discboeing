@@ -6,9 +6,9 @@ import type {
 } from "$lib/components/ai/types";
 
 const ATTACHMENTS_CONTEXT_KEY = Symbol.for(
-	"discobot-ui-ai-attachments-context",
+	"discboeing-ui-ai-attachments-context",
 );
-const ATTACHMENT_CONTEXT_KEY = Symbol.for("discobot-ui-ai-attachment-context");
+const ATTACHMENT_CONTEXT_KEY = Symbol.for("discboeing-ui-ai-attachment-context");
 
 export type AttachmentsContextValue = {
 	variant: AttachmentVariant;

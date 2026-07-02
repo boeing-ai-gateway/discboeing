@@ -20,14 +20,14 @@ async function gotoApp(page: Page) {
   });
 
   if (await loginLink.isVisible().catch(() => false)) {
-    test.skip(true, "Discobot is showing an authentication screen.");
+    test.skip(true, "Discboeing is showing an authentication screen.");
   }
 
   await expect(settingsButton).toBeVisible();
   expect(errors, "Browser console/page errors during app boot").toEqual([]);
 }
 
-test.describe("Discobot app smoke", () => {
+test.describe("Discboeing app smoke", () => {
   test("boots to the app shell with primary actions", async ({ page }) => {
     await gotoApp(page);
 

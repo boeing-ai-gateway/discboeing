@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 func TestResolveSlashCommand_Script(t *testing.T) {
 	root := t.TempDir()
-	scriptDir := filepath.Join(root, ".discobot", "scripts")
+	scriptDir := filepath.Join(root, ".discboeing", "scripts")
 	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

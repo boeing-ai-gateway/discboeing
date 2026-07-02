@@ -12,7 +12,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"golang.org/x/oauth2"
 
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
 )
 
 // channelCodeFetcher satisfies auth.AuthorizationCodeHandlerConfig.AuthorizationCodeFetcher.
@@ -150,7 +150,7 @@ func buildAuthorizationCodeHandler(
 		// Default: dynamic client registration.
 		handlerCfg.DynamicClientRegistrationConfig = &sdkauth.DynamicClientRegistrationConfig{
 			Metadata: &oauthex.ClientRegistrationMetadata{
-				ClientName:   "discobot-" + serverName,
+				ClientName:   "discboeing-" + serverName,
 				RedirectURIs: []string{fetcher.redirectURI},
 				GrantTypes:   []string{"authorization_code"},
 			},

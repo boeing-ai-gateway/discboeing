@@ -438,7 +438,7 @@ func dialChatWebSocket(t *testing.T, ts *TestServer, user *TestUser, projectID s
 
 	headers := http.Header{}
 	if user != nil {
-		headers.Add("Cookie", fmt.Sprintf("discobot_session=%s", user.Token))
+		headers.Add("Cookie", fmt.Sprintf("discboeing_session=%s", user.Token))
 	}
 	conn, resp, err := websocket.Dial(context.Background(), chatWebSocketURL(ts, nil, projectID), &websocket.DialOptions{
 		HTTPHeader: headers,

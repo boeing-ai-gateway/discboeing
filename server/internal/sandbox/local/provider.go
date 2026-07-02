@@ -17,8 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 // Provider implements the sandbox.Provider interface using local processes.
@@ -55,10 +55,10 @@ type processInfo struct {
 
 // NewProvider creates a new local sandbox provider.
 func NewProvider(cfg *config.Config) (*Provider, error) {
-	// Use configured binary path, default to "obot-agent-api" in PATH
+	// Use configured binary path, default to "boeing-agent-api" in PATH
 	binaryPath := cfg.LocalAgentBinary
 	if binaryPath == "" {
-		binaryPath = "obot-agent-api"
+		binaryPath = "boeing-agent-api"
 	}
 
 	// Verify that the agent API binary exists
@@ -217,7 +217,7 @@ func (p *Provider) Start(_ context.Context, state []byte, sessionID string) ([]b
 
 	// Set environment variables
 	cmd.Env = os.Environ() // Start with current environment
-	cmd.Env = append(cmd.Env, fmt.Sprintf("DISCOBOT_PORT=%d", port))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("DISCBOEING_PORT=%d", port))
 	for k, v := range info.env {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}

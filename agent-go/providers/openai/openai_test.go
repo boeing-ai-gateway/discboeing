@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 func TestNew(t *testing.T) {
@@ -756,7 +756,7 @@ func TestConvertTools(t *testing.T) {
 		}
 	})
 
-	t.Run("maps discobot web search to server-side tool", func(t *testing.T) {
+	t.Run("maps discboeing web search to server-side tool", func(t *testing.T) {
 		tools := []providers.ToolDefinition{
 			{
 				Name: webSearchToolName,
@@ -788,7 +788,7 @@ func TestConvertTools(t *testing.T) {
 		}
 	})
 
-	t.Run("maps discobot web fetch to server-side web search tool", func(t *testing.T) {
+	t.Run("maps discboeing web fetch to server-side web search tool", func(t *testing.T) {
 		tools := []providers.ToolDefinition{
 			{
 				Name: "WebFetch",
@@ -813,7 +813,7 @@ func TestConvertTools(t *testing.T) {
 		}
 	})
 
-	t.Run("deduplicates discobot web search and fetch native tool", func(t *testing.T) {
+	t.Run("deduplicates discboeing web search and fetch native tool", func(t *testing.T) {
 		tools := []providers.ToolDefinition{
 			{
 				Name: webSearchToolName,
@@ -849,7 +849,7 @@ func TestConvertTools(t *testing.T) {
 		}
 	})
 
-	t.Run("maps discobot web search to function when server-side search disabled", func(t *testing.T) {
+	t.Run("maps discboeing web search to function when server-side search disabled", func(t *testing.T) {
 		tools := []providers.ToolDefinition{
 			{
 				Name:        webSearchToolName,
@@ -1250,10 +1250,10 @@ func TestParseSSEStream(t *testing.T) {
 			"response.created", `{"response":{"id":"resp_completed_citation","model":"gpt-5.5"}}`,
 			"response.output_item.added", `{"item":{"id":"msg_1","type":"message","role":"assistant"}}`,
 			"response.content_part.added", `{"part":{"type":"output_text"},"item_id":"msg_1"}`,
-			"response.output_text.delta", `{"item_id":"msg_1","delta":"Discobot lives on GitHub."}`,
-			"response.output_text.done", `{"item_id":"msg_1","text":"Discobot lives on GitHub."}`,
+			"response.output_text.delta", `{"item_id":"msg_1","delta":"Discboeing lives on GitHub."}`,
+			"response.output_text.done", `{"item_id":"msg_1","text":"Discboeing lives on GitHub."}`,
 			"response.output_item.done", `{"item":{"id":"msg_1","type":"message"}}`,
-			"response.completed", `{"response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Discobot lives on GitHub.","annotations":[{"type":"url_citation","url":"https://github.com/obot-platform/discobot","title":"Discobot"}]}]}],"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0}}}}`,
+			"response.completed", `{"response":{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"Discboeing lives on GitHub.","annotations":[{"type":"url_citation","url":"https://github.com/boeing-ai-gateway/discboeing","title":"Discboeing"}]}]}],"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":0},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0}}}}`,
 		)
 
 		chunks := collectChunks(t, sse)
@@ -1268,7 +1268,7 @@ func TestParseSSEStream(t *testing.T) {
 		)
 
 		source := chunks[5].(message.SourceChunk)
-		if source.URL != "https://github.com/obot-platform/discobot" || source.Title != "Discobot" {
+		if source.URL != "https://github.com/boeing-ai-gateway/discboeing" || source.Title != "Discboeing" {
 			t.Fatalf("unexpected source chunk: %#v", source)
 		}
 	})

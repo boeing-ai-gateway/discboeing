@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 func (p *Provider) PrepareState(_ context.Context, sessionID string, opts sandbox.CreateOptions) ([]byte, error) {

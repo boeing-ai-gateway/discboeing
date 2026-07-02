@@ -15,17 +15,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/conntrack"
-	"github.com/obot-platform/discobot/server/internal/encryption"
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	sandboxlocal "github.com/obot-platform/discobot/server/internal/sandbox/local"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/conntrack"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/encryption"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	sandboxlocal "github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/local"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // GitConfigProvider retrieves the git user name and email configuration.
@@ -114,7 +114,7 @@ func (s *SandboxService) SetGitConfigProvider(provider GitConfigProvider) {
 
 // Start watches sandbox lifecycle events and keeps persisted session state in
 // sync with provider state. It handles external runtime changes, such as
-// sandboxes being stopped or deleted outside of Discobot.
+// sandboxes being stopped or deleted outside of Discboeing.
 func (s *SandboxService) Start(ctx context.Context, handlers ...SandboxEventHandler) error {
 	if s == nil || s.provider == nil {
 		return fmt.Errorf("sandbox provider unavailable")
@@ -698,9 +698,9 @@ func (s *SandboxService) CreateForSession(ctx context.Context, sessionID string)
 		SharedSecret: sharedSecret,
 		Env:          sandboxCreateEnv(sessionID, sharedSecret, trustKey),
 		Labels: map[string]string{
-			"discobot.session.id":   sessionID,
-			"discobot.workspace.id": session.WorkspaceID,
-			"discobot.project.id":   session.ProjectID,
+			"discboeing.session.id":   sessionID,
+			"discboeing.workspace.id": session.WorkspaceID,
+			"discboeing.project.id":   session.ProjectID,
 		},
 		WorkspacePath:        workspacePath,
 		WorkspaceSource:      workspace.Path, // Original workspace path (local or git URL)
@@ -786,8 +786,8 @@ func (s *SandboxService) configureSandboxAgent(ctx context.Context, sessionID st
 		WorkspaceTargetRef:     workspaceTargetRef,
 		SessionID:              sessionID,
 		MCPOAuthRedirectBase:   s.cfg.MCPOAuthRedirectBase,
-		DiscobotServerURL:      s.cfg.AgentServerURL,
-		DiscobotProjectID:      session.ProjectID,
+		DiscboeingServerURL:      s.cfg.AgentServerURL,
+		DiscboeingProjectID:      session.ProjectID,
 		EnableGitControlSocket: sandboxGitControlSocketEnabled(workspace, valueOrEmpty(session.WorkspacePath)),
 		Credentials:            creds,
 		GitUserName:            gitUserName,
@@ -839,14 +839,14 @@ func sandboxGitControlSocketEnabled(workspace *model.Workspace, workspacePath st
 
 func sandboxCreateEnv(sessionID, sharedSecret, trustKey string) map[string]string {
 	env := map[string]string{
-		"DISCOBOT_SESSION_ID":      sessionID,
-		"DISCOBOT_WAIT_FOR_CONFIG": "true",
+		"DISCBOEING_SESSION_ID":      sessionID,
+		"DISCBOEING_WAIT_FOR_CONFIG": "true",
 	}
 	if sharedSecret != "" {
-		env["DISCOBOT_SECRET"] = hashSandboxSecret(sharedSecret)
+		env["DISCBOEING_SECRET"] = hashSandboxSecret(sharedSecret)
 	}
 	if trustKey != "" {
-		env["DISCOBOT_TRUST_KEY"] = trustKey
+		env["DISCBOEING_TRUST_KEY"] = trustKey
 	}
 	return env
 }

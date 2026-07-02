@@ -18,7 +18,7 @@ async function gotoApp(page: Page) {
   } catch (error) {
     test.skip(
       true,
-      `Discobot E2E target is not reachable: ${error instanceof Error ? error.message : String(error)}`,
+      `Discboeing E2E target is not reachable: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 
@@ -29,7 +29,7 @@ async function gotoApp(page: Page) {
   });
 
   if (await loginLink.isVisible().catch(() => false)) {
-    test.skip(true, "Discobot is showing an authentication screen.");
+    test.skip(true, "Discboeing is showing an authentication screen.");
   }
 
   await expect(settingsButton).toBeVisible();

@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vz"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vz"
 )
 
 const (

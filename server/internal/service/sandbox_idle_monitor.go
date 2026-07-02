@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/conntrack"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/conntrack"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // SandboxIdleMonitor monitors sessions for inactivity and automatically stops

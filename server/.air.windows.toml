@@ -4,10 +4,10 @@ tmp_dir = "build"
 
 [build]
   args_bin = []
-  entrypoint = "./build/discobot.exe"
+  entrypoint = "./build/discboeing.exe"
   # Windows ARM64 fails to build this server with the debug gcflags used in the
   # Unix config, so use a plain development build here.
-  cmd = "go build -o ./build/discobot.exe ./cmd/server"
+  cmd = "go build -o ./build/discboeing.exe ./cmd/server"
   delay = 1000
   exclude_dir = ["assets", "buid", "vendor", "testdata", "node_modules", "workspaces", "static/ui/dist"]
   exclude_file = []

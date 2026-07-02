@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/obot-platform/discobot/proxy/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/config"
 )
 
 // Injector manages header injection rules.

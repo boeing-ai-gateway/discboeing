@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
 )
 
 func (a *DefaultAgent) formatRecentThreadsReminder(currentThreadID string) string {

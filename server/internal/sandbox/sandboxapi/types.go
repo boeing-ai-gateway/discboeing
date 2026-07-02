@@ -24,7 +24,7 @@ import (
 type ChatRequest struct {
 	// Messages is the array of UIMessages to send.
 	// Kept as raw JSON to pass through without requiring Go to understand
-	// the full Discobot UIMessage structure.
+	// the full Discboeing UIMessage structure.
 	Messages json.RawMessage `json:"messages"`
 	// Model is the optional model to use for this chat request.
 	Model string `json:"model,omitempty"`
@@ -72,7 +72,7 @@ type CommandCredentialRequest struct {
 	ApprovedUses  []CommandApprovedUse `json:"approvedUses,omitempty"`
 }
 
-type CommandDiscobotMetadata struct {
+type CommandDiscboeingMetadata struct {
 	UI                bool                       `json:"ui,omitempty"`
 	Label             string                     `json:"label,omitempty"`
 	ActiveLabel       string                     `json:"activeLabel,omitempty"`
@@ -86,7 +86,7 @@ type Command struct {
 	Name        string                  `json:"name"`
 	Description string                  `json:"description,omitempty"`
 	Kind        string                  `json:"kind"`
-	Discobot    CommandDiscobotMetadata `json:"discobot"`
+	Discboeing    CommandDiscboeingMetadata `json:"discboeing"`
 }
 
 type ListCommandsResponse struct {
@@ -322,7 +322,7 @@ type UpdateQueuedPromptResponse struct {
 	Queue   *QueuedPrompt `json:"queue,omitempty"`
 }
 
-// UIMessage represents a message in Discobot UIMessage format.
+// UIMessage represents a message in Discboeing UIMessage format.
 // This is a minimal representation - the full structure is passed through
 // as raw JSON where possible to avoid tight coupling with UI internals.
 type UIMessage struct {
@@ -466,7 +466,7 @@ type CommitsResponse struct {
 	HeadCommit  string `json:"headCommit"`
 }
 
-// WorkspaceChangeCommit is one Discobot workspace change commit.
+// WorkspaceChangeCommit is one Discboeing workspace change commit.
 type WorkspaceChangeCommit struct {
 	CreatedAt string    `json:"createdAt"`
 	Hash      string    `json:"hash"`
@@ -553,7 +553,7 @@ type AnswerQuestionResponse struct {
 
 // Service represents a user-defined service in the sandbox.
 type Service struct {
-	ID          string                `json:"id"`                    // Filename in .discobot/services/
+	ID          string                `json:"id"`                    // Filename in .discboeing/services/
 	Name        string                `json:"name"`                  // Display name (from config or id)
 	Description string                `json:"description,omitempty"` // Description from config
 	Order       *int                  `json:"order,omitempty"`       // Optional UI ordering hint (lower first)

@@ -18,10 +18,10 @@ import (
 	gosdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/oauth2"
 
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
 )
 
 // ServerStatus is the connection state of an MCP server.
@@ -46,8 +46,8 @@ type ServerInfo struct {
 
 // TokenCallback is invoked after a successful OAuth token exchange.
 // resourceURL is the canonical URL of the MCP server. The implementation
-// should persist the token to the Discobot server so it can be re-delivered
-// on subsequent sessions via the X-Discobot-Credentials header.
+// should persist the token to the Discboeing server so it can be re-delivered
+// on subsequent sessions via the X-Discboeing-Credentials header.
 type TokenCallback func(resourceURL string, token *oauth2.Token)
 
 // OAuthToken is the structure of a single entry in MCP_OAUTH_TOKENS.
@@ -90,7 +90,7 @@ type mcpTokenPayload struct {
 }
 
 // MakeTokenCallback creates a TokenCallback that persists MCP OAuth tokens to the
-// Discobot server so they can be re-delivered on subsequent sessions.
+// Discboeing server so they can be re-delivered on subsequent sessions.
 // Returns nil if serverURL or projectID is empty (token persistence disabled).
 func MakeTokenCallback(serverURL, projectID string) TokenCallback {
 	if serverURL == "" || projectID == "" {
@@ -187,7 +187,7 @@ func (m *Manager) connectServer(
 	cfg := sc.cfg
 
 	client := gosdkmcp.NewClient(&gosdkmcp.Implementation{
-		Name:    "discobot-agent",
+		Name:    "discboeing-agent",
 		Version: "1.0.0",
 	}, nil)
 

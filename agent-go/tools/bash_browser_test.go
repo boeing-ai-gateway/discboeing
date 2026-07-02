@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func TestBashEnvForToolUsesBrowserEnvCallback(t *testing.T) {
@@ -17,9 +17,9 @@ func TestBashEnvForToolUsesBrowserEnvCallback(t *testing.T) {
 			t.Fatalf("expected thread-1, got %q", threadID)
 		}
 		return map[string]string{
-			"DISCOBOT_BROWSER_CDP_URL":   "ws://127.0.0.1/browser?threadId=thread-1",
+			"DISCBOEING_BROWSER_CDP_URL":   "ws://127.0.0.1/browser?threadId=thread-1",
 			"BU_CDP_WS":                  "ws://127.0.0.1/browser?threadId=thread-1",
-			"DISCOBOT_BROWSER_THREAD_ID": "thread-1",
+			"DISCBOEING_BROWSER_THREAD_ID": "thread-1",
 		}
 	})
 
@@ -28,10 +28,10 @@ func TestBashEnvForToolUsesBrowserEnvCallback(t *testing.T) {
 	for _, item := range env {
 		joined.WriteString(item + "\n")
 	}
-	if !containsLine(env, "DISCOBOT_BROWSER_CDP_URL=ws://127.0.0.1/browser?threadId=thread-1") {
+	if !containsLine(env, "DISCBOEING_BROWSER_CDP_URL=ws://127.0.0.1/browser?threadId=thread-1") {
 		t.Fatalf("expected browser cdp url in env, got %s", joined.String())
 	}
-	if !containsLine(env, "DISCOBOT_BROWSER_THREAD_ID=thread-1") {
+	if !containsLine(env, "DISCBOEING_BROWSER_THREAD_ID=thread-1") {
 		t.Fatalf("expected browser thread id in env, got %s", joined.String())
 	}
 	if !containsLine(env, "BU_CDP_WS=ws://127.0.0.1/browser?threadId=thread-1") {

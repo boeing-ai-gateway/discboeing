@@ -6,7 +6,7 @@
 	import { initServerConfig } from "$lib/api-config";
 	import { initDesktopConfig } from "$lib/shell";
 	import type { AuthUser, StartupTask } from "$lib/api-types";
-	import DiscobotBrand from "$lib/components/app/parts/DiscobotBrand.svelte";
+	import DiscboeingBrand from "$lib/components/app/parts/DiscboeingBrand.svelte";
 	import Button from "$lib/components/ui/button/button.svelte";
 	import StartupScreen, {
 		type StartupApiState,
@@ -190,7 +190,7 @@
 
 		if (phase === "error") {
 			return {
-				headline: "Discobot could not connect to the backend",
+				headline: "Discboeing could not connect to the backend",
 				detail:
 					"The shell is still waiting for the server to become available before it can render.",
 				statusLabel: "Needs attention",
@@ -206,7 +206,7 @@
 			return {
 				headline: "A startup task needs attention",
 				detail:
-					"Discobot connected to the backend, but one of the startup tasks reported an error.",
+					"Discboeing connected to the backend, but one of the startup tasks reported an error.",
 				statusLabel: "Task failed",
 				statusVariant: "destructive",
 				progress,
@@ -221,8 +221,8 @@
 				headline: "Completing startup tasks",
 				detail:
 					visibleTasks.length === 1
-						? "Discobot is waiting for one backend startup task to finish."
-						: `Discobot is waiting for ${visibleTasks.length} backend startup tasks to finish.`,
+						? "Discboeing is waiting for one backend startup task to finish."
+						: `Discboeing is waiting for ${visibleTasks.length} backend startup tasks to finish.`,
 				statusLabel: hasRunningTask ? "Running tasks" : "Queued tasks",
 				statusVariant: hasRunningTask ? "secondary" : "outline",
 				progress,
@@ -234,7 +234,7 @@
 
 		if (phase === "auth") {
 			return {
-				headline: "Sign in to Discobot",
+				headline: "Sign in to Discboeing",
 				detail:
 					"The backend is ready, but you need to authenticate before the workspace shell can load.",
 				statusLabel: "Authentication required",
@@ -250,7 +250,7 @@
 			return {
 				headline: "Loading the workspace shell",
 				detail:
-					"The backend is ready, and Discobot is fetching the first set of app data.",
+					"The backend is ready, and Discboeing is fetching the first set of app data.",
 				statusLabel: "Hydrating data",
 				statusVariant: "secondary",
 				progress,
@@ -268,8 +268,8 @@
 						: "Waiting for the backend API",
 				detail:
 					retries > 0
-						? "Discobot is polling the live status endpoint until the backend is reachable."
-						: "Discobot is waiting for the backend status endpoint before it reveals the shell.",
+						? "Discboeing is polling the live status endpoint until the backend is reachable."
+						: "Discboeing is waiting for the backend status endpoint before it reveals the shell.",
 				statusLabel: retries > 0 ? "Retrying API" : "Waiting for API",
 				statusVariant: retries > 0 ? "outline" : "secondary",
 				progress,
@@ -281,7 +281,7 @@
 
 		if (phase === "ready") {
 			return {
-				headline: "Discobot is ready",
+				headline: "Discboeing is ready",
 				detail:
 					"Startup checks passed and the workspace shell is ready to render.",
 				statusLabel: "Ready",
@@ -296,7 +296,7 @@
 		return {
 			headline: "Booting the desktop shell",
 			detail:
-				"Discobot is initializing the desktop runtime and preparing to contact the backend.",
+				"Discboeing is initializing the desktop runtime and preparing to contact the backend.",
 			statusLabel: "Initializing",
 			statusVariant: "outline",
 			progress,
@@ -322,7 +322,7 @@
 	function getStartupErrorMessage(error: unknown) {
 		return error instanceof Error
 			? error.message
-			: "Discobot could not connect to the backend.";
+			: "Discboeing could not connect to the backend.";
 	}
 
 	function isAbortError(error: unknown, signal: AbortSignal) {
@@ -447,13 +447,13 @@
 			class="w-full max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-sm"
 		>
 			<div class="mb-5 flex justify-center">
-				<DiscobotBrand heightClass="h-8" />
+				<DiscboeingBrand heightClass="h-8" />
 			</div>
 			<h1 class="mb-2 font-semibold text-2xl text-foreground">
 				Sign in required
 			</h1>
 			<p class="mb-6 text-muted-foreground text-sm leading-6">
-				Sign in to continue to your Discobot workspace.
+				Sign in to continue to your Discboeing workspace.
 			</p>
 			<div class="flex justify-center">
 				<Button href={loginHref} size="lg">Sign in</Button>

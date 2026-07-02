@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 type bashInput struct {
@@ -94,7 +94,7 @@ func (e *Executor) runBashSync(ctx context.Context, toolCtx *thread.ToolContext,
 	wrapped := wrapShellCommandForOS(runtime.GOOS, command)
 	cmd := exec.CommandContext(cmdCtx, shellPath, shellCommandArgsForOS(runtime.GOOS, wrapped)...)
 	cmd.Dir = cwd
-	cmd.Env = append(applyCredentialEnv(e.bashEnvForTool(toolCtx), credentialEnv), "DISCOBOT_BASH_CWD_PATH="+cwdPath)
+	cmd.Env = append(applyCredentialEnv(e.bashEnvForTool(toolCtx), credentialEnv), "DISCBOEING_BASH_CWD_PATH="+cwdPath)
 	processGroup := newProcessGroupController()
 	processGroup.configure(cmd)
 	cmd.Cancel = func() error {
@@ -246,14 +246,14 @@ func bashCredentialEnvForCall(credentialEnv map[string]string, uses []Credential
 	out := make(map[string]string, len(credentialEnv)+4)
 	maps.Copy(out, credentialEnv)
 	for _, use := range uses {
-		if use.EnvVar != "DISCOBOT_SUDO_TOKEN" {
+		if use.EnvVar != "DISCBOEING_SUDO_TOKEN" {
 			continue
 		}
-		out["DISCOBOT_SUDO_RUNTIME"] = "agent"
-		out["DISCOBOT_SUDO_CREDENTIAL_ID"] = use.CredentialID
-		out["DISCOBOT_SUDO_USE_ID"] = use.UseID
-		out["DISCOBOT_SUDO_TOOL_CALL_ID"] = toolCallID
-		out["DISCOBOT_SUDO_COMMAND"] = command
+		out["DISCBOEING_SUDO_RUNTIME"] = "agent"
+		out["DISCBOEING_SUDO_CREDENTIAL_ID"] = use.CredentialID
+		out["DISCBOEING_SUDO_USE_ID"] = use.UseID
+		out["DISCBOEING_SUDO_TOOL_CALL_ID"] = toolCallID
+		out["DISCBOEING_SUDO_COMMAND"] = command
 		break
 	}
 	return out
@@ -366,17 +366,17 @@ func windowsExecutableExtensions(pathExt string) []string {
 
 func wrapShellCommandForOS(goos, command string) string {
 	if goos != "windows" {
-		return fmt.Sprintf("%s\n__exit=$?\n%s > \"$DISCOBOT_BASH_CWD_PATH\"\nexit $__exit", command, bashPwdCaptureCommand())
+		return fmt.Sprintf("%s\n__exit=$?\n%s > \"$DISCBOEING_BASH_CWD_PATH\"\nexit $__exit", command, bashPwdCaptureCommand())
 	}
 	return strings.Join([]string{
 		`$ErrorActionPreference = "Continue"`,
-		`$script:__discobot_exit = 0`,
+		`$script:__discboeing_exit = 0`,
 		`& {`,
 		command,
-		`$script:__discobot_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }`,
+		`$script:__discboeing_exit = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } elseif ($?) { 0 } else { 1 }`,
 		`} | Out-String -Stream`,
-		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCOBOT_BASH_CWD_PATH -NoNewline`,
-		`exit $script:__discobot_exit`,
+		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCBOEING_BASH_CWD_PATH -NoNewline`,
+		`exit $script:__discboeing_exit`,
 	}, "\n")
 }
 

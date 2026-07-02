@@ -12,9 +12,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	_ "github.com/obot-platform/discobot/agent-go/providers/openai"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	_ "github.com/boeing-ai-gateway/discboeing/agent-go/providers/openai"
 )
 
 const testModel = "gpt-4.1-nano"

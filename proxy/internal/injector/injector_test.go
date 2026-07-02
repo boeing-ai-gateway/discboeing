@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/obot-platform/discobot/proxy/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/config"
 )
 
 func TestInjector_SetRules(t *testing.T) {

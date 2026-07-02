@@ -1,10 +1,10 @@
 package agentimpl
 
 import (
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/scriptexec"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/scriptexec"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func scriptExecutionMetadata(execution scriptexec.Execution) *thread.ScriptExecutionMetadata {
@@ -18,8 +18,8 @@ func scriptExecutionMetadata(execution scriptexec.Execution) *thread.ScriptExecu
 	}
 }
 
-func discobotCommandMetadata(metadata sessionconfig.DiscobotCommandMetadata) api.CommandDiscobotMetadata {
-	converted := api.CommandDiscobotMetadata{
+func discboeingCommandMetadata(metadata sessionconfig.DiscboeingCommandMetadata) api.CommandDiscboeingMetadata {
+	converted := api.CommandDiscboeingMetadata{
 		UI:          metadata.UI,
 		Label:       metadata.Label,
 		ActiveLabel: metadata.ActiveLabel,

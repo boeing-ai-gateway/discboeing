@@ -14,12 +14,12 @@ import (
 
 	"github.com/docker/docker/client"
 
-	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
 )
 
-// NewAPIClient creates a Docker SDK client from Discobot config.
+// NewAPIClient creates a Docker SDK client from Discboeing config.
 //
-// On Windows, DISCOBOT_DOCKER_WSL_DISTRO can route host Docker access through
+// On Windows, DISCBOEING_DOCKER_WSL_DISTRO can route host Docker access through
 // `wsl.exe -d <distro> -- docker system dial-stdio` so local dev builds and
 // host-to-VM image transfer can reuse a user-managed WSL Docker daemon.
 func NewAPIClient(cfg *config.Config) (*client.Client, error) {

@@ -1,6 +1,6 @@
-# Discobot Architecture
+# Discboeing Architecture
 
-This document describes the overall architecture of Discobot, an IDE-like chat interface for managing coding sessions with AI agents.
+This document describes the overall architecture of Discboeing, an IDE-like chat interface for managing coding sessions with AI agents.
 
 ## Component Documentation
 
@@ -12,7 +12,7 @@ This document describes the overall architecture of Discobot, an IDE-like chat i
 
 ## Overview
 
-Discobot is a web-based development environment built around Discobot's own coding agent runtime. Each workspace can contain multiple chat sessions, and users can configure the built-in agent with custom prompts, MCP servers, and supported model providers such as Anthropic and OpenAI.
+Discboeing is a web-based development environment built around Discboeing's own coding agent runtime. Each workspace can contain multiple chat sessions, and users can configure the built-in agent with custom prompts, MCP servers, and supported model providers such as Anthropic and OpenAI.
 
 ## Core Concepts
 
@@ -48,7 +48,7 @@ For git workspaces:
 
 - The server passes the git URL and target ref to the sandbox
 - The sandbox agent performs the clone locally
-- Git object mirrors are cached in the sandbox's persistent `/home/discobot/.cache`
+- Git object mirrors are cached in the sandbox's persistent `/home/discboeing/.cache`
 - Tracks current commit SHA
 - Supports branch operations, diffs, commits
 
@@ -90,12 +90,12 @@ The `ready` ⇄ `running` transition happens automatically:
 - On server startup, VM-backed sandboxes are re-enumerated from persisted
   project disks before image reconciliation runs, so stale containers are
   still visible after a restart
-- If a stopped sandbox was built from an older runtime image, Discobot removes
+- If a stopped sandbox was built from an older runtime image, Discboeing removes
   it and recreates it on demand instead of restarting the stale container
 
 ### Agent
 
-Configuration for Discobot's built-in AI coding assistant. It stores the project's agent settings and can customize:
+Configuration for Discboeing's built-in AI coding assistant. It stores the project's agent settings and can customize:
 
 - System prompt
 - MCP servers (stdio or HTTP)
@@ -158,7 +158,7 @@ Credentials are encrypted with AES-256-GCM before storage.
          │    │   │ sandbox setup│   │     │                      │
          │    │   │ script       │   │     │                      │
          │    │   │      ↓       │   │     │                      │
-         │    │   │ discobot-agent-api      │   │ ──▶ │                      │
+         │    │   │ discboeing-agent-api      │   │ ──▶ │                      │
          │    │   │ + AI CLI     │   │     │                      │
          │    │   └──────────────┘   │     │                      │
          │    └──────────────────────┘     └──────────────────────┘
@@ -176,7 +176,7 @@ Credentials are encrypted with AES-256-GCM before storage.
 The per-session agent container now also owns a session-scoped browser runtime.
 The runtime image packages the Browser Use harness as the `browser-harness`
 command and exposes a built-in browser-harness skill to teach the agent how to
-use it. `discobot-agent-api` can launch a local Chromium profile, expose a
+use it. `discboeing-agent-api` can launch a local Chromium profile, expose a
 CDP WebSocket endpoint at `/sessions/{sessionId}/browser/cdp?token=...`, and
 inject that endpoint into agent tool subprocesses. This keeps browser state
 shared across threads within a session while preserving a stable seam for a
@@ -191,10 +191,10 @@ Browser artifacts are exposed to the UI with `artifacts://...` URIs and are
 read back through a thread-scoped artifact endpoint instead of the workspace
 file API so screenshots remain outside the editable workspace tree.
 
-Sandbox images replace `/usr/bin/sudo` with a Discobot-owned gate binary. The
-gate reads `/etc/discobot/sudo-gate.json`, which must be root-owned and
+Sandbox images replace `/usr/bin/sudo` with a Discboeing-owned gate binary. The
+gate reads `/etc/discboeing/sudo-gate.json`, which must be root-owned and
 inaccessible to group/other users, to find the real sudo binary and local
-agent authorization endpoint. It calls the local `discobot-agent-api`
+agent authorization endpoint. It calls the local `discboeing-agent-api`
 `/sudo/authorize` endpoint before it execs the real sudo binary from a
 root-only path. Interactive console terminals receive a per-terminal random
 console sudo token in their exec environment. The agent API registers that token
@@ -203,7 +203,7 @@ revokes it when the persistent terminal PTY exits. There is no standalone HTTP
 API for registering or revoking console sudo tokens. Console sudo is allowed
 only when invoked from a TTY with that internally registered token, so console
 sudo grants do not remain valid after the terminal session closes.
-Agent Bash tool invocations must first obtain an approved `DISCOBOT_SUDO_TOKEN`
+Agent Bash tool invocations must first obtain an approved `DISCBOEING_SUDO_TOKEN`
 credential through the normal request-credential flow; the Bash tool injects
 the returned credential/use metadata so the gate can validate the sudo request
 against the approved use before privilege escalation. Sudo approvals carry the
@@ -453,9 +453,9 @@ Windows HCS packaging mirrors the macOS VZ guest image flow:
 
 - `Dockerfile` target `vz-image-builder` creates the shared Linux rootfs:
   - `/rootfs.squashfs`
-  - `/discobot-rootfs.tar.zst`
+  - `/discboeing-rootfs.tar.zst`
 - `Dockerfile` target `hcs-image` converts `/rootfs.squashfs` into:
-  - `/discobot-rootfs.vhd`
+  - `/discboeing-rootfs.vhd`
   - `/wsl-kernel`
   - `/kernel-version`
   - `/wsl-kernel-ref`
@@ -487,18 +487,18 @@ Manual build commands:
 depot build \
   --target hcs-image \
   --platform linux/amd64 \
-  --build-arg PRELOAD_IMAGE=ghcr.io/obot-platform/discobot:main \
+  --build-arg PRELOAD_IMAGE=ghcr.io/boeing-ai-gateway/discboeing:main \
   --build-arg WSL_KERNEL_REF=linux-msft-wsl-6.18.26.3 \
-  --output type=oci,dest=/tmp/discobot-hcs-amd64.oci \
+  --output type=oci,dest=/tmp/discboeing-hcs-amd64.oci \
   .
 
 # Build the HCS artifact image for Arm64.
 depot build \
   --target hcs-image \
   --platform linux/arm64 \
-  --build-arg PRELOAD_IMAGE=ghcr.io/obot-platform/discobot:main \
+  --build-arg PRELOAD_IMAGE=ghcr.io/boeing-ai-gateway/discboeing:main \
   --build-arg WSL_KERNEL_REF=linux-msft-wsl-6.18.26.3 \
-  --output type=oci,dest=/tmp/discobot-hcs-arm64.oci \
+  --output type=oci,dest=/tmp/discboeing-hcs-arm64.oci \
   .
 ```
 

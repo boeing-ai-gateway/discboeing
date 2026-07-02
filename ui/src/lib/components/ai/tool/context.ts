@@ -1,6 +1,6 @@
 import { getContext, setContext } from "svelte";
 
-const TOOL_CONTEXT_KEY = Symbol.for("discobot-ui-ai-tool-context");
+const TOOL_CONTEXT_KEY = Symbol.for("discboeing-ui-ai-tool-context");
 
 export type ToolContextValue = {
 	isOpen: boolean;

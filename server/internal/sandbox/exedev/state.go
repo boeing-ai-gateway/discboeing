@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 type providerState struct {

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-    Discobot API Explorer
+    Discboeing API Explorer
 
     Routes are loaded dynamically from /api/routes.
     Route metadata is defined in server/cmd/server/main.go using routes.Register().
@@ -9,7 +9,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discobot API Explorer</title>
+    <title>Discboeing API Explorer</title>
     <style>
         * {
             box-sizing: border-box;
@@ -35,7 +35,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Rboeingo, Oxygen, Ubuntu, sans-serif;
             background: var(--bg);
             color: var(--text);
             line-height: 1.5;
@@ -625,7 +625,7 @@
         <aside class="sidebar" id="sidebar">
             <div class="resize-handle" id="resizeHandle"></div>
             <div class="sidebar-header">
-                <h1>Discobot API</h1>
+                <h1>Discboeing API</h1>
                 <input type="text" class="search-input" placeholder="Search endpoints..." id="search">
                 <div class="project-id-section">
                     <label class="project-id-label" for="defaultProjectId">Default Project ID</label>
@@ -678,7 +678,7 @@
         let currentEndpoint = null;
         let _currentUser = null;
         let _paramValues = {};
-        let defaultProjectId = localStorage.getItem('discobot_default_project_id') || 'local';
+        let defaultProjectId = localStorage.getItem('discboeing_default_project_id') || 'local';
 
         // Resource cache for comboboxes
         // eslint-disable-next-line no-unused-vars
@@ -774,7 +774,7 @@
             input.value = defaultProjectId;
             input.addEventListener('input', (e) => {
                 defaultProjectId = e.target.value;
-                localStorage.setItem('discobot_default_project_id', defaultProjectId);
+                localStorage.setItem('discboeing_default_project_id', defaultProjectId);
             });
         })();
 

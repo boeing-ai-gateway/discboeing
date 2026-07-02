@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
-	"github.com/obot-platform/discobot/modelsdev"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/modelsdev"
 )
 
 // ProviderRegistry builds and caches Provider instances on demand.
@@ -17,7 +17,7 @@ import (
 // Rather than requiring callers to pre-register providers at startup,
 // Get builds a provider from the current credentials the first time
 // it is requested and caches it. If the credentials change (e.g. via
-// X-Discobot-Credentials on a subsequent request), the cached instance
+// X-Discboeing-Credentials on a subsequent request), the cached instance
 // is discarded and a new one is built with the updated config.
 //
 // Add exists for tests and special cases where a pre-built provider instance
@@ -156,7 +156,7 @@ func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string,
 	if ref == "" {
 		ids := r.IDs()
 		if len(ids) == 0 {
-			return ModelRef{}, fmt.Errorf("no model providers are available; configure a provider, set DISCOBOT_MODEL, or pass --model")
+			return ModelRef{}, fmt.Errorf("no model providers are available; configure a provider, set DISCBOEING_MODEL, or pass --model")
 		}
 
 		candidateIDs := ids
@@ -184,7 +184,7 @@ func (r *ProviderRegistry) ResolveModelInProvider(currentProviderID, ref string,
 			}
 		}
 		return ModelRef{}, fmt.Errorf(
-			"no provider available with a default model for tasks %q; available providers: %s; set DISCOBOT_MODEL or pass --model",
+			"no provider available with a default model for tasks %q; available providers: %s; set DISCBOEING_MODEL or pass --model",
 			strings.Join(taskTypes, ", "),
 			strings.Join(ids, ", "),
 		)

@@ -18,7 +18,7 @@ export const MOCK_NOW = "2026-01-01T00:00:00.000Z";
 
 export const mockUser: AuthUser = {
 	id: "mock-user",
-	email: "mock@discobot.test",
+	email: "mock@discboeing.test",
 	name: "Mock User",
 	provider: "mock",
 };
@@ -50,7 +50,7 @@ export function mockSupportInfo(): SupportInfoResponse {
 			port: 3001,
 			database_driver: "mock",
 			auth_enabled: false,
-			workspace_dir: "/tmp/discobot-e2e",
+			workspace_dir: "/tmp/discboeing-e2e",
 			sandbox_image: "mock",
 			desktop_mode: false,
 			ssh_enabled: true,
@@ -59,7 +59,7 @@ export function mockSupportInfo(): SupportInfoResponse {
 			available_providers: ["mock"],
 		},
 		server_log: "mock e2e server log",
-		log_path: "/tmp/discobot-e2e.log",
+		log_path: "/tmp/discboeing-e2e.log",
 		log_exists: true,
 		system_info: mockSystemStatus,
 	};
@@ -67,8 +67,8 @@ export function mockSupportInfo(): SupportInfoResponse {
 
 export const mockWorkspace: Workspace = {
 	id: "workspace-1",
-	path: "/workspace/discobot",
-	displayName: "Discobot Mock Workspace",
+	path: "/workspace/discboeing",
+	displayName: "Discboeing Mock Workspace",
 	sourceType: "local",
 	status: "ready",
 	createdAt: MOCK_NOW,

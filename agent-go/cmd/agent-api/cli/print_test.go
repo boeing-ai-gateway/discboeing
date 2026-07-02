@@ -11,10 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 func TestPrintPromptInput_UsesArgs(t *testing.T) {

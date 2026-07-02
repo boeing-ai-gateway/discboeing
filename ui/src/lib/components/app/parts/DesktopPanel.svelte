@@ -114,7 +114,7 @@
 	function getDesktopWsUrl(sessionId: string, host: HTMLElement) {
 		const apiRoot = getApiRootBase();
 		const parsed = new URL(apiRoot);
-		const subdomain = `${sessionId}-svc-discobot-desktop`;
+		const subdomain = `${sessionId}-svc-discboeing-desktop`;
 		const protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
 		const url = new URL(`${protocol}//${subdomain}.${parsed.host}`);
 		const width = Math.floor(host.clientWidth);

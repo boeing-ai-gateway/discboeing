@@ -15,11 +15,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/internal/routes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/routes"
 
 	// Embed the API browser HTML.
-	staticFiles "github.com/obot-platform/discobot/agent-go/cmd/agent-api/static"
+	staticFiles "github.com/boeing-ai-gateway/discboeing/agent-go/cmd/agent-api/static"
 )
 
 // Run starts the HTTP API server and blocks until SIGINT/SIGTERM.

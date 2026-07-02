@@ -11,8 +11,8 @@ func TestTranslatePath(t *testing.T) {
 	}{
 		{
 			name:   "unix path unchanged",
-			source: "/home/discobot/workspace",
-			want:   "/home/discobot/workspace",
+			source: "/home/discboeing/workspace",
+			want:   "/home/discboeing/workspace",
 		},
 		{
 			name:   "windows drive path",

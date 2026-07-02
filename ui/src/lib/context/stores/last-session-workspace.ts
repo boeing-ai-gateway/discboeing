@@ -1,7 +1,7 @@
 import { readStorage, writeStorage } from "$lib/local-storage";
 
 const LAST_SESSION_WORKSPACE_STORAGE_PREFIX =
-	"discobot:last-session-workspace:";
+	"discboeing:last-session-workspace:";
 
 export function isStoredWorkspaceOption(value: string): boolean {
 	return (

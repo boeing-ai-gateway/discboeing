@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
+	fmparser "github.com/boeing-ai-gateway/discboeing/agent-go/frontmatter"
 )
 
 // SkillConfig represents a discovered skill (user-invocable prompt template).
@@ -31,36 +31,36 @@ type SkillConfig struct {
 	// entries from commands/ directories.
 	Kind string
 
-	// Discobot contains optional Discobot-specific metadata parsed from
+	// Discboeing contains optional Discboeing-specific metadata parsed from
 	// frontmatter.
-	Discobot DiscobotCommandMetadata
+	Discboeing DiscboeingCommandMetadata
 }
 
-type DiscobotCommandMetadata struct {
+type DiscboeingCommandMetadata struct {
 	UI                bool
 	Label             string
 	ActiveLabel       string
 	Icon              string
 	Group             string
 	Order             int
-	CredentialRequest []DiscobotCredentialRequest
+	CredentialRequest []DiscboeingCredentialRequest
 }
 
-type DiscobotCredentialRequest struct {
+type DiscboeingCredentialRequest struct {
 	EnvVar        string
 	Name          string
 	Justification string
-	ApprovedUses  []DiscobotCredentialApprovedUse
+	ApprovedUses  []DiscboeingCredentialApprovedUse
 }
 
-type DiscobotCredentialApprovedUse struct {
+type DiscboeingCredentialApprovedUse struct {
 	Description string
 }
 
-// discoverSkills loads skill configs from Discobot-native skill directories and
+// discoverSkills loads skill configs from Discboeing-native skill directories and
 // the shared .agents skill directories first. Provider-specific skill
 // directories are compatibility fallbacks and only win for names that were not
-// already defined by .discobot or .agents. Later entries with a duplicate name
+// already defined by .discboeing or .agents. Later entries with a duplicate name
 // are ignored.
 func discoverSkills(projectRoot string) ([]SkillConfig, []string, error) {
 	home, _ := os.UserHomeDir()
@@ -91,18 +91,18 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 		return nil
 	}
 
-	// 1. Project skills: .discobot/skills/*/SKILL.md then
+	// 1. Project skills: .discboeing/skills/*/SKILL.md then
 	// .agents/skills/*/SKILL.md.
-	for _, dir := range []string{".discobot", ".agents"} {
+	for _, dir := range []string{".discboeing", ".agents"} {
 		if err := addFrom(loadSkillsDir(filepath.Join(projectRoot, dir, "skills"))); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// 2. User skills: ~/.discobot/skills/*/SKILL.md then
+	// 2. User skills: ~/.discboeing/skills/*/SKILL.md then
 	// ~/.agents/skills/*/SKILL.md.
 	if home != "" {
-		for _, dir := range []string{".discobot", ".agents"} {
+		for _, dir := range []string{".discboeing", ".agents"} {
 			if err := addFrom(loadSkillsDir(filepath.Join(home, dir, "skills"))); err != nil {
 				return nil, nil, err
 			}
@@ -110,7 +110,7 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 	}
 
 	// 3. System skills installed with the image.
-	for _, dir := range discobotSystemPaths("skills") {
+	for _, dir := range discboeingSystemPaths("skills") {
 		if err := addFrom(loadSkillsDir(dir)); err != nil {
 			return nil, nil, err
 		}
@@ -132,17 +132,17 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 		}
 	}
 
-	// 6. Project commands: .claude/commands/ then .discobot/commands/ (both formats).
-	for _, dir := range []string{".claude", ".discobot"} {
+	// 6. Project commands: .claude/commands/ then .discboeing/commands/ (both formats).
+	for _, dir := range []string{".claude", ".discboeing"} {
 		if err := addFrom(loadCommandsDir(filepath.Join(projectRoot, dir, "commands"))); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	// 7. User commands: ~/.claude/commands/ then ~/.discobot/commands/ then
+	// 7. User commands: ~/.claude/commands/ then ~/.discboeing/commands/ then
 	// ~/.agents/commands/ (both formats).
 	if home != "" {
-		for _, dir := range []string{".claude", ".discobot", ".agents"} {
+		for _, dir := range []string{".claude", ".discboeing", ".agents"} {
 			if err := addFrom(loadCommandsDir(filepath.Join(home, dir, "commands"))); err != nil {
 				return nil, nil, err
 			}
@@ -150,7 +150,7 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 	}
 
 	// 8. System commands installed with the image.
-	for _, dir := range discobotSystemPaths("commands") {
+	for _, dir := range discboeingSystemPaths("commands") {
 		if err := addFrom(loadCommandsDir(dir)); err != nil {
 			return nil, nil, err
 		}
@@ -161,8 +161,8 @@ func discoverSkillsWithHome(projectRoot, home string) ([]SkillConfig, []string, 
 
 // LookupSkill searches for a skill by name in skills/ directories only.
 // It does NOT search commands/ — use LookupCommand for legacy commands.
-// Project-level .discobot and .agents directories are checked first, followed by
-// user-level ~/.discobot/skills and ~/.agents/skills, Discobot system skills,
+// Project-level .discboeing and .agents directories are checked first, followed by
+// user-level ~/.discboeing/skills and ~/.agents/skills, Discboeing system skills,
 // then provider-specific compatibility fallbacks.
 // Returns (zero, false, nil) if the skill is not found.
 func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
@@ -172,15 +172,15 @@ func LookupSkill(projectRoot, skillName string) (SkillConfig, bool, error) {
 
 func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool, error) {
 	dirs := []string{
-		filepath.Join(projectRoot, ".discobot", "skills"),
+		filepath.Join(projectRoot, ".discboeing", "skills"),
 		filepath.Join(projectRoot, ".agents", "skills"),
 	}
 	if home != "" {
-		for _, dir := range []string{".discobot", ".agents"} {
+		for _, dir := range []string{".discboeing", ".agents"} {
 			dirs = append(dirs, filepath.Join(home, dir, "skills"))
 		}
 	}
-	dirs = append(dirs, discobotSystemPaths("skills")...)
+	dirs = append(dirs, discboeingSystemPaths("skills")...)
 	for _, dir := range []string{".claude", ".gemini", ".opencode"} {
 		dirs = append(dirs, filepath.Join(projectRoot, dir, "skills"))
 	}
@@ -196,9 +196,9 @@ func lookupSkillWithHome(projectRoot, skillName, home string) (SkillConfig, bool
 // LookupCommand searches for a legacy command by name in commands/ directories.
 // Commands are expanded programmatically when a user message starts with /name,
 // unlike skills which are invoked via the Skill tool by the LLM.
-// Project-level .claude and .discobot directory styles are checked, along with
-// user-level ~/.claude/commands, ~/.discobot/commands, ~/.agents/commands, and
-// the Discobot system commands directories.
+// Project-level .claude and .discboeing directory styles are checked, along with
+// user-level ~/.claude/commands, ~/.discboeing/commands, ~/.agents/commands, and
+// the Discboeing system commands directories.
 // Returns (zero, false, nil) if the command is not found.
 func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
 	home, _ := os.UserHomeDir()
@@ -208,14 +208,14 @@ func LookupCommand(projectRoot, cmdName string) (SkillConfig, bool, error) {
 func lookupCommandWithHome(projectRoot, cmdName, home string) (SkillConfig, bool, error) {
 	dirs := []string{
 		filepath.Join(projectRoot, ".claude", "commands"),
-		filepath.Join(projectRoot, ".discobot", "commands"),
+		filepath.Join(projectRoot, ".discboeing", "commands"),
 	}
 	if home != "" {
-		for _, dir := range []string{".claude", ".discobot", ".agents"} {
+		for _, dir := range []string{".claude", ".discboeing", ".agents"} {
 			dirs = append(dirs, filepath.Join(home, dir, "commands"))
 		}
 	}
-	dirs = append(dirs, discobotSystemPaths("commands")...)
+	dirs = append(dirs, discboeingSystemPaths("commands")...)
 
 	return lookupInSkillIndex(cmdName, dirs, "command", true)
 }
@@ -493,7 +493,7 @@ func parseSkill(defaultName, content string) (SkillConfig, error) {
 	if doc.Metadata.Description != "" {
 		skill.Description = doc.Metadata.Description
 	}
-	skill.Discobot = doc.Metadata.discobotMetadata()
+	skill.Discboeing = doc.Metadata.discboeingMetadata()
 
 	return skill, nil
 }

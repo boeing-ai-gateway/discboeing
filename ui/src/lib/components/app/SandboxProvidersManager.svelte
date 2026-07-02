@@ -42,7 +42,7 @@
 	};
 
 	const context = useContext();
-	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
+	const sandboxProvidersUpdatedEvent = "discboeing:sandbox-providers-updated";
 
 	const providerTypes = $derived.by(() =>
 		context.data.sandboxProviders.types.allIds

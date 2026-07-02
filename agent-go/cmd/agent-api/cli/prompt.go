@@ -41,7 +41,7 @@ func formatPromptHint() string {
 }
 
 func startupMessage(showResume, showHistory bool) string {
-	msg := "Discobot agent ready. Type your message"
+	msg := "Discboeing agent ready. Type your message"
 	var commands []string
 	if showResume {
 		commands = append(commands, "/resume to switch threads")

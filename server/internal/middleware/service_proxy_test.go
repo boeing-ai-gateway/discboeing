@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 // TestServiceSubdomainPattern tests the regex pattern matching for service subdomain segments.
@@ -252,7 +252,7 @@ func TestServiceProxyNonServiceSubdomain(t *testing.T) {
 }
 
 // TestServiceProxySessionNotFound verifies that when no valid session is found,
-// the request passes through to the next handler (e.g. may be a nested discobot
+// the request passes through to the next handler (e.g. may be a nested discboeing
 // subdomain where none of the session IDs belong to this instance).
 func TestServiceProxySessionNotFound(t *testing.T) {
 	provider := &mockSandboxProvider{
@@ -281,7 +281,7 @@ func TestServiceProxySessionNotFound(t *testing.T) {
 	}
 }
 
-// TestServiceProxyNestedSubdomains verifies that nested discobot subdomains
+// TestServiceProxyNestedSubdomains verifies that nested discboeing subdomains
 // correctly resolve to the first valid session ID.
 func TestServiceProxyNestedSubdomains(t *testing.T) {
 	outerSessionID := "zivnuflwywnlfxkr"
@@ -345,15 +345,15 @@ func TestServiceProxyXForwardedHost(t *testing.T) {
 
 	var proxiedPath string
 	var proxiedXFwdHost string
-	var proxiedDiscobotFwdHost string
-	var proxiedDiscobotFwdPath string
-	var proxiedDiscobotFwdProto string
+	var proxiedDiscboeingFwdHost string
+	var proxiedDiscboeingFwdPath string
+	var proxiedDiscboeingFwdProto string
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		proxiedPath = r.URL.Path
 		proxiedXFwdHost = r.Header.Get("X-Forwarded-Host")
-		proxiedDiscobotFwdHost = r.Header.Get(discobotForwardedHostHeader)
-		proxiedDiscobotFwdPath = r.Header.Get(discobotForwardedPathHeader)
-		proxiedDiscobotFwdProto = r.Header.Get(discobotForwardedProtoHeader)
+		proxiedDiscboeingFwdHost = r.Header.Get(discboeingForwardedHostHeader)
+		proxiedDiscboeingFwdPath = r.Header.Get(discboeingForwardedPathHeader)
+		proxiedDiscboeingFwdProto = r.Header.Get(discboeingForwardedProtoHeader)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer backend.Close()
@@ -381,7 +381,7 @@ func TestServiceProxyXForwardedHost(t *testing.T) {
 
 	middleware := ServiceProxy(provider, nil)(next)
 
-	// Simulate a nested discobot: Host is internal, but X-Forwarded-Host
+	// Simulate a nested discboeing: Host is internal, but X-Forwarded-Host
 	// carries the full multi-level subdomain chain from the outer proxy.
 	originalChain := "bCfyeG08yfDammp5-svc-ui." + sessionID + "-svc-api.localhost:3001"
 	req := httptest.NewRequest("GET", "http://localhost:3001/some/path", nil)
@@ -399,18 +399,18 @@ func TestServiceProxyXForwardedHost(t *testing.T) {
 		t.Errorf("proxied path = %q, want %q", proxiedPath, wantPath)
 	}
 	// The outgoing X-Forwarded-Host must preserve the full chain so the
-	// next nested discobot level can find its own service subdomain.
+	// next nested discboeing level can find its own service subdomain.
 	if proxiedXFwdHost != originalChain {
 		t.Errorf("X-Forwarded-Host = %q, want full chain %q", proxiedXFwdHost, originalChain)
 	}
-	if proxiedDiscobotFwdHost != originalChain {
-		t.Errorf("%s = %q, want %q", discobotForwardedHostHeader, proxiedDiscobotFwdHost, originalChain)
+	if proxiedDiscboeingFwdHost != originalChain {
+		t.Errorf("%s = %q, want %q", discboeingForwardedHostHeader, proxiedDiscboeingFwdHost, originalChain)
 	}
-	if proxiedDiscobotFwdPath != "/some/path" {
-		t.Errorf("%s = %q, want /some/path", discobotForwardedPathHeader, proxiedDiscobotFwdPath)
+	if proxiedDiscboeingFwdPath != "/some/path" {
+		t.Errorf("%s = %q, want /some/path", discboeingForwardedPathHeader, proxiedDiscboeingFwdPath)
 	}
-	if proxiedDiscobotFwdProto != "http" {
-		t.Errorf("%s = %q, want http", discobotForwardedProtoHeader, proxiedDiscobotFwdProto)
+	if proxiedDiscboeingFwdProto != "http" {
+		t.Errorf("%s = %q, want http", discboeingForwardedProtoHeader, proxiedDiscboeingFwdProto)
 	}
 }
 

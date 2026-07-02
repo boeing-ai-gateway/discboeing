@@ -48,7 +48,7 @@
 			return;
 		}
 
-		const filename = `discobot-support-info-${new Date().toISOString().split("T")[0]}.json`;
+		const filename = `discboeing-support-info-${new Date().toISOString().split("T")[0]}.json`;
 		await downloadFile({
 			filename,
 			content: supportJson,

@@ -1,4 +1,4 @@
-module github.com/obot-platform/discobot/hcs-go
+module github.com/boeing-ai-gateway/discboeing/hcs-go
 
 go 1.26
 

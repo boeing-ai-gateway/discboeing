@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // UserPreference represents a user preference (for API responses)

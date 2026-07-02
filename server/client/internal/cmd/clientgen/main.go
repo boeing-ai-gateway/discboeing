@@ -34,7 +34,7 @@ type operation struct {
 	Parameters        []parameterOrRef    `json:"parameters"`
 	RequestBody       *requestBodyOrRef   `json:"requestBody"`
 	Responses         map[string]response `json:"responses"`
-	DiscobotWebSocket *discobotWebSocket  `json:"x-discobot-websocket"`
+	DiscboeingWebSocket *discboeingWebSocket  `json:"x-discboeing-websocket"`
 }
 
 type parameterOrRef struct {
@@ -66,10 +66,10 @@ type schemaOrRef struct {
 	Type                  string                 `json:"type"`
 	Items                 *schemaOrRef           `json:"items"`
 	AllOf                 []schemaOrRef          `json:"allOf"`
-	DiscobotDiscriminator *discobotDiscriminator `json:"x-discobot-discriminator"`
+	DiscboeingDiscriminator *discboeingDiscriminator `json:"x-discboeing-discriminator"`
 }
 
-type discobotWebSocket struct {
+type discboeingWebSocket struct {
 	Requests []schemaOrRef `json:"requests"`
 	Messages []schemaOrRef `json:"messages"`
 }
@@ -77,10 +77,10 @@ type discobotWebSocket struct {
 type componentSchema struct {
 	Properties            map[string]schemaProperty `json:"properties"`
 	Required              []string                  `json:"required"`
-	DiscobotDiscriminator *discobotDiscriminator    `json:"x-discobot-discriminator"`
+	DiscboeingDiscriminator *discboeingDiscriminator    `json:"x-discboeing-discriminator"`
 }
 
-type discobotDiscriminator struct {
+type discboeingDiscriminator struct {
 	Type string `json:"type"`
 }
 
@@ -209,7 +209,7 @@ func generate(doc spec, endpoints []endpoint) []byte {
 	"strconv"
 	"strings"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
 )
 
 `)
@@ -232,10 +232,10 @@ type websocketMessageCase struct {
 func writeWebSocketUnions(b *bytes.Buffer, doc spec, endpoints []endpoint) {
 	for _, ep := range endpoints {
 		op := operationForEndpoint(doc, ep)
-		if op.DiscobotWebSocket == nil || len(op.DiscobotWebSocket.Messages) == 0 {
+		if op.DiscboeingWebSocket == nil || len(op.DiscboeingWebSocket.Messages) == 0 {
 			continue
 		}
-		cases := websocketMessageCases(doc, op.DiscobotWebSocket.Messages)
+		cases := websocketMessageCases(doc, op.DiscboeingWebSocket.Messages)
 		if len(cases) == 0 {
 			continue
 		}
@@ -313,11 +313,11 @@ func websocketMessageCases(doc spec, refs []schemaOrRef) []websocketMessageCase 
 			continue
 		}
 		typeValue := ""
-		if ref.DiscobotDiscriminator != nil {
-			typeValue = ref.DiscobotDiscriminator.Type
+		if ref.DiscboeingDiscriminator != nil {
+			typeValue = ref.DiscboeingDiscriminator.Type
 		}
-		if typeValue == "" && schema.DiscobotDiscriminator != nil {
-			typeValue = schema.DiscobotDiscriminator.Type
+		if typeValue == "" && schema.DiscboeingDiscriminator != nil {
+			typeValue = schema.DiscboeingDiscriminator.Type
 		}
 		if typeValue == "" {
 			typeValue = enumValue(schema.Properties["type"])
@@ -403,7 +403,7 @@ func operationForEndpoint(doc spec, ep endpoint) operation {
 }
 
 func writeCore(b *bytes.Buffer, services []string) {
-	b.WriteString(`// Client is a typed HTTP client for the Discobot server API.
+	b.WriteString(`// Client is a typed HTTP client for the Discboeing server API.
 type Client struct {
 	Server string
 
@@ -428,7 +428,7 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
-// NewClient creates a Discobot API client rooted at baseURL.
+// NewClient creates a Discboeing API client rooted at baseURL.
 func NewClient(baseURL string, opts ...Option) (*Client, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		return nil, fmt.Errorf("base URL is required")
@@ -501,9 +501,9 @@ func (c *Client) resolve(path string, query any) string {
 func decodeError(resp *http.Response) error {
 	var apiErr serverapi.ErrorResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
-		return fmt.Errorf("discobot API %s: %s", resp.Status, apiErr.Error)
+		return fmt.Errorf("discboeing API %s: %s", resp.Status, apiErr.Error)
 	}
-	return fmt.Errorf("discobot API %s", resp.Status)
+	return fmt.Errorf("discboeing API %s", resp.Status)
 }
 
 func encodeQuery(query any) string {

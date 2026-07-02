@@ -9,7 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 type Document[T any] struct {

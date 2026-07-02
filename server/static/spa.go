@@ -112,7 +112,7 @@ func injectRuntimeConfig(html []byte, config map[string]string) ([]byte, error) 
 		return nil, err
 	}
 
-	script := []byte("<script>window.__DISCOBOT_CONFIG__=" + string(configJSON) + ";</script>")
+	script := []byte("<script>window.__DISCBOEING_CONFIG__=" + string(configJSON) + ";</script>")
 	if bytes.Contains(html, []byte("</head>")) {
 		return bytes.Replace(html, []byte("</head>"), append(script, []byte("</head>")...), 1), nil
 	}

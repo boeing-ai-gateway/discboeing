@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 // LocalProvider implements Provider using the local git CLI.

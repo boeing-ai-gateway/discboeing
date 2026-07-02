@@ -367,7 +367,7 @@ test("isHookFailureMessage returns true for hook-failure metadata", () => {
 		{ type: "text", text: "### Hook failed: lint" },
 	]);
 	(message as ChatMessage & { metadata?: unknown }).metadata = {
-		discobot: {
+		discboeing: {
 			kind: "hook-failure",
 			hookName: "lint",
 			exitCode: 1,
@@ -399,11 +399,11 @@ test("getHookFailureMessageMetadata normalizes absolute hook paths", () => {
 		{ type: "text", text: "### Hook failed: lint" },
 	]);
 	(message as ChatMessage & { metadata?: unknown }).metadata = {
-		discobot: {
+		discboeing: {
 			kind: "hook-failure",
 			hookName: "lint",
 			exitCode: 1,
-			hookPath: "/home/discobot/workspace/.discobot/hooks/09-ci.sh",
+			hookPath: "/home/discboeing/workspace/.discboeing/hooks/09-ci.sh",
 		},
 	};
 
@@ -412,7 +412,7 @@ test("getHookFailureMessageMetadata normalizes absolute hook paths", () => {
 		hookName: "lint",
 		exitCode: 1,
 		pattern: undefined,
-		hookPath: ".discobot/hooks/09-ci.sh",
+		hookPath: ".discboeing/hooks/09-ci.sh",
 		files: undefined,
 		extraFileCount: undefined,
 		output: undefined,
@@ -427,7 +427,7 @@ test("getHookFailureMessageMetadata includes truncated output tail metadata", ()
 		{ type: "text", text: "### Hook failed: lint" },
 	]);
 	(message as ChatMessage & { metadata?: unknown }).metadata = {
-		discobot: {
+		discboeing: {
 			kind: "hook-failure",
 			hookName: "lint",
 			exitCode: 1,
@@ -452,11 +452,11 @@ test("getHookFailureMessageMetadata includes truncated output tail metadata", ()
 	});
 });
 
-test("getHookPathDisplayLabel trims the discobot hook directory", () => {
-	assert.equal(getHookPathDisplayLabel(".discobot/hooks/09-ci.sh"), "09-ci.sh");
+test("getHookPathDisplayLabel trims the discboeing hook directory", () => {
+	assert.equal(getHookPathDisplayLabel(".discboeing/hooks/09-ci.sh"), "09-ci.sh");
 });
 
-test("getHookPathDisplayLabel keeps non-discobot hook paths intact", () => {
+test("getHookPathDisplayLabel keeps non-discboeing hook paths intact", () => {
 	assert.equal(
 		getHookPathDisplayLabel(".claude/hooks/backend-check.sh"),
 		".claude/hooks/backend-check.sh",
@@ -503,7 +503,7 @@ test("getHookFailureCollapsedSummary falls back to pattern and hook file metadat
 			kind: "hook-failure",
 			hookName: "lint",
 			exitCode: 1,
-			hookPath: ".discobot/hooks/09-ci.sh",
+			hookPath: ".discboeing/hooks/09-ci.sh",
 		}),
 		"Hook file: 09-ci.sh",
 	);

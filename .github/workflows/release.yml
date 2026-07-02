@@ -381,11 +381,11 @@ jobs:
           SHORT_SHA="${GITHUB_SHA::12}"
           echo "full=$TAG" >> "$GITHUB_OUTPUT"
           echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
-          echo "release=discobot@${TAG}+${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "release=discboeing@${TAG}+${SHORT_SHA}" >> "$GITHUB_OUTPUT"
           echo "sandbox_image=ghcr.io/${{ github.repository }}:${TAG}" >> "$GITHUB_OUTPUT"
           echo "Full version: $TAG"
           echo "Short SHA: $SHORT_SHA"
-          echo "Sentry release: discobot@${TAG}+${SHORT_SHA}"
+          echo "Sentry release: discboeing@${TAG}+${SHORT_SHA}"
 
       - name: Prepare Electron signing certificate
         if: runner.os == 'macOS'
@@ -398,7 +398,7 @@ jobs:
           import os
           from pathlib import Path
 
-          cert_path = Path(os.environ["RUNNER_TEMP"]) / "discobot-signing.p12"
+          cert_path = Path(os.environ["RUNNER_TEMP"]) / "discboeing-signing.p12"
           cert_path.write_bytes(base64.b64decode(os.environ["APPLE_CERTIFICATE"]))
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
               env_file.write(f"CSC_LINK={cert_path}\n")
@@ -407,25 +407,25 @@ jobs:
       - name: Set Electron package version
         shell: bash
         env:
-          DISCOBOT_VERSION: ${{ steps.version.outputs.full }}
+          DISCBOEING_VERSION: ${{ steps.version.outputs.full }}
         run: |
-          node -e 'const fs=require("fs"); const packagePath="package.json"; const packageJson=JSON.parse(fs.readFileSync(packagePath,"utf8")); packageJson.version=process.env.DISCOBOT_VERSION; fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);'
+          node -e 'const fs=require("fs"); const packagePath="package.json"; const packageJson=JSON.parse(fs.readFileSync(packagePath,"utf8")); packageJson.version=process.env.DISCBOEING_VERSION; fs.writeFileSync(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`);'
 
       - name: Build Electron app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DISCOBOT_TARGET_TRIPLE: ${{ matrix.target }}
-          DISCOBOT_VERSION: ${{ steps.version.outputs.full }}
+          DISCBOEING_TARGET_TRIPLE: ${{ matrix.target }}
+          DISCBOEING_VERSION: ${{ steps.version.outputs.full }}
           SANDBOX_IMAGE: ${{ steps.version.outputs.sandbox_image }}
           SANDBOX_IMAGE_REMOTE: ${{ steps.version.outputs.sandbox_image }}
-          PUBLIC_SENTRY_DSN: ${{ secrets.DISCOBOT_SENTRY_DSN }}
+          PUBLIC_SENTRY_DSN: ${{ secrets.DISCBOEING_SENTRY_DSN }}
           PUBLIC_SENTRY_APP_VERSION: ${{ steps.version.outputs.full }}
           PUBLIC_SENTRY_RELEASE: ${{ steps.version.outputs.release }}
           PUBLIC_SENTRY_DIST: electron
           PUBLIC_SENTRY_GIT_COMMIT: ${{ github.sha }}
           PUBLIC_SENTRY_GIT_TAG: ${{ github.ref_name }}
-          PUBLIC_DISCOBOT_RELEASES_API_URL: https://api.github.com/repos/${{ github.repository }}/releases?per_page=20
-          DISCOBOT_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.DISCOBOT_GITHUB_OAUTH_CLIENT_ID }}
+          PUBLIC_DISCBOEING_RELEASES_API_URL: https://api.github.com/repos/${{ github.repository }}/releases?per_page=20
+          DISCBOEING_GITHUB_OAUTH_CLIENT_ID: ${{ secrets.DISCBOEING_GITHUB_OAUTH_CLIENT_ID }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -443,7 +443,7 @@ jobs:
           gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
             gh release create "${GITHUB_REF_NAME}" \
               --draft \
-              --title "Discobot ${GITHUB_REF_NAME}" \
+              --title "Discboeing ${GITHUB_REF_NAME}" \
               --notes "See the assets below for download links." || \
             gh release view "${GITHUB_REF_NAME}" >/dev/null
 

@@ -17,8 +17,8 @@ COPY agent-go/go.mod agent-go/go.sum ./agent-go/
 COPY go.mod go.sum ./
 
 # Download dependencies
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
+RUN --mount=type=cache,id=discboeing-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discboeing-gobuildcache,target=/root/.cache/go-build \
     go mod download
 
 # Proxy binary builder
@@ -28,8 +28,8 @@ FROM root-go-deps AS proxy-builder
 COPY proxy/ ./proxy/
 
 # Build the proxy binary
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
+RUN --mount=type=cache,id=discboeing-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discboeing-gobuildcache,target=/root/.cache/go-build \
     CGO_ENABLED=0 go build -ldflags="-s -w" -o /proxy ./proxy/cmd/proxy
 
 # VSOCK port proxy builder
@@ -38,9 +38,9 @@ FROM root-go-deps AS vsock-port-proxy-builder
 COPY server/cmd/vsock-port-proxy/ ./server/cmd/vsock-port-proxy/
 COPY server/internal/sandbox/vm/vsockproxy/ ./server/internal/sandbox/vm/vsockproxy/
 
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-vsock-port-proxy ./server/cmd/vsock-port-proxy
+RUN --mount=type=cache,id=discboeing-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discboeing-gobuildcache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /discboeing-vsock-port-proxy ./server/cmd/vsock-port-proxy
 
 # gvisor-tap-vsock builders for HCS user-mode networking.
 # gvforwarder runs in the Linux guest; gvproxy.exe runs on the Windows host.
@@ -49,12 +49,12 @@ FROM golang:1.26 AS gvforwarder-builder
 ARG TARGETARCH
 ARG GV_FORWARDER_VERSION=v0.8.7
 
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
+RUN --mount=type=cache,id=discboeing-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discboeing-gobuildcache,target=/root/.cache/go-build \
     set -ex \
     && mkdir -p /tmp/gvbuild \
     && cd /tmp/gvbuild \
-    && go mod init discobot-gvbuild \
+    && go mod init discboeing-gvbuild \
     && go get \
     "github.com/containers/gvisor-tap-vsock/cmd/vm@${GV_FORWARDER_VERSION}" \
     "github.com/containers/gvisor-tap-vsock/cmd/gvproxy@${GV_FORWARDER_VERSION}" \
@@ -78,8 +78,8 @@ COPY modelsdev/go.mod /modelsdev/
 COPY agent-go/go.mod agent-go/go.sum ./
 
 # Download dependencies
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
+RUN --mount=type=cache,id=discboeing-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discboeing-gobuildcache,target=/root/.cache/go-build \
     go mod download
 
 # Agent API binary builder
@@ -92,12 +92,12 @@ COPY modelsdev/ /modelsdev/
 # Copy agent-go source
 COPY agent-go/ ./
 
-# Build the agent-go binary as discobot-agent-api and the sudo policy gate.
+# Build the agent-go binary as discboeing-agent-api and the sudo policy gate.
 # Use mcp_go_client_oauth build tag to enable OAuth support for MCP tools
-RUN --mount=type=cache,id=discobot-gomodcache,target=/go/pkg/mod \
-    --mount=type=cache,id=discobot-gobuildcache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -tags mcp_go_client_oauth -ldflags="-s -w" -o /discobot-agent-api ./cmd/agent-api \
-    && CGO_ENABLED=0 go build -ldflags="-s -w" -o /discobot-sudo-gate ./cmd/sudo-gate
+RUN --mount=type=cache,id=discboeing-gomodcache,target=/go/pkg/mod \
+    --mount=type=cache,id=discboeing-gobuildcache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 go build -tags mcp_go_client_oauth -ldflags="-s -w" -o /discboeing-agent-api ./cmd/agent-api \
+    && CGO_ENABLED=0 go build -ldflags="-s -w" -o /discboeing-sudo-gate ./cmd/sudo-gate
 
 # Shared Ubuntu runtime base
 FROM ubuntu:24.04 AS runtime-base
@@ -108,7 +108,7 @@ ARG UBUNTU_PORTS_MIRROR
 COPY --chmod=755 container-assets/configure-ubuntu-mirrors.sh /usr/local/bin/configure-ubuntu-mirrors
 
 # Label for image identification and cleanup
-LABEL io.discobot.sandbox-image=true
+LABEL io.discboeing.sandbox-image=true
 
 # Tell systemd it's running inside a container
 ENV container=docker
@@ -172,13 +172,13 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     # Install code-server
     && curl -fsSL https://code-server.dev/install.sh | sh \
     # Seed bundled code-server extensions
-    && mkdir -p /opt/discobot/code-server-defaults/extensions \
-    && code-server --install-extension vscodevim.vim --extensions-dir /opt/discobot/code-server-defaults/extensions \
-    && code-server --install-extension golang.go --extensions-dir /opt/discobot/code-server-defaults/extensions \
-    && code-server --install-extension rust-lang.rust-analyzer --extensions-dir /opt/discobot/code-server-defaults/extensions \
-    && code-server --install-extension ms-python.python --extensions-dir /opt/discobot/code-server-defaults/extensions \
-    && code-server --install-extension svelte.svelte-vscode --extensions-dir /opt/discobot/code-server-defaults/extensions \
-    && rm -f /opt/discobot/code-server-defaults/extensions/extensions.json \
+    && mkdir -p /opt/discboeing/code-server-defaults/extensions \
+    && code-server --install-extension vscodevim.vim --extensions-dir /opt/discboeing/code-server-defaults/extensions \
+    && code-server --install-extension golang.go --extensions-dir /opt/discboeing/code-server-defaults/extensions \
+    && code-server --install-extension rust-lang.rust-analyzer --extensions-dir /opt/discboeing/code-server-defaults/extensions \
+    && code-server --install-extension ms-python.python --extensions-dir /opt/discboeing/code-server-defaults/extensions \
+    && code-server --install-extension svelte.svelte-vscode --extensions-dir /opt/discboeing/code-server-defaults/extensions \
+    && rm -f /opt/discboeing/code-server-defaults/extensions/extensions.json \
     # Install pnpm
     && npm install -g pnpm \
     # Install latest stable Go
@@ -194,12 +194,12 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     # All image-time apt installs are already complete, so this only affects runtime installs.
     && rm -f /etc/apt/apt.conf.d/docker-clean
 
-# Create discobot user (UID 1000)
+# Create discboeing user (UID 1000)
 # Handle case where UID 1000 might already be taken by another user
-RUN (useradd -m -s /bin/bash -u 1000 discobot 2>/dev/null \
-    || (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discobot) \
-    || useradd -m -s /bin/bash discobot) \
-    && usermod -aG systemd-journal discobot
+RUN (useradd -m -s /bin/bash -u 1000 discboeing 2>/dev/null \
+    || (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discboeing) \
+    || useradd -m -s /bin/bash discboeing) \
+    && usermod -aG systemd-journal discboeing
 
 # Install Nix in multi-user mode. The installer cannot start systemd during
 # image builds, so copy the generated units explicitly. The installed /nix tree
@@ -245,41 +245,41 @@ echo "Restoring Nix installation from /nix.staging to /nix"
 (cd /nix.staging && tar cpf - .) | (cd /nix && tar xpf -)
 EOF
 
-# Install the Discobot sudo gate. The real sudo binary is kept in a
-# root-only path; /usr/bin/sudo becomes a setuid Discobot gate that calls the
+# Install the Discboeing sudo gate. The real sudo binary is kept in a
+# root-only path; /usr/bin/sudo becomes a setuid Discboeing gate that calls the
 # local agent API before exec'ing the real sudo binary.
-COPY --from=agent-go-builder --chmod=4755 /discobot-sudo-gate /tmp/discobot-sudo-gate
-RUN mkdir -p /usr/lib/discobot /etc/discobot \
+COPY --from=agent-go-builder --chmod=4755 /discboeing-sudo-gate /tmp/discboeing-sudo-gate
+RUN mkdir -p /usr/lib/discboeing /etc/discboeing \
     && dpkg-divert --rename --add /usr/bin/sudo \
-    && mv /usr/bin/sudo.distrib /usr/lib/discobot/sudo.real \
-    && chown root:root /usr/lib/discobot/sudo.real \
-    && install -m 4755 /tmp/discobot-sudo-gate /usr/bin/sudo \
-    && rm -f /tmp/discobot-sudo-gate \
-    && chmod 4700 /usr/lib/discobot/sudo.real \
-    && printf '%s\n' '{"realSudo":"/usr/lib/discobot/sudo.real","agentAPIURL":"http://127.0.0.1:3002/sudo/authorize"}' > /etc/discobot/sudo-gate.json \
-    && chown root:root /etc/discobot/sudo-gate.json \
-    && chmod 400 /etc/discobot/sudo-gate.json \
+    && mv /usr/bin/sudo.distrib /usr/lib/discboeing/sudo.real \
+    && chown root:root /usr/lib/discboeing/sudo.real \
+    && install -m 4755 /tmp/discboeing-sudo-gate /usr/bin/sudo \
+    && rm -f /tmp/discboeing-sudo-gate \
+    && chmod 4700 /usr/lib/discboeing/sudo.real \
+    && printf '%s\n' '{"realSudo":"/usr/lib/discboeing/sudo.real","agentAPIURL":"http://127.0.0.1:3002/sudo/authorize"}' > /etc/discboeing/sudo-gate.json \
+    && chown root:root /etc/discboeing/sudo-gate.json \
+    && chmod 400 /etc/discboeing/sudo-gate.json \
     && printf '%s\n' \
-        'Defaults env_keep += "DISCOBOT_SUDO_RUNTIME DISCOBOT_SUDO_TOKEN DISCOBOT_SUDO_CREDENTIAL_ID DISCOBOT_SUDO_USE_ID DISCOBOT_SUDO_TOOL_CALL_ID DISCOBOT_SUDO_COMMAND DISCOBOT_SECRET"' \
-        'discobot ALL=(ALL) NOPASSWD:SETENV: ALL' \
-        > /etc/sudoers.d/discobot-gated \
-    && chmod 440 /etc/sudoers.d/discobot-gated
+        'Defaults env_keep += "DISCBOEING_SUDO_RUNTIME DISCBOEING_SUDO_TOKEN DISCBOEING_SUDO_CREDENTIAL_ID DISCBOEING_SUDO_USE_ID DISCBOEING_SUDO_TOOL_CALL_ID DISCBOEING_SUDO_COMMAND DISCBOEING_SECRET"' \
+        'discboeing ALL=(ALL) NOPASSWD:SETENV: ALL' \
+        > /etc/sudoers.d/discboeing-gated \
+    && chmod 440 /etc/sudoers.d/discboeing-gated
 
-# Install rustup for discobot user (Rust toolchain manager)
-# Must be done after user creation so rust tools are owned by discobot
+# Install rustup for discboeing user (Rust toolchain manager)
+# Must be done after user creation so rust tools are owned by discboeing
 # Install rustup without any toolchains (users can install toolchains on demand with rustup install)
-RUN su - discobot -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none'
+RUN su - discboeing -c 'curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none'
 
-# Configure npm global directory in /home/discobot/.npm-global
-# This allows npm install -g to work without root for the discobot user
+# Configure npm global directory in /home/discboeing/.npm-global
+# This allows npm install -g to work without root for the discboeing user
 # Also add ~/.local/bin so uv-installed Python executables are on PATH by default
-# Environment is set system-wide via /etc/profile.d so both root and discobot can use it
-RUN mkdir -p /home/discobot/.npm-global/bin /home/discobot/.local/bin \
-    && chown -R discobot:discobot /home/discobot/.npm-global /home/discobot/.local \
+# Environment is set system-wide via /etc/profile.d so both root and discboeing can use it
+RUN mkdir -p /home/discboeing/.npm-global/bin /home/discboeing/.local/bin \
+    && chown -R discboeing:discboeing /home/discboeing/.npm-global /home/discboeing/.local \
     && printf '%s\n' \
     '# User-local executables and npm global packages' \
-    'export NPM_CONFIG_PREFIX="/home/discobot/.npm-global"' \
-    'export PATH="/home/discobot/.local/bin:/home/discobot/.npm-global/bin:$PATH"' \
+    'export NPM_CONFIG_PREFIX="/home/discboeing/.npm-global"' \
+    'export PATH="/home/discboeing/.local/bin:/home/discboeing/.npm-global/bin:$PATH"' \
     > /etc/profile.d/npm-global.sh \
     && chmod 644 /etc/profile.d/npm-global.sh
 
@@ -287,25 +287,25 @@ RUN mkdir -p /home/discobot/.npm-global/bin /home/discobot/.local/bin \
 # Create directory structure per filesystem design
 # /.data      - persistent storage (Docker volume or VZ disk)
 # /.workspace - base workspace (read-only)
-RUN mkdir -p /.data /.workspace /opt/discobot/bin /opt/discobot/scripts \
-    && chown discobot:discobot /.data /opt/discobot/scripts
+RUN mkdir -p /.data /.workspace /opt/discboeing/bin /opt/discboeing/scripts \
+    && chown discboeing:discboeing /.data /opt/discboeing/scripts
 
-# Add discobot binaries, Nix, user-local bin, and npm global bin to PATH
+# Add discboeing binaries, Nix, user-local bin, and npm global bin to PATH
 # Also set NPM_CONFIG_PREFIX for non-login shell contexts
 # Set PNPM_HOME to use persistent storage for pnpm cache/store
 # Add Rust cargo bin for rustc and cargo
 # Claude CLI is installed to /usr/local/bin (already in default PATH)
-ENV NPM_CONFIG_PREFIX="/home/discobot/.npm-global"
+ENV NPM_CONFIG_PREFIX="/home/discboeing/.npm-global"
 ENV PNPM_HOME="/.data/pnpm"
 ENV NIX_REMOTE=daemon
-ENV PATH="/home/discobot/.cargo/bin:/nix/var/nix/profiles/default/bin:/usr/local/go/bin:/home/discobot/.local/bin:/home/discobot/.npm-global/bin:/opt/discobot/bin:${PATH}"
-ENV WORKSPACE_PATH=/home/discobot/workspace
+ENV PATH="/home/discboeing/.cargo/bin:/nix/var/nix/profiles/default/bin:/usr/local/go/bin:/home/discboeing/.local/bin:/home/discboeing/.npm-global/bin:/opt/discboeing/bin:${PATH}"
+ENV WORKSPACE_PATH=/home/discboeing/workspace
 
-WORKDIR /home/discobot
+WORKDIR /home/discboeing
 
 EXPOSE 3002
 
-# systemd as PID 1 — manages discobot services (setup, proxy, dockerd, agent-api)
+# systemd as PID 1 — manages discboeing services (setup, proxy, dockerd, agent-api)
 # SIGRTMIN+3 tells systemd to shut down cleanly (used by docker stop)
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]
@@ -369,11 +369,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Configure Openbox to autostart PCManFM in desktop mode (renders desktop icons)
 # Configure libfm to launch executable .desktop files without the "Execute File" prompt
-RUN mkdir -p /home/discobot/.config/openbox /home/discobot/.config/libfm \
+RUN mkdir -p /home/discboeing/.config/openbox /home/discboeing/.config/libfm \
     && printf '%s\n' \
     '# Launch PCManFM in desktop mode to render desktop icons' \
     'pcmanfm --desktop &' \
-    > /home/discobot/.config/openbox/autostart \
+    > /home/discboeing/.config/openbox/autostart \
     && printf '%s\n' \
     '[config]' \
     'single_click=0' \
@@ -381,11 +381,11 @@ RUN mkdir -p /home/discobot/.config/openbox /home/discobot/.config/libfm \
     'confirm_del=1' \
     'confirm_trash=1' \
     'quick_exec=1' \
-    > /home/discobot/.config/libfm/libfm.conf \
-    && chown -R discobot:discobot /home/discobot/.config
+    > /home/discboeing/.config/libfm/libfm.conf \
+    && chown -R discboeing:discboeing /home/discboeing/.config
 
 # Create desktop shortcuts for Chromium and XTerm
-RUN mkdir -p /home/discobot/Desktop \
+RUN mkdir -p /home/discboeing/Desktop \
     && printf '%s\n' \
     '[Desktop Entry]' \
     'Type=Application' \
@@ -394,7 +394,7 @@ RUN mkdir -p /home/discobot/Desktop \
     'Icon=chromium' \
     'Terminal=false' \
     'Categories=Network;WebBrowser;' \
-    > /home/discobot/Desktop/chromium.desktop \
+    > /home/discboeing/Desktop/chromium.desktop \
     && printf '%s\n' \
     '[Desktop Entry]' \
     'Type=Application' \
@@ -403,9 +403,9 @@ RUN mkdir -p /home/discobot/Desktop \
     'Icon=xterm-color' \
     'Terminal=false' \
     'Categories=System;TerminalEmulator;' \
-    > /home/discobot/Desktop/xterm.desktop \
-    && chmod 755 /home/discobot/Desktop/*.desktop \
-    && chown -R discobot:discobot /home/discobot/Desktop
+    > /home/discboeing/Desktop/xterm.desktop \
+    && chmod 755 /home/discboeing/Desktop/*.desktop \
+    && chown -R discboeing:discboeing /home/discboeing/Desktop
 
 ENV DISPLAY=:0
 
@@ -429,41 +429,41 @@ RUN git clone --depth 1 --branch "${BROWSER_HARNESS_REF}" "${BROWSER_HARNESS_REP
 # Runtime overlay with frequently-changing binaries and container assets
 FROM scratch AS runtime-overlay
 
-# Copy binaries to /opt/discobot/bin
-COPY --from=agent-go-builder --chmod=755 /discobot-agent-api /opt/discobot/bin/discobot-agent-api
-COPY --from=proxy-builder --chmod=755 /proxy /opt/discobot/bin/proxy
-COPY --chmod=755 sandbox-init/discobot-sandbox-init.sh /opt/discobot/bin/discobot-sandbox-init
-COPY --from=vsock-port-proxy-builder --chmod=755 /discobot-vsock-port-proxy /opt/discobot/bin/discobot-vsock-port-proxy
+# Copy binaries to /opt/discboeing/bin
+COPY --from=agent-go-builder --chmod=755 /discboeing-agent-api /opt/discboeing/bin/discboeing-agent-api
+COPY --from=proxy-builder --chmod=755 /proxy /opt/discboeing/bin/proxy
+COPY --chmod=755 sandbox-init/discboeing-sandbox-init.sh /opt/discboeing/bin/discboeing-sandbox-init
+COPY --from=vsock-port-proxy-builder --chmod=755 /discboeing-vsock-port-proxy /opt/discboeing/bin/discboeing-vsock-port-proxy
 
 # Copy browser-harness runtime and expose it at /usr/local/bin/browser-harness
 COPY --from=browser-harness-builder /opt/browser-harness /opt/browser-harness
 COPY --from=browser-harness-builder /usr/local/bin/browser-harness /usr/local/bin/browser-harness
-COPY --from=browser-harness-builder /opt/browser-harness-skills/ /opt/discobot/skills/
-COPY container-assets/discobot/skills/ /opt/discobot/skills/
+COPY --from=browser-harness-builder /opt/browser-harness-skills/ /opt/discboeing/skills/
+COPY container-assets/discboeing/skills/ /opt/discboeing/skills/
 
 # Docker wrapper: injects --output type=docker for build commands so remote
 # buildx builders always load images into the local daemon.
 COPY --chmod=755 container-assets/docker-wrapper.sh /usr/local/bin/docker
-COPY --chmod=755 container-assets/discobot-session-env.sh /usr/local/bin/discobot-session-env
-COPY --chmod=755 container-assets/discobot-vnc-websockify /usr/local/bin/discobot-vnc-websockify
+COPY --chmod=755 container-assets/discboeing-session-env.sh /usr/local/bin/discboeing-session-env
+COPY --chmod=755 container-assets/discboeing-vnc-websockify /usr/local/bin/discboeing-vnc-websockify
 
 # Copy systemd service files and setup helper for container service management
-COPY --chmod=755 container-assets/configure-container-systemd.sh /opt/discobot/bin/configure-container-systemd
+COPY --chmod=755 container-assets/configure-container-systemd.sh /opt/discboeing/bin/configure-container-systemd
 COPY container-assets/systemd/ /etc/systemd/system/
 COPY container-assets/xorg-dummy.conf /etc/X11/xorg-dummy.conf
 
 # Copy code-server default profile templates
-COPY --chown=1000:1000 container-assets/code-server/ /opt/discobot/code-server-defaults/
+COPY --chown=1000:1000 container-assets/code-server/ /opt/discboeing/code-server-defaults/
 
-# Copy container-specific Discobot docs.
-COPY --chown=1000:1000 container-assets/docs.txt /discobot/docs.txt
+# Copy container-specific Discboeing docs.
+COPY --chown=1000:1000 container-assets/docs.txt /discboeing/docs.txt
 
 # Minimal runtime without graphical tools
 FROM runtime-base AS runtime-shell
 
 COPY --from=runtime-overlay / /
 
-RUN ! grep -R /opt/discobot/bin/restore-nix-staging /etc/systemd/system \
+RUN ! grep -R /opt/discboeing/bin/restore-nix-staging /etc/systemd/system \
     && grep -R /usr/local/bin/restore-nix-staging /etc/systemd/system
 
 # Configure systemd for container environment
@@ -476,7 +476,7 @@ FROM runtime-gui-base AS runtime
 
 COPY --from=runtime-overlay / /
 
-RUN ! grep -R /opt/discobot/bin/restore-nix-staging /etc/systemd/system \
+RUN ! grep -R /opt/discboeing/bin/restore-nix-staging /etc/systemd/system \
     && grep -R /usr/local/bin/restore-nix-staging /etc/systemd/system
 
 # Configure systemd for container environment
@@ -485,8 +485,8 @@ RUN ! grep -R /opt/discobot/bin/restore-nix-staging /etc/systemd/system \
 RUN configure-container-systemd gui
 
 # VZ/WSL root filesystem builder with systemd and Docker
-# Build with: docker build --target vz-image -t discobot-vz .
-# Then extract /vmlinuz and /discobot-rootfs.squashfs with docker cp from a
+# Build with: docker build --target vz-image -t discboeing-vz .
+# Then extract /vmlinuz and /discboeing-rootfs.squashfs with docker cp from a
 # temporary container. The watcher uses this flow so local Windows/WSL builds
 # do not rely on docker build --output extraction.
 # This creates a minimal systemd-based system with Docker daemon for macOS Virtualization.framework
@@ -499,8 +499,8 @@ ARG UBUNTU_PORTS_MIRROR
 COPY --chmod=755 container-assets/configure-ubuntu-mirrors.sh /usr/local/bin/configure-ubuntu-mirrors
 
 # Docker image to preload into the VM at build time (pulled via crane as OCI tarball)
-# Defaults to the main tag of the discobot runtime image
-ARG PRELOAD_IMAGE=ghcr.io/obot-platform/discobot:main
+# Defaults to the main tag of the discboeing runtime image
+ARG PRELOAD_IMAGE=ghcr.io/boeing-platform/discboeing:main
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
@@ -609,14 +609,14 @@ RUN set -ex \
     && systemctl enable docker-vsock-proxy \
     && systemctl enable preload-image
 
-# Create discobot user (UID 1000)
-RUN useradd -m -s /bin/bash -u 1000 discobot || \
-    (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discobot)
+# Create discboeing user (UID 1000)
+RUN useradd -m -s /bin/bash -u 1000 discboeing || \
+    (userdel -r $(getent passwd 1000 | cut -d: -f1) 2>/dev/null; useradd -m -s /bin/bash -u 1000 discboeing)
 
 # Create minimal directory structure for VM
 # /Users is for macOS host home directory VirtioFS mounts (root is read-only squashfs)
 RUN mkdir -p /.data /.workspace /Users \
-    && chown discobot:discobot /.data
+    && chown discboeing:discboeing /.data
 
 # VZ/WSL image artifact builder
 FROM ubuntu:24.04 AS vz-image-builder
@@ -676,8 +676,8 @@ RUN set -ex \
     && RATIO=$((100 - (SQUASHFS_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
     && echo "SquashFS image: ${SQUASHFS_SIZE_MB}MB (${RATIO}% reduction)" \
     && echo "Creating WSL rootfs archive with zstd compression..." \
-    && tar --numeric-owner -C /rootfs -cf - . | zstd -T0 -19 -o /discobot-rootfs.tar.zst \
-    && ROOTFS_TAR_SIZE_MB=$(du -m /discobot-rootfs.tar.zst | cut -f1) \
+    && tar --numeric-owner -C /rootfs -cf - . | zstd -T0 -19 -o /discboeing-rootfs.tar.zst \
+    && ROOTFS_TAR_SIZE_MB=$(du -m /discboeing-rootfs.tar.zst | cut -f1) \
     && TAR_RATIO=$((100 - (ROOTFS_TAR_SIZE_MB * 100 / ROOTFS_SIZE_MB))) \
     && echo "WSL rootfs archive: ${ROOTFS_TAR_SIZE_MB}MB (${TAR_RATIO}% reduction)"
 
@@ -686,12 +686,12 @@ RUN set -ex \
 FROM scratch AS vz-image
 COPY --from=vz-image-builder /vmlinuz /vmlinuz
 COPY --from=vz-image-builder /kernel-version /kernel-version
-COPY --from=vz-image-builder /rootfs.squashfs /discobot-rootfs.squashfs
+COPY --from=vz-image-builder /rootfs.squashfs /discboeing-rootfs.squashfs
 
 # WSL output with rootfs archive
 # This target is published as the Windows WSL guest image.
 FROM scratch AS wsl-image
-COPY --from=vz-image-builder /discobot-rootfs.tar.zst /discobot-rootfs.tar.zst
+COPY --from=vz-image-builder /discboeing-rootfs.tar.zst /discboeing-rootfs.tar.zst
 
 # Build the Microsoft WSL2 kernel from the release source ref selected by CI.
 # The GitHub releases currently publish source archives rather than prebuilt
@@ -721,7 +721,7 @@ RUN configure-ubuntu-mirrors "${UBUNTU_MIRROR}" "${UBUNTU_PORTS_MIRROR}" \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=type=cache,id=discobot-wsl-kernel-git,target=/root/.cache/git \
+RUN --mount=type=cache,id=discboeing-wsl-kernel-git,target=/root/.cache/git \
     set -ex \
     && git clone --depth 1 --branch "${WSL_KERNEL_REF}" https://github.com/microsoft/WSL2-Linux-Kernel.git /kernel \
     && cd /kernel \
@@ -759,7 +759,7 @@ FROM ubuntu:24.04 AS hcs-image-builder
 RUN apt-get update && apt-get install -y --no-install-recommends python3 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=vz-image-builder /rootfs.squashfs /discobot-rootfs.squashfs
+COPY --from=vz-image-builder /rootfs.squashfs /discboeing-rootfs.squashfs
 
 RUN python3 - <<'PY'
 import hashlib
@@ -767,8 +767,8 @@ import os
 import struct
 import uuid
 
-raw_path = "/discobot-rootfs.squashfs"
-vhd_path = "/discobot-rootfs.vhd"
+raw_path = "/discboeing-rootfs.squashfs"
+vhd_path = "/discboeing-rootfs.vhd"
 sector = 512
 
 raw = open(raw_path, "rb").read()
@@ -838,7 +838,7 @@ PY
 # HCS output with root VHD, WSL2 kernel, host launcher, host gvproxy, and guest
 # gvforwarder. This target is published as the Windows HCS guest image.
 FROM scratch AS hcs-image
-COPY --from=hcs-image-builder /discobot-rootfs.vhd /discobot-rootfs.vhd
+COPY --from=hcs-image-builder /discboeing-rootfs.vhd /discboeing-rootfs.vhd
 COPY --from=wsl-kernel-builder /wsl-kernel /wsl-kernel
 COPY --from=wsl-kernel-builder /kernel-version /kernel-version
 COPY --from=wsl-kernel-builder /wsl-kernel-ref /wsl-kernel-ref

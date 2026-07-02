@@ -70,7 +70,7 @@ func TestGetDiffRejectsWorkspaceChangeCommitTarget(t *testing.T) {
 	runGit(t, repo, "add", "secret.txt")
 	tree := strings.TrimSpace(runGitOutput(t, repo, "write-tree"))
 	commit := strings.TrimSpace(runGitOutput(t, repo, "commit-tree", tree, "-p", base, "-m", "workspace change"))
-	runGit(t, repo, "update-ref", "refs/discobot/workspace-change-commits/session-123/snapshot-1", commit)
+	runGit(t, repo, "update-ref", "refs/discboeing/workspace-change-commits/session-123/snapshot-1", commit)
 	writeRepoFile(t, repo, "secret.txt", "TOKEN=initial\n")
 
 	_, err := GetDiff(repo, "", commit)

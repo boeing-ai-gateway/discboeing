@@ -1,4 +1,4 @@
-# Discobot Proxy
+# Discboeing Proxy
 
 A multi-protocol proxy server with HTTP interception, header injection, and dynamic configuration.
 
@@ -113,7 +113,7 @@ The binary stream files use a compact framed format so each chunk keeps its dire
 ### Building
 
 ```bash
-go build -o discobot-proxy ./cmd/proxy
+go build -o discboeing-proxy ./cmd/proxy
 ```
 
 ### Configuration File
@@ -146,7 +146,7 @@ headers:
       - header: "X-Environment"
         equals: "production"
     set:
-      "X-Request-Source": "discobot-proxy"
+      "X-Request-Source": "discboeing-proxy"
     append:
       "X-Forwarded-For": "proxy.internal"
 
@@ -221,7 +221,7 @@ curl -X PATCH http://localhost:17081/api/config \
 
 # Add append-style headers
 curl -X PATCH http://localhost:17081/api/config \
-  -d '{"headers": {"*": {"append": {"Via": "1.1 discobot-proxy"}}}}'
+  -d '{"headers": {"*": {"append": {"Via": "1.1 discboeing-proxy"}}}}'
 
 # Delete a domain's headers
 curl -X PATCH http://localhost:17081/api/config \
@@ -324,10 +324,10 @@ For HTTPS interception, initialize the proxy CA before starting the proxy:
 ```bash
 # Generate or reuse the CA from tls.cert_dir in config.yaml and install it in
 # the local Linux system trust store.
-sudo ./discobot-proxy init-certs -config config.yaml
+sudo ./discboeing-proxy init-certs -config config.yaml
 
 # Also import the CA into a runtime user's NSS DB for Chromium-based browsers.
-sudo /opt/discobot/bin/proxy init-certs -config /.data/proxy/config.yaml -user discobot
+sudo /opt/discboeing/bin/proxy init-certs -config /.data/proxy/config.yaml -user discboeing
 ```
 
 The command writes `ca.crt` and `ca.key` under the configured `tls.cert_dir`,

@@ -158,7 +158,7 @@ if (session.status === "completed") {
 Use the defined constants:
 
 ```go
-import "discobot/internal/model"
+import "discboeing/internal/model"
 
 // Good ✓
 session.CommitStatus = model.CommitStatusCompleted

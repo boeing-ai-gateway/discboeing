@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
 )
 
 // mockSandboxProvider implements sandbox.Provider for testing SandboxAgentClient.
@@ -759,7 +759,7 @@ func TestSandboxAgentClient_SendMessages_WithCredentials(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
-			receivedCredentials = r.Header.Get("X-Discobot-Credentials")
+			receivedCredentials = r.Header.Get("X-Discboeing-Credentials")
 			w.WriteHeader(http.StatusAccepted)
 			json.NewEncoder(w).Encode(map[string]string{
 				"completionId": "test-123",
@@ -862,12 +862,12 @@ func TestSandboxAuthTransportMergesProviderWebSocketAuth(t *testing.T) {
 	transport := &sandboxAuthTransport{
 		base: base,
 		token: func(context.Context) string {
-			return "discobot-secret"
+			return "discboeing-secret"
 		},
 	}
 
 	headers := transport.Headers()
-	if got := headers.Get("Authorization"); got != "Bearer discobot-secret" {
+	if got := headers.Get("Authorization"); got != "Bearer discboeing-secret" {
 		t.Fatalf("Authorization = %q", got)
 	}
 	if got := headers.Get("X-Exedev-Authorization"); got != "Bearer vm-api-key" {
@@ -1312,8 +1312,8 @@ func TestSandboxAgentClient_SendMessages_WithGitConfig(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
-			receivedGitUserName = r.Header.Get("X-Discobot-Git-User-Name")
-			receivedGitUserEmail = r.Header.Get("X-Discobot-Git-User-Email")
+			receivedGitUserName = r.Header.Get("X-Discboeing-Git-User-Name")
+			receivedGitUserEmail = r.Header.Get("X-Discboeing-Git-User-Email")
 			w.WriteHeader(http.StatusAccepted)
 			json.NewEncoder(w).Encode(map[string]string{
 				"completionId": "test-123",
@@ -1353,10 +1353,10 @@ func TestSandboxAgentClient_SendMessages_WithGitConfig(t *testing.T) {
 
 	// Verify git config headers were sent
 	if receivedGitUserName != "Test User" {
-		t.Errorf("Expected X-Discobot-Git-User-Name: Test User, got: %s", receivedGitUserName)
+		t.Errorf("Expected X-Discboeing-Git-User-Name: Test User, got: %s", receivedGitUserName)
 	}
 	if receivedGitUserEmail != "test@example.com" {
-		t.Errorf("Expected X-Discobot-Git-User-Email: test@example.com, got: %s", receivedGitUserEmail)
+		t.Errorf("Expected X-Discboeing-Git-User-Email: test@example.com, got: %s", receivedGitUserEmail)
 	}
 }
 
@@ -1365,8 +1365,8 @@ func TestSandboxAgentClient_SendMessages_WithPartialGitConfig(t *testing.T) {
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/chat") {
-			receivedGitUserName = r.Header.Get("X-Discobot-Git-User-Name")
-			receivedGitUserEmail = r.Header.Get("X-Discobot-Git-User-Email")
+			receivedGitUserName = r.Header.Get("X-Discboeing-Git-User-Name")
+			receivedGitUserEmail = r.Header.Get("X-Discboeing-Git-User-Email")
 			w.WriteHeader(http.StatusAccepted)
 			json.NewEncoder(w).Encode(map[string]string{
 				"completionId": "test-123",
@@ -1405,10 +1405,10 @@ func TestSandboxAgentClient_SendMessages_WithPartialGitConfig(t *testing.T) {
 
 	// Verify only name header was sent
 	if receivedGitUserName != "Name Only User" {
-		t.Errorf("Expected X-Discobot-Git-User-Name: Name Only User, got: %s", receivedGitUserName)
+		t.Errorf("Expected X-Discboeing-Git-User-Name: Name Only User, got: %s", receivedGitUserName)
 	}
 	if receivedGitUserEmail != "" {
-		t.Errorf("Expected no X-Discobot-Git-User-Email header, got: %s", receivedGitUserEmail)
+		t.Errorf("Expected no X-Discboeing-Git-User-Email header, got: %s", receivedGitUserEmail)
 	}
 }
 

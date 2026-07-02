@@ -74,7 +74,7 @@ interface BuildDockerTargetFilesOptions {
 // Some Docker daemons reject `docker create` for scratch-based artifact images
 // unless an explicit command is provided. The container is never started; it is
 // created only so `docker cp` can read build artifacts back out.
-const artifactContainerCommand = ["/__discobot_artifact__"];
+const artifactContainerCommand = ["/__discboeing_artifact__"];
 
 function localDockerPath(projectRoot: string, destination: string): string {
 	// When Docker is proxied through `wsl.exe ... docker`, `docker cp` writes the
@@ -328,15 +328,15 @@ export class VzWatcher {
 				runCommand: this.runCommand,
 				projectRoot: this.config.projectRoot,
 				target: "vz-image",
-				temporaryTagPrefix: "discobot-vz-watcher-extract",
+				temporaryTagPrefix: "discboeing-vz-watcher-extract",
 				artifacts: [
 					{
 						source: "/vmlinuz",
 						destination: join(this.config.outputDir, "vmlinuz"),
 					},
 					{
-						source: "/discobot-rootfs.squashfs",
-						destination: join(this.config.outputDir, "discobot-rootfs.squashfs"),
+						source: "/discboeing-rootfs.squashfs",
+						destination: join(this.config.outputDir, "discboeing-rootfs.squashfs"),
 					},
 				],
 			});
@@ -420,7 +420,7 @@ export class VzWatcher {
 			const kernelPath = await this.decompressKernel();
 			const baseDiskPath = join(
 				this.config.outputDir,
-				"discobot-rootfs.squashfs",
+				"discboeing-rootfs.squashfs",
 			);
 
 			// Verify squashfs exists

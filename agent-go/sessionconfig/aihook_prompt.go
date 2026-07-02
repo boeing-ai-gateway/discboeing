@@ -32,7 +32,7 @@ func FormatAIHookPrompt(data AIHookPromptData) string {
 	if data.FollowUp {
 		fmt.Fprintf(&b, "New changes are available for review: %s.\n\n", data.HookName)
 	} else {
-		fmt.Fprintf(&b, "You are running the Discobot hook %q.\n\n", data.HookName)
+		fmt.Fprintf(&b, "You are running the Discboeing hook %q.\n\n", data.HookName)
 	}
 	if strings.TrimSpace(data.Instructions) != "" {
 		b.WriteString("Hook instructions:\n")
@@ -78,7 +78,7 @@ func FormatAIHookPrompt(data AIHookPromptData) string {
 // FormatAIHookContext builds the full context file content for an AI hook run.
 func FormatAIHookContext(data AIHookPromptData) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Discobot hook context: %s\n\n", data.HookName)
+	fmt.Fprintf(&b, "# Discboeing hook context: %s\n\n", data.HookName)
 	if strings.TrimSpace(data.Instructions) != "" {
 		b.WriteString("## Hook instructions\n\n")
 		b.WriteString(strings.TrimSpace(data.Instructions))

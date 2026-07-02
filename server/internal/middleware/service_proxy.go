@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 // serviceSubdomainPattern matches a single {session-id}-svc-{service-id} subdomain component.
@@ -21,10 +21,10 @@ import (
 var serviceSubdomainPattern = regexp.MustCompile(`^([0-9A-Za-z]{10,26})-svc-([a-z0-9_-]+)$`)
 
 const (
-	discobotForwardedForHeader   = "X-Discobot-Forwarded-For"
-	discobotForwardedHostHeader  = "X-Discobot-Forwarded-Host"
-	discobotForwardedPathHeader  = "X-Discobot-Forwarded-Path"
-	discobotForwardedProtoHeader = "X-Discobot-Forwarded-Proto"
+	discboeingForwardedForHeader   = "X-Discboeing-Forwarded-For"
+	discboeingForwardedHostHeader  = "X-Discboeing-Forwarded-Host"
+	discboeingForwardedPathHeader  = "X-Discboeing-Forwarded-Path"
+	discboeingForwardedProtoHeader = "X-Discboeing-Forwarded-Proto"
 
 	serviceProxyRouteCacheTTL     = 10 * time.Second
 	serviceProxyRouteCacheMaxSize = 1024
@@ -169,7 +169,7 @@ func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(htt
 			started := time.Now()
 
 			// Check both Host and X-Forwarded-Host for service subdomains.
-			// In nested discobot, the outer proxy sets X-Forwarded-Host to
+			// In nested discboeing, the outer proxy sets X-Forwarded-Host to
 			// the original host before rewriting, so the inner instance's
 			// service subdomain may only appear there.
 			hosts := []string{r.Host}
@@ -191,7 +191,7 @@ func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(htt
 			}
 			if !cacheHit {
 				// Split each host into subdomain components and find the first one
-				// with a valid session ID. This handles nested discobot where
+				// with a valid session ID. This handles nested discboeing where
 				// multiple {id}-svc-{name} components may be chained, e.g.:
 				//   inner-svc-ui.outer-svc-api.localhost:3001
 				// We need to find the component whose session ID exists on THIS instance.
@@ -286,13 +286,13 @@ func ServiceProxy(sandboxSvc SandboxService, tracker ConnectionTracker) func(htt
 
 					// exe.dev's public VM proxy is expected to set/overwrite the
 					// standard X-Forwarded-* headers before the request reaches
-					// agent-go. Carry Discobot's intended values in private headers
+					// agent-go. Carry Discboeing's intended values in private headers
 					// so agent-go can restore them before forwarding to the final
 					// workspace service.
-					req.Header.Set(discobotForwardedForHeader, forwardedFor)
-					req.Header.Set(discobotForwardedHostHeader, forwardedHost)
-					req.Header.Set(discobotForwardedPathHeader, forwardedPath)
-					req.Header.Set(discobotForwardedProtoHeader, forwardedProto)
+					req.Header.Set(discboeingForwardedForHeader, forwardedFor)
+					req.Header.Set(discboeingForwardedHostHeader, forwardedHost)
+					req.Header.Set(discboeingForwardedPathHeader, forwardedPath)
+					req.Header.Set(discboeingForwardedProtoHeader, forwardedProto)
 				},
 				Transport: clientLease.Client.Transport,
 				ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
@@ -349,7 +349,7 @@ func formatServiceProxyTiming(resolveDuration, acquireDuration time.Duration, st
 	if cacheHit {
 		cacheDescription = "hit"
 	}
-	return fmt.Sprintf("discobot-resolve;dur=%.3f;desc=%q, discobot-acquire;dur=%.3f, discobot-total-start;dur=%.3f",
+	return fmt.Sprintf("discboeing-resolve;dur=%.3f;desc=%q, discboeing-acquire;dur=%.3f, discboeing-total-start;dur=%.3f",
 		durationMillis(resolveDuration), cacheDescription, durationMillis(acquireDuration), durationMillis(time.Since(started)))
 }
 

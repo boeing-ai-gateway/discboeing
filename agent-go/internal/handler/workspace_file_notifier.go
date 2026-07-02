@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/filewatcher"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/filewatcher"
 )
 
 type workspaceFileNotifier struct {

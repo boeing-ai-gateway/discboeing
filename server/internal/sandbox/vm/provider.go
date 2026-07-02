@@ -11,9 +11,9 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/docker"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/docker"
 )
 
 // SessionProjectResolver looks up the project ID for a session from the database.
@@ -58,7 +58,7 @@ type Provider struct {
 
 	// hostDockerClient connects to the configured host Docker daemon for image
 	// transfer to VMs. On Windows this can proxy through a user-managed WSL
-	// distro when DISCOBOT_DOCKER_WSL_DISTRO is set.
+	// distro when DISCBOEING_DOCKER_WSL_DISTRO is set.
 	hostDockerClient     *dockerclient.Client
 	hostDockerClientOnce sync.Once
 	hostDockerClientErr  error
@@ -172,7 +172,7 @@ func (p *Provider) Definition() sandbox.ProviderDefinition {
 		Icon:        icon,
 		Description: name + " sandbox driver",
 		ConfigFields: []sandbox.ProviderConfigField{
-			{Key: "dataDir", Label: "Data directory", Type: "text", Placeholder: "~/.local/state/discobot/vz", Description: "Directory for Apple VZ VM state.", Advanced: true},
+			{Key: "dataDir", Label: "Data directory", Type: "text", Placeholder: "~/.local/state/discboeing/vz", Description: "Directory for Apple VZ VM state.", Advanced: true},
 			{Key: "imageRef", Label: "Image reference", Type: "text", Placeholder: "ghcr.io/...", Description: "Optional registry image for VM guest assets.", Advanced: true},
 			{Key: "homeDir", Label: "Shared home directory", Type: "text", Placeholder: "/Users/me", Description: "Host directory shared into VMs.", Advanced: true},
 			{Key: "cpuCount", Label: "CPU count", Type: "number", Placeholder: "0", Description: "CPUs per VM. Leave empty or 0 for the platform default.", Advanced: true},
@@ -311,7 +311,7 @@ func (p *Provider) GetProjectInspectionInfo(_ context.Context, _ string) (*sandb
 	return &sandbox.ProjectInspectionInfo{
 		Provider:      p.providerName,
 		Available:     true,
-		ContainerName: "discobot-host-inspect",
+		ContainerName: "discboeing-host-inspect",
 		Scope:         "project_vm",
 	}, nil
 }
@@ -698,7 +698,7 @@ func (p *Provider) getHostDockerClient() (*dockerclient.Client, error) {
 }
 
 // ensureImageInVM loads the sandbox image from the host's Docker into the VM's Docker
-// when the image is local (discobot-local/ tag) and cannot be pulled from a registry.
+// when the image is local (discboeing-local/ tag) and cannot be pulled from a registry.
 func (p *Provider) ensureImageInVM(ctx context.Context, dockerProv *docker.Provider) error {
 	if !docker.IsLocalImage(p.cfg.SandboxImage) {
 		return nil

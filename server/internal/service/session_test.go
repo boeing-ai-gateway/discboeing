@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/local"
-	mocksandbox "github.com/obot-platform/discobot/server/internal/sandbox/mock"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/local"
+	mocksandbox "github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/mock"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 func testSandboxConfig() *config.Config {
@@ -229,23 +229,23 @@ func TestInitializeSessionGitURLPassesCloneInputsToSandbox(t *testing.T) {
 	if _, ok := opts.Env[legacySessionEnv]; ok {
 		t.Fatalf("Env[%s] = %q, want unset", legacySessionEnv, opts.Env[legacySessionEnv])
 	}
-	if opts.Env["DISCOBOT_SESSION_ID"] != dbSession.ID {
-		t.Fatalf("Env[DISCOBOT_SESSION_ID] = %q, want %q", opts.Env["DISCOBOT_SESSION_ID"], dbSession.ID)
+	if opts.Env["DISCBOEING_SESSION_ID"] != dbSession.ID {
+		t.Fatalf("Env[DISCBOEING_SESSION_ID] = %q, want %q", opts.Env["DISCBOEING_SESSION_ID"], dbSession.ID)
 	}
 	for _, key := range []string{
-		"DISCOBOT_PROJECT_ID",
+		"DISCBOEING_PROJECT_ID",
 		"WORKSPACE_SOURCE",
 		"WORKSPACE_SOURCE_TYPE",
-		"DISCOBOT_WORKSPACE_SOURCE_TYPE",
-		"DISCOBOT_ENABLE_GIT_CONTROL_SOCKET",
+		"DISCBOEING_WORKSPACE_SOURCE_TYPE",
+		"DISCBOEING_ENABLE_GIT_CONTROL_SOCKET",
 		"WORKSPACE_TARGET_REF",
 	} {
 		if opts.Env[key] != "" {
 			t.Fatalf("Env[%s] = %q, want empty because dynamic config is sent to /configure", key, opts.Env[key])
 		}
 	}
-	if opts.Env["DISCOBOT_SECRET"] == "" {
-		t.Fatal("Env[DISCOBOT_SECRET] is empty")
+	if opts.Env["DISCBOEING_SECRET"] == "" {
+		t.Fatal("Env[DISCBOEING_SECRET] is empty")
 	}
 
 	stored, err := testStore.GetSessionByID(ctx, dbSession.ID)
@@ -357,18 +357,18 @@ func TestInitializeSessionWithUserUsesTrustKey(t *testing.T) {
 	if opts.SharedSecret != "" {
 		t.Fatalf("SharedSecret = %q, want empty for trust-key auth", opts.SharedSecret)
 	}
-	if opts.Env["DISCOBOT_SECRET"] != "" {
-		t.Fatalf("Env[DISCOBOT_SECRET] = %q, want empty for trust-key auth", opts.Env["DISCOBOT_SECRET"])
+	if opts.Env["DISCBOEING_SECRET"] != "" {
+		t.Fatalf("Env[DISCBOEING_SECRET] = %q, want empty for trust-key auth", opts.Env["DISCBOEING_SECRET"])
 	}
-	if opts.Env["DISCOBOT_TRUST_KEY"] == "" {
-		t.Fatal("Env[DISCOBOT_TRUST_KEY] is empty")
+	if opts.Env["DISCBOEING_TRUST_KEY"] == "" {
+		t.Fatal("Env[DISCBOEING_TRUST_KEY] is empty")
 	}
 	storedUser, err := testStore.GetUserByID(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("failed to reload user: %v", err)
 	}
-	if storedUser.SandboxPublicKey != opts.Env["DISCOBOT_TRUST_KEY"] {
-		t.Fatalf("SandboxPublicKey = %q, want trust key %q", storedUser.SandboxPublicKey, opts.Env["DISCOBOT_TRUST_KEY"])
+	if storedUser.SandboxPublicKey != opts.Env["DISCBOEING_TRUST_KEY"] {
+		t.Fatalf("SandboxPublicKey = %q, want trust key %q", storedUser.SandboxPublicKey, opts.Env["DISCBOEING_TRUST_KEY"])
 	}
 	if storedUser.EncryptedSandboxPrivateKey == "" {
 		t.Fatal("EncryptedSandboxPrivateKey is empty")
@@ -572,7 +572,7 @@ func TestStopSessionResetsErroredNotRunningSandbox(t *testing.T) {
 func TestInitializeRecreatesStoppedSandboxWhenImageIDChanges(t *testing.T) {
 	ctx := context.Background()
 	testStore := setupTestStore(t)
-	baseProvider := mocksandbox.NewProviderWithImage("ghcr.io/obot-platform/discobot:alpha90")
+	baseProvider := mocksandbox.NewProviderWithImage("ghcr.io/boeing-ai-gateway/discboeing:alpha90")
 	provider := &imageIDAwareSessionProvider{
 		Provider:       baseProvider,
 		base:           baseProvider,

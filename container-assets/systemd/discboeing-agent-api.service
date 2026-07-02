@@ -1,0 +1,21 @@
+[Unit]
+Description=Discboeing agent API (AI coding agent interface)
+After=discboeing-sandbox-init.service discboeing-proxy.service
+Requires=discboeing-sandbox-init.service
+Wants=discboeing-proxy.service
+
+[Service]
+Type=simple
+User=discboeing
+Group=discboeing
+WorkingDirectory=/home/discboeing/workspace
+EnvironmentFile=/run/discboeing/agent-env
+ExecStart=/opt/discboeing/bin/discboeing-agent-api
+Restart=on-failure
+RestartSec=5
+
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

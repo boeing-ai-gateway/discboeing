@@ -57,7 +57,7 @@ const watcher = new AgentWatcher({
 	additionalDirs: [AGENT_DIR],
 	projectRoot: ROOT_DIR,
 	envFilePath: SERVER_ENV_PATH,
-	imageName: "discobot-agent-api",
+	imageName: "discboeing-agent-api",
 	imageTag: "dev",
 	buildTarget,
 	remoteImageRepository,

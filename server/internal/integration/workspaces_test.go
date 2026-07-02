@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // createWorkspaceTestGitRepo creates a test git repository for workspace initialization tests
@@ -388,7 +388,7 @@ func TestCreateWorkspace_TildeExpansion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get home directory: %v", err)
 	}
-	testSubdir := fmt.Sprintf(".discobot-test-tilde-%d", time.Now().UnixNano())
+	testSubdir := fmt.Sprintf(".discboeing-test-tilde-%d", time.Now().UnixNano())
 	testPath := filepath.Join(homeDir, testSubdir)
 	if err := os.MkdirAll(testPath, 0755); err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)

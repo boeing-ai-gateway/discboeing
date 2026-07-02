@@ -20,10 +20,10 @@ test("renderServiceOutputText applies carriage-return line replacement", () => {
 	const raw = [
 		"\u001b[1m\u001b[96m   Building\u001b[0m [========>             ] 575/633: electron-builder",
 		"\r\u001b[K\u001b[1m\u001b[96m   Building\u001b[0m [===================>  ] 586/633: electron-updater",
-		"\r\u001b[K\u001b[1m\u001b[92m   Compiling\u001b[0m discobot v0.1.0",
+		"\r\u001b[K\u001b[1m\u001b[92m   Compiling\u001b[0m discboeing v0.1.0",
 	].join("");
 
-	assert.equal(renderServiceOutputText(raw), "   Compiling discobot v0.1.0");
+	assert.equal(renderServiceOutputText(raw), "   Compiling discboeing v0.1.0");
 });
 
 test("renderServiceOutputText handles carriage-return overwrite without clearing", () => {

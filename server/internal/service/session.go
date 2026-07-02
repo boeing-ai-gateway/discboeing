@@ -13,13 +13,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // SessionIDMaxLength is the maximum allowed length for a session ID.
@@ -1088,9 +1088,9 @@ func (s *SessionService) initializeSync(
 			SharedSecret: sandboxSecret,
 			Env:          sandboxCreateEnv(sessionID, sandboxSecret, trustKey),
 			Labels: map[string]string{
-				"discobot.session.id":   sessionID,
-				"discobot.workspace.id": workspace.ID,
-				"discobot.project.id":   projectID,
+				"discboeing.session.id":   sessionID,
+				"discboeing.workspace.id": workspace.ID,
+				"discboeing.project.id":   projectID,
 			},
 			WorkspacePath:      workspacePath,
 			WorkspaceSource:    workspace.Path,
@@ -1205,7 +1205,7 @@ func ptrString(s string) *string {
 // Flow:
 // 1. Set session commit state and ensure the target ref is present
 // 2. If patches are already available relative to the current target, apply them
-// 3. If pending: send /discobot-commit to agent, transition to committing
+// 3. If pending: send /discboeing-commit to agent, transition to committing
 // 4. If appliedCommit not set: resolve the current target, fetch patches, and apply them
 // 5. Transition to completed
 func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID string, opts CommitSessionOptions) (retErr error) {
@@ -1258,7 +1258,7 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 		}
 	}
 
-	// Step 2: Send /discobot-commit to agent (if pending)
+	// Step 2: Send /discboeing-commit to agent (if pending)
 	if sess.CommitStatus == model.CommitStatusPending && !usesPreparedSandboxCommitPull(opts) {
 		if err := s.sendCommitPrompt(ctx, projectID, workspace, sess); err != nil {
 			return err
@@ -1293,7 +1293,7 @@ func (s *SessionService) PerformCommit(ctx context.Context, projectID, sessionID
 }
 
 // tryApplyExistingPatches checks if the agent already has patches ready and applies them.
-// This is called optimistically before sending /discobot-commit in case commits are already available.
+// This is called optimistically before sending /discboeing-commit in case commits are already available.
 func (s *SessionService) tryApplyExistingPatches(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session, opts CommitSessionOptions) error {
 	if s.sandboxService == nil {
 		return nil
@@ -1416,16 +1416,16 @@ func isPromptStreamInterruption(err error) bool {
 		strings.Contains(message, "chat stream ended before completion finished")
 }
 
-// sendCommitPrompt sends the /discobot-commit command to the agent.
+// sendCommitPrompt sends the /discboeing-commit command to the agent.
 func (s *SessionService) sendCommitPrompt(ctx context.Context, projectID string, workspace *model.Workspace, sess *model.Session) error {
 	if s.sandboxService == nil {
 		s.setCommitFailed(ctx, projectID, workspace, sess, "Sandbox service not available")
 		return nil
 	}
 
-	log.Printf("Session %s: sending /discobot-commit to agent", sess.ID)
+	log.Printf("Session %s: sending /discboeing-commit to agent", sess.ID)
 
-	commitMessage := "/discobot-commit"
+	commitMessage := "/discboeing-commit"
 	messages, err := buildCommitMessage(sess.ID+"-commit", commitMessage)
 	if err != nil {
 		s.setCommitFailed(ctx, projectID, workspace, sess, fmt.Sprintf("Failed to build commit message: %v", err))
@@ -1465,7 +1465,7 @@ func (s *SessionService) sendCommitPrompt(ctx context.Context, projectID string,
 		return nil
 	}
 
-	log.Printf("Session %s: /discobot-commit message completed", sess.ID)
+	log.Printf("Session %s: /discboeing-commit message completed", sess.ID)
 	return nil
 }
 
@@ -1669,7 +1669,7 @@ func (s *SessionService) FinalizeRequestCommitPullApproval(ctx context.Context, 
 	answers := map[string]string{}
 	if commitErr != nil {
 		answers[requestCommitPullFailedKey] = "true"
-		answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot failed to pull the prepared sandbox commit into the host workspace: %v", commitErr)
+		answers[requestCommitPullResultKey] = fmt.Sprintf("Discboeing failed to pull the prepared sandbox commit into the host workspace: %v", commitErr)
 	} else {
 		sess, err := s.store.GetSessionByID(ctx, sessionID)
 		if err != nil {
@@ -1679,20 +1679,20 @@ func (s *SessionService) FinalizeRequestCommitPullApproval(ctx context.Context, 
 		case model.CommitStatusCompleted:
 			answers[requestCommitPullSucceededKey] = "true"
 			if sess.AppliedCommit != nil && strings.TrimSpace(*sess.AppliedCommit) != "" {
-				answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot successfully pulled the prepared sandbox commit into the host workspace. Applied workspace commit: %s", strings.TrimSpace(*sess.AppliedCommit))
+				answers[requestCommitPullResultKey] = fmt.Sprintf("Discboeing successfully pulled the prepared sandbox commit into the host workspace. Applied workspace commit: %s", strings.TrimSpace(*sess.AppliedCommit))
 			} else {
-				answers[requestCommitPullResultKey] = "Discobot completed the pull request, but there was no new workspace commit to apply."
+				answers[requestCommitPullResultKey] = "Discboeing completed the pull request, but there was no new workspace commit to apply."
 			}
 		case model.CommitStatusFailed:
 			answers[requestCommitPullFailedKey] = "true"
 			if sess.CommitError != nil && strings.TrimSpace(*sess.CommitError) != "" {
-				answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot failed to pull the prepared sandbox commit into the host workspace: %s", strings.TrimSpace(*sess.CommitError))
+				answers[requestCommitPullResultKey] = fmt.Sprintf("Discboeing failed to pull the prepared sandbox commit into the host workspace: %s", strings.TrimSpace(*sess.CommitError))
 			} else {
-				answers[requestCommitPullResultKey] = "Discobot failed to pull the prepared sandbox commit into the host workspace."
+				answers[requestCommitPullResultKey] = "Discboeing failed to pull the prepared sandbox commit into the host workspace."
 			}
 		default:
 			answers[requestCommitPullFailedKey] = "true"
-			answers[requestCommitPullResultKey] = fmt.Sprintf("Discobot finished the pull job in unexpected state %q.", sess.CommitStatus)
+			answers[requestCommitPullResultKey] = fmt.Sprintf("Discboeing finished the pull job in unexpected state %q.", sess.CommitStatus)
 		}
 	}
 

@@ -5,7 +5,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
 )
 
 func TestGetModelsForProject_SkipsInactiveCredentials(t *testing.T) {

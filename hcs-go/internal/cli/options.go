@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/hvsocket"
-	"github.com/obot-platform/discobot/hcs-go/internal/resources"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/hvsocket"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/resources"
 )
 
 type NetworkMode string

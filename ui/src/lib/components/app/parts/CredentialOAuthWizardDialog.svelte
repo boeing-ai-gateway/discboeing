@@ -238,7 +238,7 @@
 								</label>
 								<p class="text-sm text-muted-foreground">
 									If the browser does not return here automatically, paste the
-									full callback URL or just the <code>code</code> value and Discobot
+									full callback URL or just the <code>code</code> value and Discboeing
 									will extract the authorization code.
 								</p>
 							</div>

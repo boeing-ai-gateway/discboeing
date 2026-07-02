@@ -1,6 +1,6 @@
 # Frontend / Server Compatibility Changes
 
-This document describes the changes needed in the discobot server and frontend to work with the `agent-go` backend. These changes are **not yet applied** — `agent-go` is currently standalone and does not affect the existing system.
+This document describes the changes needed in the discboeing server and frontend to work with the `agent-go` backend. These changes are **not yet applied** — `agent-go` is currently standalone and does not affect the existing system.
 
 ## Route Changes
 
@@ -107,7 +107,7 @@ Agent-go delivers the system prompt and reminder content differently than a
 simple concatenation:
 
 1. **System prompt** (behavioral instructions) → injected as `role: "system"` root message
-2. **User instructions** (`AGENTS.md`, with provider-specific fallbacks like `CLAUDE.md` and `GEMINI.md`, plus rules) → injected as `role: "user"` message with `<system-reminder>` tags, matching Discobot's agent instruction delivery format
+2. **User instructions** (`AGENTS.md`, with provider-specific fallbacks like `CLAUDE.md` and `GEMINI.md`, plus rules) → injected as `role: "user"` message with `<system-reminder>` tags, matching Discboeing's agent instruction delivery format
 3. **Runtime/bootstrap reminders** (runtime snapshot, recent threads, visible
    skills/scripts) → injected as synthetic `role: "user"` reminder messages at
    thread bootstrap

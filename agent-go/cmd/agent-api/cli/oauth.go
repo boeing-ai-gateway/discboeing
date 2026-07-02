@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agentimpl"
 )
 
 // watchMCPOAuth polls the MCP manager's server status and prints authorization
@@ -49,7 +49,7 @@ func watchMCPOAuth(ctx context.Context, a *agentimpl.DefaultAgent) {
 // the agent, and close the server when done.
 //
 // On failure (e.g. no ports available), returns ("", nil) — MCP OAuth will
-// still work if DISCOBOT_MCP_OAUTH_REDIRECT_BASE is set via environment variable.
+// still work if DISCBOEING_MCP_OAUTH_REDIRECT_BASE is set via environment variable.
 func startOAuthServer() (string, *http.Server) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

@@ -157,7 +157,7 @@ export type ChatMessageMetadata = {
 	reasoning?: string;
 	originalText?: string;
 	slashCommand?: ChatSlashCommandMetadata;
-	discobot?: {
+	discboeing?: {
 		kind?: string;
 		compactionFor?: string;
 		turnId?: string;
@@ -532,7 +532,7 @@ export interface AgentCommandCredentialRequest {
 	approvedUses?: AgentCommandApprovedUse[];
 }
 
-export interface AgentCommandDiscobotMetadata {
+export interface AgentCommandDiscboeingMetadata {
 	ui?: boolean;
 	label?: string;
 	activeLabel?: string;
@@ -546,7 +546,7 @@ export interface AgentCommand {
 	name: string;
 	description: string;
 	kind: string;
-	discobot?: AgentCommandDiscobotMetadata;
+	discboeing?: AgentCommandDiscboeingMetadata;
 }
 
 export interface ModelInfo {
@@ -1314,7 +1314,7 @@ export interface ServiceLocalhostBind {
 
 /** Service represents a user-defined service in the sandbox */
 export interface Service {
-	/** Filename in .discobot/services/ */
+	/** Filename in .discboeing/services/ */
 	id: string;
 	/** Display name (from config or id) */
 	name: string;

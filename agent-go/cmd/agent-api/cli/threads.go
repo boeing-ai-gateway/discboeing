@@ -12,10 +12,10 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/internal/clisession"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/clisession"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // threadSummary holds display metadata for a single thread.
@@ -80,7 +80,7 @@ func handleResumeCommand(ctx context.Context, session clisession.Session, curren
 	summaries := make([]threadSummary, 0, len(threads))
 	otherDirCounts := map[string]int{}
 	otherUnknown := 0
-	threadsDir := filepath.Join(os.Getenv("HOME"), ".discobot", "threads")
+	threadsDir := filepath.Join(os.Getenv("HOME"), ".discboeing", "threads")
 
 	for _, item := range threads {
 		threadCWD := normalizeCWD(item.CWD)

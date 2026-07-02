@@ -1,0 +1,10 @@
+[Unit]
+Description=Discboeing VS Code socket activation
+After=discboeing-sandbox-init.service
+Requires=discboeing-sandbox-init.service
+
+[Socket]
+ListenStream=13337
+
+[Install]
+WantedBy=sockets.target

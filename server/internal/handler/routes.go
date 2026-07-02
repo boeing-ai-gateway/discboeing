@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/obot-platform/discobot/server/internal/routes"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/routes"
 )
 
 // GetRoutes returns all registered API routes with their metadata.

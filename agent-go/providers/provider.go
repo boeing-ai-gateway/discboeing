@@ -6,7 +6,7 @@ import (
 	"errors"
 	"iter"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // ModelTaskType identifies the intended use of a model within a provider's

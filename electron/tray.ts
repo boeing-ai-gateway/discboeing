@@ -42,7 +42,7 @@ export function hideMainWindow(window: BrowserWindow): void {
 
 export function setupTray(window: BrowserWindow): Tray {
   const tray = new Tray(trayIcon());
-  tray.setToolTip("Discobot");
+  tray.setToolTip("Discboeing");
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Show", click: () => showMainWindow(window) },

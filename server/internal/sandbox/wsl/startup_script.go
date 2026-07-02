@@ -16,12 +16,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 )
 
 const (
 	wslStartupScriptEnv  = "WSL_STARTUP_SCRIPT_PATH"
-	wslStartupScriptName = "discobot-wsl-startup.ps1"
+	wslStartupScriptName = "discboeing-wsl-startup.ps1"
 
 	wslStartupExitOK              = 0
 	wslStartupExitActionsRequired = 10
@@ -208,7 +208,7 @@ func prepareStartupRootfsTar(ctx context.Context, options wslStartupOptions, pro
 func wslUnavailableStartupError(message string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
-		message = "WSL is not installed or is not enabled. Install WSL with `wsl.exe --install`, restart Windows if prompted, then restart Discobot."
+		message = "WSL is not installed or is not enabled. Install WSL with `wsl.exe --install`, restart Windows if prompted, then restart Discboeing."
 	}
 	return &wslStartupScriptError{
 		ExitCode: wslStartupExitWSLUnavailable,
@@ -241,7 +241,7 @@ func runWSLStartupScript(ctx context.Context, options wslStartupOptions, mode st
 }
 
 func runElevatedWSLStartupScript(ctx context.Context, options wslStartupOptions, mode string, rootfsTarPath string) (wslStartupScriptResult, error) {
-	resultPath, cleanup, err := createTempWSLStartupResultFile("discobot-wsl-startup-result-*.json", "elevated WSL startup result")
+	resultPath, cleanup, err := createTempWSLStartupResultFile("discboeing-wsl-startup-result-*.json", "elevated WSL startup result")
 	if err != nil {
 		return wslStartupScriptResult{}, err
 	}
@@ -283,7 +283,7 @@ func wslStartupScriptCommand(options wslStartupOptions, mode string, resultFile 
 }
 
 func defaultRunWSLStartupPowerShell(ctx context.Context, _ string, args ...string) (wslStartupScriptResult, error) {
-	resultPath, cleanup, err := createTempWSLStartupResultFile("discobot-wsl-startup-check-*.json", "WSL startup check result")
+	resultPath, cleanup, err := createTempWSLStartupResultFile("discboeing-wsl-startup-check-*.json", "WSL startup check result")
 	if err != nil {
 		return wslStartupScriptResult{}, err
 	}
@@ -377,12 +377,12 @@ func stageEmbeddedWSLStartupScript() (string, error) {
 		return "", fmt.Errorf("create embedded WSL startup script cache directory %q: %w", scriptDir, err)
 	}
 
-	scriptPath := filepath.Join(scriptDir, fmt.Sprintf("discobot-wsl-startup-%x.ps1", sum[:8]))
+	scriptPath := filepath.Join(scriptDir, fmt.Sprintf("discboeing-wsl-startup-%x.ps1", sum[:8]))
 	if current, err := os.ReadFile(scriptPath); err == nil && bytes.Equal(current, embeddedWSLStartupScript) {
 		return scriptPath, nil
 	}
 
-	tempFile, err := os.CreateTemp(scriptDir, "discobot-wsl-startup-*.ps1")
+	tempFile, err := os.CreateTemp(scriptDir, "discboeing-wsl-startup-*.ps1")
 	if err != nil {
 		return "", fmt.Errorf("create embedded WSL startup script temp file: %w", err)
 	}
@@ -425,5 +425,5 @@ func wslStartupScriptCacheDir() (string, error) {
 		}
 		return "", fmt.Errorf("resolve embedded WSL startup script cache directory: no cache or temp directory")
 	}
-	return filepath.Join(cacheDir, "Discobot", "wsl"), nil
+	return filepath.Join(cacheDir, "Discboeing", "wsl"), nil
 }

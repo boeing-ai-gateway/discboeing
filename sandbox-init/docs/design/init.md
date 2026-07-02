@@ -1,19 +1,19 @@
 # Init Process Design
 
-Discobot sandbox containers now use systemd as PID 1. Sandbox initialization is a
-Bash setup script installed at `/opt/discobot/bin/discobot-sandbox-init` and run
-by `discobot-sandbox-init.service`.
+Discboeing sandbox containers now use systemd as PID 1. Sandbox initialization is a
+Bash setup script installed at `/opt/discboeing/bin/discboeing-sandbox-init` and run
+by `discboeing-sandbox-init.service`.
 
 ## Responsibilities
 
 The script is intentionally limited to setup work:
 
-- copy or refresh the persistent base home at `/.data/discobot`
-- mount OverlayFS over `/home/discobot`
-- create `/home/discobot/workspace`
+- copy or refresh the persistent base home at `/.data/discboeing`
+- mount OverlayFS over `/home/discboeing`
+- create `/home/discboeing/workspace`
 - mount cache directories from `/.data/cache`
 - write proxy config and initialize proxy CA certificates
-- write proxy and agent environment files under `/run/discobot`
+- write proxy and agent environment files under `/run/discboeing`
 - write Docker daemon configuration
 - notify systemd readiness and exit
 
@@ -26,7 +26,7 @@ proxy, Docker, VS Code, and desktop services run as separate units.
 Type=notify
 NotifyAccess=all
 RemainAfterExit=yes
-ExecStart=/opt/discobot/bin/discobot-sandbox-init setup
+ExecStart=/opt/discboeing/bin/discboeing-sandbox-init setup
 ```
 
-`DISCOBOT_SESSION_ID` is required. `AGENT_USER` defaults to `discobot`.
+`DISCBOEING_SESSION_ID` is required. `AGENT_USER` defaults to `discboeing`.

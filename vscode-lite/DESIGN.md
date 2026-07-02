@@ -1,7 +1,7 @@
 # vscode-lite Design and Implementation Plan
 
 `vscode-lite` is a standalone lightweight IDE subsystem that lives under
-`./vscode-lite`. It is intentionally independent from Discobot sessions for the
+`./vscode-lite`. It is intentionally independent from Discboeing sessions for the
 MVP. The subsystem runs one local Go server process for one local workspace and
 serves a Svelte/Vite/Monaco frontend.
 
@@ -17,7 +17,7 @@ serves a Svelte/Vite/Monaco frontend.
 
 - Single workspace per process.
 - The vscode-lite Go server owns LSP process lifecycle.
-- The MVP does not depend on Discobot project/session APIs.
+- The MVP does not depend on Discboeing project/session APIs.
 - File operations go through a VFS abstraction.
 - Initial VFS implementation is a local filesystem VFS rooted at the configured
   workspace.
@@ -135,7 +135,7 @@ Path rules:
 
 This makes room for future implementations such as:
 
-- `DiscobotSessionVFS`
+- `DiscboeingSessionVFS`
 - remote VFS
 - overlay VFS
 - Git-aware VFS

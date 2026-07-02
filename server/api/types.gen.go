@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	message "github.com/obot-platform/discobot/agent-go/message"
+	message "github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 const (
@@ -515,7 +515,7 @@ type CacheVolumesResponse map[string]interface{}
 
 // ChatRequest Request to submit or queue chat messages for a session thread.
 type ChatRequest struct {
-	// Messages Discobot UIMessage values accepted by the sandbox agent API.
+	// Messages Discboeing UIMessage values accepted by the sandbox agent API.
 	Messages []Message `json:"messages,omitempty"`
 
 	// Model model value for the chat Request object.
@@ -1305,10 +1305,10 @@ type MCPTokenRequest struct {
 	URL string `json:"url"`
 }
 
-// Message Discobot UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.
+// Message Discboeing UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.
 type Message = message.UIMessage
 
-// MessageChunk Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.
+// MessageChunk Discboeing stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.
 type MessageChunk = message.MessageChunk
 
 // MessagePart Discriminated UIMessage part. Authoritative variants live in agent-go/message.

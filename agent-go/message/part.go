@@ -12,10 +12,10 @@ type Part interface {
 	partType() string
 }
 
-// DiscobotPartMetadata holds discobot-specific metadata attached to a part's
-// ProviderMetadata field. It is serialized as {"discobot": {...}} to match the
+// DiscboeingPartMetadata holds discboeing-specific metadata attached to a part's
+// ProviderMetadata field. It is serialized as {"discboeing": {...}} to match the
 // nested ProviderMetadata shape (Record<providerNamespace, JSONObject>).
-type DiscobotPartMetadata struct {
+type DiscboeingPartMetadata struct {
 	// OriginalCommand is the raw slash-command string the user typed (e.g.
 	// "/commit fix the bug").
 	OriginalCommand string `json:"originalCommand,omitempty"`
@@ -26,37 +26,37 @@ type DiscobotPartMetadata struct {
 	ReminderKind string `json:"reminderKind,omitempty"`
 }
 
-// MarshalProviderMetadata encodes a DiscobotPartMetadata value into the
+// MarshalProviderMetadata encodes a DiscboeingPartMetadata value into the
 // ProviderMetadata wire format:
 //
-//	{"discobot": {"originalCommand": "..."}}
+//	{"discboeing": {"originalCommand": "..."}}
 //
 // Returns nil on marshal error (non-fatal; callers may use nil as a no-op).
-func MarshalProviderMetadata(meta DiscobotPartMetadata) json.RawMessage {
-	data, err := json.Marshal(map[string]DiscobotPartMetadata{"discobot": meta})
+func MarshalProviderMetadata(meta DiscboeingPartMetadata) json.RawMessage {
+	data, err := json.Marshal(map[string]DiscboeingPartMetadata{"discboeing": meta})
 	if err != nil {
 		return nil
 	}
 	return data
 }
 
-// UnmarshalProviderMetadata decodes Discobot provider metadata from the nested
-// providerMetadata shape. It returns false when no discobot metadata is present.
-func UnmarshalProviderMetadata(data json.RawMessage) (DiscobotPartMetadata, bool) {
+// UnmarshalProviderMetadata decodes Discboeing provider metadata from the nested
+// providerMetadata shape. It returns false when no discboeing metadata is present.
+func UnmarshalProviderMetadata(data json.RawMessage) (DiscboeingPartMetadata, bool) {
 	if len(data) == 0 {
-		return DiscobotPartMetadata{}, false
+		return DiscboeingPartMetadata{}, false
 	}
 	var nested map[string]json.RawMessage
 	if json.Unmarshal(data, &nested) != nil {
-		return DiscobotPartMetadata{}, false
+		return DiscboeingPartMetadata{}, false
 	}
-	rawMeta, ok := nested["discobot"]
+	rawMeta, ok := nested["discboeing"]
 	if !ok {
-		return DiscobotPartMetadata{}, false
+		return DiscboeingPartMetadata{}, false
 	}
-	var meta DiscobotPartMetadata
+	var meta DiscboeingPartMetadata
 	if json.Unmarshal(rawMeta, &meta) != nil {
-		return DiscobotPartMetadata{}, false
+		return DiscboeingPartMetadata{}, false
 	}
 	return meta, true
 }

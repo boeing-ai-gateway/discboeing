@@ -9,7 +9,7 @@ export const PROJECT_ID = "local";
 
 declare global {
 	interface Window {
-		__DISCOBOT_CONFIG__?: {
+		__DISCBOEING_CONFIG__?: {
 			apiRoot?: string;
 		};
 	}
@@ -19,7 +19,7 @@ const DEFAULT_SSH_PORT = 3333;
 const DEFAULT_HTTP_PORT = 3001;
 const desktopLocalhost = "localhost";
 const sameOriginAPIPath = "/api";
-const viteApiRoot = import.meta.env.VITE_DISCOBOT_API_ROOT;
+const viteApiRoot = import.meta.env.VITE_DISCBOEING_API_ROOT;
 
 // Server config (fetched from backend)
 let sshPort = DEFAULT_SSH_PORT;
@@ -46,7 +46,7 @@ function getInjectedApiRootBase(): string | null {
 	if (typeof window === "undefined") {
 		return null;
 	}
-	const apiRoot = window.__DISCOBOT_CONFIG__?.apiRoot;
+	const apiRoot = window.__DISCBOEING_CONFIG__?.apiRoot;
 	if (!apiRoot) {
 		return null;
 	}

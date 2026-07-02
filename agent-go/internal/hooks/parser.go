@@ -1,5 +1,5 @@
 // Package hooks provides the hook system for post-completion evaluation.
-// Hooks are executable scripts in .discobot/hooks/ with YAML front matter.
+// Hooks are executable scripts in .discboeing/hooks/ with YAML front matter.
 package hooks
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 // HooksDir is the directory within the workspace where hooks are defined.
-const HooksDir = ".discobot/hooks"
+const HooksDir = ".discboeing/hooks"
 
 // HookType is the type of hook.
 type HookType string

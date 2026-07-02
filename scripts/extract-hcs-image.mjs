@@ -8,7 +8,7 @@
  * bundling into the Windows app.
  *
  * Usage: node scripts/extract-hcs-image.mjs [image-ref] [arch]
- *   image-ref: Docker image reference (defaults to ghcr.io/obot-platform/discobot-hcs:main)
+ *   image-ref: Docker image reference (defaults to ghcr.io/boeing-platform/discboeing-hcs:main)
  *   arch: Architecture (amd64 or arm64, defaults to host arch)
  */
 
@@ -22,7 +22,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 const resourcesDir = join(projectRoot, "electron", "resources", "hcs");
 
-const imageRef = process.argv[2] || "ghcr.io/obot-platform/discobot-hcs:main";
+const imageRef = process.argv[2] || "ghcr.io/boeing-platform/discboeing-hcs:main";
 const arch = process.argv[3] || (process.arch === "arm64" ? "arm64" : "amd64");
 
 mkdirSync(resourcesDir, { recursive: true });
@@ -83,7 +83,7 @@ console.log(`Image: ${imageRef}`);
 console.log(`Output directory: ${resourcesDir}`);
 
 const extractFiles = [
-  "discobot-rootfs.vhd",
+  "discboeing-rootfs.vhd",
   "wsl-kernel",
   "kernel-version",
   "wsl-kernel-ref",
@@ -91,7 +91,7 @@ const extractFiles = [
   "gvproxy.exe",
   "gvforwarder",
 ];
-const tempDir = mkdtempSync(join(os.tmpdir(), "discobot-hcs-image-"));
+const tempDir = mkdtempSync(join(os.tmpdir(), "discboeing-hcs-image-"));
 const tempTarPath = join(tempDir, "image.tar");
 
 try {

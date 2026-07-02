@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
-	"github.com/obot-platform/discobot/modelsdev"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/modelsdev"
 )
 
 const (
@@ -317,7 +317,7 @@ func estimatePDFPageCount(data []byte) int {
 
 func renderPDFPagesToImages(pdfPath string, selection *pdfPageSelection, approxPages int) ([]message.ContentImageDataItem, string, error) {
 	start, end := resolvePDFRenderRange(selection, approxPages)
-	tmpDir, err := os.MkdirTemp("", "discobot-read-pdf-images-*")
+	tmpDir, err := os.MkdirTemp("", "discboeing-read-pdf-images-*")
 	if err != nil {
 		return nil, "", fmt.Errorf("create temporary directory: %w", err)
 	}

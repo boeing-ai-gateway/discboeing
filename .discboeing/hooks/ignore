@@ -1,0 +1,2 @@
+# Generated templ output; hooks should run against source .templ files.
+discboeing/**/*_templ.go

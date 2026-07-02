@@ -1,16 +1,16 @@
 # Workspace Customization
 
-Discobot supports per-workspace customization through the `.discobot/` directory at the root of your workspace. Four workspace-level customizations are available:
+Discboeing supports per-workspace customization through the `.discboeing/` directory at the root of your workspace. Four workspace-level customizations are available:
 
-- **Environment file** (`.discobot/env`) — Environment variables loaded into tools, console sessions, hooks, and services
-- **Scripts** (`.discobot/scripts/`) — User-facing executable slash commands exposed to the agent through the Skill tool
-- **Hooks** (`.discobot/hooks/`) — Automation scripts or AI review prompts that run at specific lifecycle points
-- **Services** (`.discobot/services/`) — Background processes and HTTP endpoints
+- **Environment file** (`.discboeing/env`) — Environment variables loaded into tools, console sessions, hooks, and services
+- **Scripts** (`.discboeing/scripts/`) — User-facing executable slash commands exposed to the agent through the Skill tool
+- **Hooks** (`.discboeing/hooks/`) — Automation scripts or AI review prompts that run at specific lifecycle points
+- **Services** (`.discboeing/services/`) — Background processes and HTTP endpoints
 
 Scripts, script hooks, and executable services use the same file format: executable scripts with YAML front matter. AI hooks and passive services use front matter with a non-executable body or declaration.
 
 ```
-.discobot/
+.discboeing/
 ├── env
 ├── scripts/
 │   ├── summarize-diff.sh
@@ -27,7 +27,7 @@ Scripts, script hooks, and executable services use the same file format: executa
 
 ## Front Matter Format
 
-All `.discobot/` files use YAML front matter to declare configuration. Three delimiter styles are supported:
+All `.discboeing/` files use YAML front matter to declare configuration. Three delimiter styles are supported:
 
 **Hash-prefixed (shell scripts):**
 
@@ -66,32 +66,32 @@ For comment-prefixed styles (`#---`, `//---`), all whitespace after the prefix i
 
 ## Environment File
 
-If `.discobot/env` exists at the workspace root, Discobot loads it into the session environment used by tools, console sessions, hooks, and services.
+If `.discboeing/env` exists at the workspace root, Discboeing loads it into the session environment used by tools, console sessions, hooks, and services.
 Changes are picked up for new tool executions, hook runs, service launches, and console sessions without restarting the session.
 
 Each non-empty line must be a `KEY=VALUE` assignment. Leading whitespace is ignored, lines starting with `#` are treated as comments, and `export KEY=VALUE` is also supported. Quoted values are allowed and are treated literally.
 
-Invalid lines are ignored with a warning that includes the file path and line number, but Discobot does not echo the rejected line contents.
+Invalid lines are ignored with a warning that includes the file path and line number, but Discboeing does not echo the rejected line contents.
 
 ---
 
 ## Scripts
 
-Scripts are executable files directly in `.discobot/scripts/` that behave like
-user-facing slash commands. A file at `.discobot/scripts/summarize-diff.sh`
-becomes `/summarize-diff`. Discobot does not recurse into subdirectories.
+Scripts are executable files directly in `.discboeing/scripts/` that behave like
+user-facing slash commands. A file at `.discboeing/scripts/summarize-diff.sh`
+becomes `/summarize-diff`. Discboeing does not recurse into subdirectories.
 Scripts are discovered from the workspace and from supported user-level script
-directories, but when Discobot tells the LLM about them, they are presented
+directories, but when Discboeing tells the LLM about them, they are presented
 through the same `Skill` tool as markdown skills.
 
-Discobot resolves executable slash commands from these locations, in order:
+Discboeing resolves executable slash commands from these locations, in order:
 
-1. workspace `.discobot/scripts/`
-2. user `~/.discobot/scripts/`
+1. workspace `.discboeing/scripts/`
+2. user `~/.discboeing/scripts/`
 3. user `~/.agents/scripts/`
-4. system `/opt/discobot/scripts/`
-5. system `/usr/local/share/discobot/scripts/`
-6. system `/usr/share/discobot/scripts/`
+4. system `/opt/discboeing/scripts/`
+5. system `/usr/local/share/discboeing/scripts/`
+6. system `/usr/share/discboeing/scripts/`
 
 That means:
 
@@ -116,26 +116,26 @@ That means:
 
 Script files must:
 
-- be directly in `.discobot/scripts/`
+- be directly in `.discboeing/scripts/`
 - be executable (`chmod +x`)
 - have a shebang line (`#!/bin/bash`, `#!/usr/bin/env python`, etc.)
 - include valid front matter
 
-On Windows, Discobot uses the script's shebang to choose an interpreter, so
+On Windows, Discboeing uses the script's shebang to choose an interpreter, so
 Bash-based scripts require `bash` to be available on `PATH`.
 
 ### Execution Semantics
 
 When a script is run:
 
-- Discobot executes the file directly and passes everything after `/name` as one
+- Discboeing executes the file directly and passes everything after `/name` as one
   raw string in `$1`
-- the working directory is `/home/discobot/workspace`
-- the session environment, including `.discobot/env`, is available
+- the working directory is `/home/discboeing/workspace`
+- the session environment, including `.discboeing/env`, is available
 - on success, only trimmed `stdout` is forwarded to the LLM
-- on failure, Discobot forwards formatted execution metadata plus trimmed
+- on failure, Discboeing forwards formatted execution metadata plus trimmed
   `stdout` and `stderr`
-- if successful output is empty after trimming, Discobot records the execution
+- if successful output is empty after trimming, Discboeing records the execution
   in message metadata and UI, but avoids starting a no-op model response
 
 Hidden scripts (`visible: false`) can still exist in the repository for
@@ -144,7 +144,7 @@ available to the LLM through the `Skill` tool.
 
 ### Example — Visible script
 
-Path: `.discobot/scripts/summarize-diff.sh`
+Path: `.discboeing/scripts/summarize-diff.sh`
 
 ```bash
 #!/bin/bash
@@ -159,7 +159,7 @@ git diff --stat -- "$1"
 
 ### Example — Hidden script
 
-Path: `.discobot/scripts/internal-refresh`
+Path: `.discboeing/scripts/internal-refresh`
 
 ```bash
 #!/bin/bash
@@ -175,9 +175,9 @@ pnpm run generate
 
 ## Hooks
 
-Hooks are files in `.discobot/hooks/` that run at specific points during a session. Script hooks execute commands, while AI hooks ask the session's AI agent to review the relevant changes. They enable automated setup, validation, and enforcement of code quality standards.
+Hooks are files in `.discboeing/hooks/` that run at specific points during a session. Script hooks execute commands, while AI hooks ask the session's AI agent to review the relevant changes. They enable automated setup, validation, and enforcement of code quality standards.
 
-Discobot supports two hook engines:
+Discboeing supports two hook engines:
 
 | Engine            | How it runs                                                                 | File requirements                         |
 | ----------------- | --------------------------------------------------------------------------- | ----------------------------------------- |
@@ -212,12 +212,12 @@ There are three hook types, set via the `type` field in front matter:
 
 Hook files must:
 
-- Be in the `.discobot/hooks/` directory
+- Be in the `.discboeing/hooks/` directory
 - Have front matter with a valid `type` field
 - For `engine: script` hooks, be executable (`chmod +x`) and have a shebang line (`#!/bin/bash`, `#!/usr/bin/env python`, etc.)
 - For `engine: ai` hooks, have `engine: ai`; no executable bit or shebang is required
 
-On Windows, Discobot uses a script hook's shebang to choose an interpreter. Bash-based hooks therefore require `bash` to be available on `PATH`.
+On Windows, Discboeing uses a script hook's shebang to choose an interpreter. Bash-based hooks therefore require `bash` to be available on `PATH`.
 
 Files are sorted alphabetically by filename, so prefix with numbers to control execution order (e.g., `01-install.sh`, `02-lint.sh`).
 
@@ -229,25 +229,25 @@ Session hooks run once when the container starts, before the AI agent begins. Th
 
 | Field    | Type             | Default | Description                             |
 | -------- | ---------------- | ------- | --------------------------------------- |
-| `run_as` | `root` or `user` | `user`  | Execute as root or as the discobot user |
+| `run_as` | `root` or `user` | `user`  | Execute as root or as the discboeing user |
 
 **Behavior:**
 
 - Run sequentially in alphabetical order
 - 5-minute timeout per hook
-- Working directory is `/home/discobot/workspace`
+- Working directory is `/home/discboeing/workspace`
 - Failures are logged but do not block the session from starting
 
 **Environment variables:**
 
 | Variable              | Description                                 |
 | --------------------- | ------------------------------------------- |
-| `DISCOBOT_SESSION_ID` | Current session ID                          |
-| `DISCOBOT_WORKSPACE`  | Workspace path (`/home/discobot/workspace`) |
-| `DISCOBOT_HOOK_TYPE`  | `session`                                   |
+| `DISCBOEING_SESSION_ID` | Current session ID                          |
+| `DISCBOEING_WORKSPACE`  | Workspace path (`/home/discboeing/workspace`) |
+| `DISCBOEING_HOOK_TYPE`  | `session`                                   |
 
 Workspace credentials are scoped per runtime context. A credential must be
-marked visible to **hooks** before Discobot injects it into hook processes.
+marked visible to **hooks** before Discboeing injects it into hook processes.
 
 **Example — Install system packages (as root):**
 
@@ -289,20 +289,20 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 - Run after the LLM completion finishes and the SSE stream closes
 - Only triggered when files matching the `pattern` have changed since the last evaluation
 - Files matching a hook's `ignore`/`exclude` field are skipped for that hook
-- Files matching `.discobot/hooks/ignore` are skipped for all file hooks
+- Files matching `.discboeing/hooks/ignore` are skipped for all file hooks
 - On failure with `notify_llm: true`: the LLM receives the hook output and attempts to fix the issue (up to 3 retries per user message)
 - On failure with `notify_llm: false`: the hook runs silently — useful for auto-fixers like formatters
 - Hooks that fail block subsequent hooks from running until fixed
 - Hooks with `phase: review` are kept pending until the session phase is `review`
-- If agent-go restarts while a file hook is running, Discobot resets that hook to pending and re-runs it on the next eligible evaluation
+- If agent-go restarts while a file hook is running, Discboeing resets that hook to pending and re-runs it on the next eligible evaluation
 
 **Environment variables:**
 
 | Variable                 | Description                                                        |
 | ------------------------ | ------------------------------------------------------------------ |
-| `DISCOBOT_CHANGED_FILES` | Space-separated list of changed file paths (relative to workspace) |
-| `DISCOBOT_SESSION_ID`    | Current session ID                                                 |
-| `DISCOBOT_HOOK_TYPE`     | `file`                                                             |
+| `DISCBOEING_CHANGED_FILES` | Space-separated list of changed file paths (relative to workspace) |
+| `DISCBOEING_SESSION_ID`    | Current session ID                                                 |
+| `DISCBOEING_HOOK_TYPE`     | `file`                                                             |
 
 **Glob pattern syntax** uses [picomatch](https://github.com/micromatch/picomatch) patterns:
 
@@ -314,7 +314,7 @@ File hooks run after each LLM turn completes, checking whether files matching a 
 | `"**/*.go"`                   | All `.go` files recursively               |
 | `"{package.json,pnpm*.yaml}"` | `package.json` and any `pnpm*.yaml` files |
 
-`.discobot/hooks/ignore` is a plain text file with one glob pattern per line.
+`.discboeing/hooks/ignore` is a plain text file with one glob pattern per line.
 Blank lines and lines starting with `#` are ignored. It uses the same glob
 syntax as `pattern`; gitignore-specific features such as `!` negation are not
 supported.
@@ -329,7 +329,7 @@ supported.
 # pattern: "*.go"
 # ignore: "*_templ.go"
 #---
-gofmt -l $DISCOBOT_CHANGED_FILES
+gofmt -l $DISCBOEING_CHANGED_FILES
 ```
 
 **Example — Auto-fix TypeScript (silent):**
@@ -342,7 +342,7 @@ gofmt -l $DISCOBOT_CHANGED_FILES
 # pattern: "*.{ts,tsx}"
 # notify_llm: false
 #---
-npx eslint --fix $DISCOBOT_CHANGED_FILES
+npx eslint --fix $DISCBOEING_CHANGED_FILES
 ```
 
 **Example — Reinstall dependencies when lockfile changes:**
@@ -366,7 +366,7 @@ pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
 # type: file
 # pattern: "**/go.mod"
 #---
-for f in $DISCOBOT_CHANGED_FILES; do
+for f in $DISCBOEING_CHANGED_FILES; do
 	dir=$(dirname "$f")
 	(cd "$dir" && go mod tidy 2>&1)
 done
@@ -392,13 +392,13 @@ Each run sends a new prompt into the same thread with the hook instructions,
 matching changed files, and an inline diff when available. Active AI hook
 reviews are registered with the same task/completion infrastructure used by the
 `Task` and `TaskOutput` tools, so the thread is visible to normal completion
-tracking while the hook waits for the final review output. Discobot also writes
+tracking while the hook waits for the final review output. Discboeing also writes
 the complete run context
-to `~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md`
+to `~/.discboeing/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md`
 and includes that path in the prompt so the AI can read the full diff if the
 inline context is truncated.
 
-Discobot adds a standard response instruction to each AI hook prompt: output
+Discboeing adds a standard response instruction to each AI hook prompt: output
 `SUCCESS` when the hook passes, or `FEEDBACK: <actionable feedback>` when
 changes need attention. Hook authors should write review-specific instructions
 and do not need to include that success/feedback wording in the hook body.
@@ -417,7 +417,7 @@ Behavior, matching the `agent-go` hook manager:
 
 - The only accepted non-empty `phase` value is `review`; other values make hook
   discovery fail for that hook set.
-- Any hook with `phase: review` makes Discobot expose the `ReadyForReview` tool
+- Any hook with `phase: review` makes Discboeing expose the `ReadyForReview` tool
   to the agent. Calling it records the session phase as `review`.
 - File hooks with `phase: review` still detect matching changed files during
   normal post-turn evaluation, but remain pending instead of executing while
@@ -452,8 +452,8 @@ Pre-commit hooks are installed as git pre-commit hooks. They run automatically w
 
 **Behavior:**
 
-- On session startup, Discobot generates a `.git/hooks/pre-commit` script that chains all `type: pre-commit` hooks
-- If a `.git/hooks/pre-commit` already exists and wasn't created by Discobot, it's preserved as `.git/hooks/pre-commit.original` and still runs
+- On session startup, Discboeing generates a `.git/hooks/pre-commit` script that chains all `type: pre-commit` hooks
+- If a `.git/hooks/pre-commit` already exists and wasn't created by Discboeing, it's preserved as `.git/hooks/pre-commit.original` and still runs
 - When the LLM runs `git commit` and the hook fails, it sees the error output and can fix the issue and retry
 
 **Example — Run CI checks before commit:**
@@ -483,7 +483,7 @@ pnpm typecheck
 When a file hook fails with `notify_llm: true`, the LLM receives a message like:
 
 ```
-[Discobot Hook Failed] "Go format check" (pattern: *.go)
+[Discboeing Hook Failed] "Go format check" (pattern: *.go)
 
 Files: internal/server/handler.go, internal/server/service.go
 Exit code: 1
@@ -498,30 +498,30 @@ Please fix the issues and ensure the hook passes. (Attempt 1/3)
 For large output (over 200 lines), the output is saved to a file and the LLM is told to read it:
 
 ```
-[Discobot Hook Failed] "Go format check" (pattern: *.go)
+[Discboeing Hook Failed] "Go format check" (pattern: *.go)
 
 Files: internal/server/handler.go, internal/server/service.go
 Exit code: 1
 
 Output is large (847 lines). Full output saved to:
-  ~/.discobot/threads/abc123/hooks/output/go-format-check.log
+  ~/.discboeing/threads/abc123/hooks/output/go-format-check.log
 
 Please read the file to see the full output and address the issues. (Attempt 1/3)
 ```
 
-After 3 consecutive hook-triggered retries, Discobot stops re-prompting. The pending hooks will re-evaluate on the next user-initiated message.
+After 3 consecutive hook-triggered retries, Discboeing stops re-prompting. The pending hooks will re-evaluate on the next user-initiated message.
 
-When multiple file hooks are pending, Discobot re-runs them in alphanumeric order by hook ID. If the earliest pending hook keeps failing, later pending hooks will wait until that earlier hook passes or is no longer pending.
+When multiple file hooks are pending, Discboeing re-runs them in alphanumeric order by hook ID. If the earliest pending hook keeps failing, later pending hooks will wait until that earlier hook passes or is no longer pending.
 
 ### Hook Reloading
 
-Hooks are automatically reloaded when files in `.discobot/hooks/` change. Adding, removing, or editing hook files takes effect on the next evaluation cycle without restarting the session.
+Hooks are automatically reloaded when files in `.discboeing/hooks/` change. Adding, removing, or editing hook files takes effect on the next evaluation cycle without restarting the session.
 
 ---
 
 ## Services
 
-Services are background processes defined in `.discobot/services/`. They allow you to run development servers, databases, or any long-running process alongside your AI agent session, with built-in HTTP proxying and output streaming.
+Services are background processes defined in `.discboeing/services/`. They allow you to run development servers, databases, or any long-running process alongside your AI agent session, with built-in HTTP proxying and output streaming.
 
 Services receive only credentials marked visible to the **services** runtime
 context. Credentials marked only for tools are not injected into background
@@ -533,7 +533,7 @@ There are two types of services:
 
 | Type           | Description                                  | Requirements                                 |
 | -------------- | -------------------------------------------- | -------------------------------------------- |
-| **Executable** | Scripts started/stopped by Discobot          | Executable file with shebang and script body |
+| **Executable** | Scripts started/stopped by Discboeing          | Executable file with shebang and script body |
 | **Passive**    | Declarations for externally-managed services | Front matter only, no script body            |
 
 ### Configuration Fields
@@ -560,7 +560,7 @@ For example: `ui.sh` becomes `ui`, `api-server.sh` becomes `api-server`.
 
 ### Service Ordering
 
-You can control the order of services in the Discobot UI with the optional `order` field.
+You can control the order of services in the Discboeing UI with the optional `order` field.
 
 - Lower numbers appear first
 - Services with the same `order` fall back to alphabetical ordering by name
@@ -570,16 +570,16 @@ This applies to the services shown in the active UI, including the service panel
 
 ### Executable Services
 
-Executable services are scripts that Discobot starts and stops as child processes. They must be executable files with a shebang line and a script body.
+Executable services are scripts that Discboeing starts and stops as child processes. They must be executable files with a shebang line and a script body.
 
-On Windows, Discobot uses the service shebang to choose an interpreter. Bash-based services therefore require `bash` to be available on `PATH`.
+On Windows, Discboeing uses the service shebang to choose an interpreter. Bash-based services therefore require `bash` to be available on `PATH`.
 
 **Example — Vite development server:**
 
 ```bash
 #!/bin/bash
 #---
-# name: Discobot UI
+# name: Discboeing UI
 # description: Vite + React Router UI development server
 # order: 10
 # http: 3000
@@ -593,10 +593,10 @@ pnpm install && pnpm dev
 #!/bin/bash
 #---
 # name: SQLite GUI
-# description: sqlite-web browser for the Discobot database
+# description: sqlite-web browser for the Discboeing database
 # http: 8080
 #---
-DB="${HOME}/.local/share/discobot/discobot.db"
+DB="${HOME}/.local/share/discboeing/discboeing.db"
 
 if [ ! -f "$DB" ]; then
     echo "Database not found at: $DB"
@@ -617,7 +617,7 @@ stopped → starting → running → stopping → stopped
 - Started via the UI or API (`POST /services/:id/start`)
 - Stopped with SIGTERM, then SIGKILL after 5 seconds if still running
 - Output (stdout/stderr) is captured and available via SSE streaming
-- Output files are stored at `~/.discobot/services/{id}/output.log` (JSONL, max 1MB, auto-truncated)
+- Output files are stored at `~/.discboeing/services/{id}/output.log` (JSONL, max 1MB, auto-truncated)
 
 ### Passive Services
 
@@ -644,7 +644,7 @@ Passive services always show as `status: "stopped"` in the API. Start/stop/outpu
 
 ### HTTP Proxy
 
-Services with an `http` or `https` port get automatic HTTP proxying. The proxy is accessible through the Discobot UI as a web preview, or via subdomain-based URLs:
+Services with an `http` or `https` port get automatic HTTP proxying. The proxy is accessible through the Discboeing UI as a web preview, or via subdomain-based URLs:
 
 ```
 {session-id}-svc-{service-id}.{base-domain}
@@ -665,10 +665,10 @@ The `path` field in front matter sets the default URL path used by the web previ
 
 ## Complete Example
 
-Here's a full `.discobot/` configuration for a Go + React project:
+Here's a full `.discboeing/` configuration for a Go + React project:
 
 ```
-.discobot/
+.discboeing/
 ├── hooks/
 │   ├── 01-install-deps.sh      # Session: install all dependencies
 │   ├── 02-go-mod-tidy.sh       # File: tidy go.mod when it changes
@@ -681,7 +681,7 @@ Here's a full `.discobot/` configuration for a Go + React project:
     └── db.sh                   # SQLite browser on port 8080
 ```
 
-**`.discobot/hooks/01-install-deps.sh`:**
+**`.discboeing/hooks/01-install-deps.sh`:**
 
 ```bash
 #!/bin/bash
@@ -693,7 +693,7 @@ pnpm install --frozen-lockfile 2>&1 || pnpm install 2>&1
 cd server && go mod download 2>&1
 ```
 
-**`.discobot/hooks/02-go-mod-tidy.sh`:**
+**`.discboeing/hooks/02-go-mod-tidy.sh`:**
 
 ```bash
 #!/bin/bash
@@ -702,13 +702,13 @@ cd server && go mod download 2>&1
 # type: file
 # pattern: "**/go.mod"
 #---
-for f in $DISCOBOT_CHANGED_FILES; do
+for f in $DISCBOEING_CHANGED_FILES; do
 	dir=$(dirname "$f")
 	(cd "$dir" && go mod tidy 2>&1)
 done
 ```
 
-**`.discobot/hooks/03-lint-frontend.sh`:**
+**`.discboeing/hooks/03-lint-frontend.sh`:**
 
 ```bash
 #!/bin/bash
@@ -720,7 +720,7 @@ done
 pnpm check:frontend:fix
 ```
 
-**`.discobot/hooks/04-lint-backend.sh`:**
+**`.discboeing/hooks/04-lint-backend.sh`:**
 
 ```bash
 #!/bin/bash
@@ -732,7 +732,7 @@ pnpm check:frontend:fix
 pnpm check:backend:fix
 ```
 
-**`.discobot/hooks/05-build.sh`:**
+**`.discboeing/hooks/05-build.sh`:**
 
 ```bash
 #!/bin/bash
@@ -744,7 +744,7 @@ pnpm check:backend:fix
 pnpm build
 ```
 
-**`.discobot/hooks/06-ci.sh`:**
+**`.discboeing/hooks/06-ci.sh`:**
 
 ```bash
 #!/bin/bash
@@ -755,7 +755,7 @@ pnpm build
 pnpm run ci
 ```
 
-**`.discobot/services/ui.sh`:**
+**`.discboeing/services/ui.sh`:**
 
 ```bash
 #!/bin/bash
@@ -768,7 +768,7 @@ pnpm run ci
 pnpm install && pnpm dev
 ```
 
-**`.discobot/services/db.sh`:**
+**`.discboeing/services/db.sh`:**
 
 ```bash
 #!/bin/bash

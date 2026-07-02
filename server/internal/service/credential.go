@@ -16,13 +16,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/encryption"
-	"github.com/obot-platform/discobot/server/internal/keyvalidator"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/oauth"
-	"github.com/obot-platform/discobot/server/internal/providers"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/encryption"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/keyvalidator"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/oauth"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/providers"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // Supported providers
@@ -33,7 +33,7 @@ const (
 	ProviderCodex         = "codex"
 	ProviderOpenAI        = "openai"
 	ProviderTavily        = "tavily"
-	ProviderDiscobot      = "discobot"
+	ProviderDiscboeing      = "discboeing"
 	ProviderExeDev        = "exedev"
 )
 
@@ -1142,7 +1142,7 @@ type CredentialEnvVar struct {
 
 const (
 	credentialCategorySudo = "sudo"
-	sudoTokenEnvVar        = "DISCOBOT_SUDO_TOKEN"
+	sudoTokenEnvVar        = "DISCBOEING_SUDO_TOKEN"
 )
 
 // GetAllDecrypted returns all configured credentials for a project as environment variable mappings.
@@ -1660,7 +1660,7 @@ func isValidProvider(provider string) bool {
 		return true
 	}
 	switch provider {
-	case ProviderAnthropic, ProviderGitHubCopilot, ProviderGitHub, ProviderCodex, ProviderOpenAI, ProviderTavily, ProviderDiscobot, ProviderExeDev:
+	case ProviderAnthropic, ProviderGitHubCopilot, ProviderGitHub, ProviderCodex, ProviderOpenAI, ProviderTavily, ProviderDiscboeing, ProviderExeDev:
 		return true
 	default:
 		return false

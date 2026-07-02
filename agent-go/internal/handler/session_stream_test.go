@@ -13,7 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
 )
 
 func TestStreamSessionEmitsAgentOwnedHistory(t *testing.T) {

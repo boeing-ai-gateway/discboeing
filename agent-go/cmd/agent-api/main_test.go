@@ -41,8 +41,8 @@ func TestRunStandaloneApplyPatch(t *testing.T) {
 		_ = os.Chdir(wd)
 	}()
 
-	t.Setenv("DISCOBOT_DATA_DIR", t.TempDir())
-	t.Setenv("DISCOBOT_THREADS_DIR", filepath.Join(t.TempDir(), "threads"))
+	t.Setenv("DISCBOEING_DATA_DIR", t.TempDir())
+	t.Setenv("DISCBOEING_THREADS_DIR", filepath.Join(t.TempDir(), "threads"))
 
 	var stdout, stderr bytes.Buffer
 	code := runStandaloneApplyPatch(nil, strings.NewReader(`*** Begin Patch

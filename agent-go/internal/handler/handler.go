@@ -9,16 +9,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
-	"github.com/obot-platform/discobot/agent-go/browser"
-	controlsocket "github.com/obot-platform/discobot/agent-go/internal/controlsocket"
-	"github.com/obot-platform/discobot/agent-go/internal/hooks"
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
-	"github.com/obot-platform/discobot/agent-go/internal/routes"
-	"github.com/obot-platform/discobot/agent-go/internal/services"
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
-	"github.com/obot-platform/discobot/agent-go/promptqueue"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agentimpl"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/browser"
+	controlsocket "github.com/boeing-ai-gateway/discboeing/agent-go/internal/controlsocket"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/hooks"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/routes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/services"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/promptqueue"
 )
 
 // Handler contains all HTTP handlers for the agent API.
@@ -311,7 +311,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		Meta: routes.Meta{Group: "Git", Description: "Get recent commit patches",
 			Params: []routes.Param{{Name: "parent", In: "query"}}}})
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/workspace-change-commits", Handler: h.ListWorkspaceChangeCommits,
-		Meta: routes.Meta{Group: "Git", Description: "List Discobot workspace change commits"}})
+		Meta: routes.Meta{Group: "Git", Description: "List Discboeing workspace change commits"}})
 
 	// Hook routes
 	reg.Register(r, routes.Route{Method: "GET", Pattern: "/hooks/status", Handler: h.HooksStatus,

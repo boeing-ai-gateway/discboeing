@@ -22,23 +22,23 @@ func TestLoadDefaultsToEphemeralHTTPSMode(t *testing.T) {
 }
 
 func TestLoadSandboxImageRemote(t *testing.T) {
-	t.Setenv("SANDBOX_IMAGE", "discobot-local/discobot-agent-api:dev")
-	t.Setenv("SANDBOX_IMAGE_REMOTE", "ghcr.io/obot-platform/discobot:main")
+	t.Setenv("SANDBOX_IMAGE", "discboeing-local/discboeing-agent-api:dev")
+	t.Setenv("SANDBOX_IMAGE_REMOTE", "ghcr.io/boeing-ai-gateway/discboeing:main")
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.SandboxImage != "discobot-local/discobot-agent-api:dev" {
+	if cfg.SandboxImage != "discboeing-local/discboeing-agent-api:dev" {
 		t.Fatalf("expected SandboxImage to use local override, got %q", cfg.SandboxImage)
 	}
-	if cfg.SandboxImageRemote != "ghcr.io/obot-platform/discobot:main" {
+	if cfg.SandboxImageRemote != "ghcr.io/boeing-ai-gateway/discboeing:main" {
 		t.Fatalf("expected SandboxImageRemote to use remote override, got %q", cfg.SandboxImageRemote)
 	}
 }
 
 func TestLoadSandboxImageRemoteDefaultsBlank(t *testing.T) {
-	t.Setenv("SANDBOX_IMAGE", "discobot-local/discobot-agent-api:dev")
+	t.Setenv("SANDBOX_IMAGE", "discboeing-local/discboeing-agent-api:dev")
 
 	cfg, err := Load()
 	if err != nil {
@@ -182,9 +182,9 @@ func TestLoadSessionSandboxCleanupDelayFromEnv(t *testing.T) {
 }
 
 func TestLoadDesktopShellSettingsFromGenericEnv(t *testing.T) {
-	t.Setenv("DISCOBOT_DESKTOP_RUNTIME", "electron")
-	t.Setenv("DISCOBOT_DESKTOP_SECRET", "desktop-secret")
-	t.Setenv("DISCOBOT_DESKTOP_ICON_PATH", `C:\Program Files\Discobot\icon.ico`)
+	t.Setenv("DISCBOEING_DESKTOP_RUNTIME", "electron")
+	t.Setenv("DISCBOEING_DESKTOP_SECRET", "desktop-secret")
+	t.Setenv("DISCBOEING_DESKTOP_ICON_PATH", `C:\Program Files\Discboeing\icon.ico`)
 
 	cfg, err := Load()
 	if err != nil {
@@ -199,7 +199,7 @@ func TestLoadDesktopShellSettingsFromGenericEnv(t *testing.T) {
 	if cfg.DesktopSecret != "desktop-secret" {
 		t.Fatalf("expected DesktopSecret desktop-secret, got %q", cfg.DesktopSecret)
 	}
-	if cfg.DesktopIconPath != `C:\Program Files\Discobot\icon.ico` {
+	if cfg.DesktopIconPath != `C:\Program Files\Discboeing\icon.ico` {
 		t.Fatalf("expected DesktopIconPath to be loaded, got %q", cfg.DesktopIconPath)
 	}
 }
@@ -209,15 +209,15 @@ func TestLoadWSLDistroNameDefaultsToDisplayName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.WSLDistroName != "Discobot" {
-		t.Fatalf("expected WSLDistroName Discobot, got %q", cfg.WSLDistroName)
+	if cfg.WSLDistroName != "Discboeing" {
+		t.Fatalf("expected WSLDistroName Discboeing, got %q", cfg.WSLDistroName)
 	}
 }
 
 func TestLoadDesktopShellSettingsRequireSecretWhenRuntimeSet(t *testing.T) {
-	t.Setenv("DISCOBOT_SECRET", "")
-	t.Setenv("DISCOBOT_DESKTOP_SECRET", "")
-	t.Setenv("DISCOBOT_DESKTOP_RUNTIME", "electron")
+	t.Setenv("DISCBOEING_SECRET", "")
+	t.Setenv("DISCBOEING_DESKTOP_SECRET", "")
+	t.Setenv("DISCBOEING_DESKTOP_RUNTIME", "electron")
 
 	_, err := Load()
 	if err == nil {
@@ -226,7 +226,7 @@ func TestLoadDesktopShellSettingsRequireSecretWhenRuntimeSet(t *testing.T) {
 }
 
 func TestLoadDockerWSLDistroFromEnv(t *testing.T) {
-	t.Setenv("DISCOBOT_DOCKER_WSL_DISTRO", "Ubuntu-24.04")
+	t.Setenv("DISCBOEING_DOCKER_WSL_DISTRO", "Ubuntu-24.04")
 
 	cfg, err := Load()
 	if err != nil {

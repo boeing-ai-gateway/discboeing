@@ -12,32 +12,32 @@ import (
 
 	"github.com/adrg/xdg"
 
-	"github.com/obot-platform/discobot/server/internal/version"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/version"
 )
 
-const appName = "discobot"
+const appName = "discboeing"
 
 // GitHubOAuthClientID is the GitHub OAuth App client ID for git operations (repo scope).
-// Set at build time via -ldflags "-X github.com/obot-platform/discobot/server/internal/config.GitHubOAuthClientID=..."
+// Set at build time via -ldflags "-X github.com/boeing-ai-gateway/discboeing/server/internal/config.GitHubOAuthClientID=..."
 // Can be overridden at runtime via the GITHUB_OAUTH_CLIENT_ID environment variable.
 var GitHubOAuthClientID = ""
 
 // DefaultSandboxImage returns the default sandbox image for sessions,
 // tagged with the current build version.
 func DefaultSandboxImage() string {
-	return "ghcr.io/obot-platform/discobot:" + version.Get()
+	return "ghcr.io/boeing-ai-gateway/discboeing:" + version.Get()
 }
 
 // DefaultVZImage returns the default VZ image containing kernel and rootfs for VMs,
 // tagged with the current build version.
 func DefaultVZImage() string {
-	return "ghcr.io/obot-platform/discobot-vz:" + version.Get()
+	return "ghcr.io/boeing-ai-gateway/discboeing-vz:" + version.Get()
 }
 
 // DefaultWSLImage returns the default WSL image containing the managed distro
 // rootfs archive, tagged with the current build version.
 func DefaultWSLImage() string {
-	return "ghcr.io/obot-platform/discobot-wsl:" + version.Get()
+	return "ghcr.io/boeing-ai-gateway/discboeing-wsl:" + version.Get()
 }
 
 // Config holds all configuration for the server
@@ -124,7 +124,7 @@ type Config struct {
 
 	// Local provider settings
 	LocalProviderEnabled bool   // Enable local sandbox provider (default: false)
-	LocalAgentBinary     string // Path to agent API binary for local provider (default: obot-agent-api in PATH)
+	LocalAgentBinary     string // Path to agent API binary for local provider (default: boeing-agent-api in PATH)
 
 	// SSH server settings
 	SSHEnabled     bool   // Enable SSH server (default: true)
@@ -142,7 +142,7 @@ type Config struct {
 	JobRetryBackoff              time.Duration // Base backoff between job retries, multiplied by attempt number (default: 5s)
 	JobMaxAttempts               int           // Default max attempts for jobs (default: 3)
 
-	// OIDC provider (for Discobot login)
+	// OIDC provider (for Discboeing login)
 	OIDCIssuerURL          string
 	OIDCBackchannelBaseURL string
 	OIDCClientID           string
@@ -216,8 +216,8 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("HTTPS_TLS_MODE must be one of: ephemeral, static, acme")
 	}
 
-	// Database - defaults to XDG_DATA_HOME/discobot/discobot.db
-	cfg.DatabaseDSN = getEnv("DATABASE_DSN", "sqlite3://"+filepath.Join(xdg.DataHome, appName, "discobot.db"))
+	// Database - defaults to XDG_DATA_HOME/discboeing/discboeing.db
+	cfg.DatabaseDSN = getEnv("DATABASE_DSN", "sqlite3://"+filepath.Join(xdg.DataHome, appName, "discboeing.db"))
 	cfg.DatabaseDriver = detectDriver(cfg.DatabaseDSN)
 
 	// Authentication - defaults to disabled (anonymous user mode)
@@ -245,7 +245,7 @@ func Load() (*Config, error) {
 	// Public address
 	cfg.PublicHostname = getEnv("PUBLIC_HOSTNAME", "")
 
-	// Workspaces and Git - defaults to XDG_DATA_HOME/discobot/workspaces
+	// Workspaces and Git - defaults to XDG_DATA_HOME/discboeing/workspaces
 	cfg.WorkspaceDir = getEnv("WORKSPACE_DIR", filepath.Join(xdg.DataHome, appName, "workspaces"))
 
 	// Sandbox runtime settings
@@ -261,10 +261,10 @@ func Load() (*Config, error) {
 	// Empty default lets the Docker SDK auto-detect (works on Linux, macOS, and Windows)
 	cfg.DockerHost = getEnv("DOCKER_HOST", "")
 	cfg.DockerNetwork = getEnv("DOCKER_NETWORK", "")
-	cfg.DockerWSLDistro = getEnv("DISCOBOT_DOCKER_WSL_DISTRO", "")
+	cfg.DockerWSLDistro = getEnv("DISCBOEING_DOCKER_WSL_DISTRO", "")
 
 	// VZ-specific settings (macOS Virtualization.framework)
-	// VZ state defaults to XDG_STATE_HOME/discobot/vz
+	// VZ state defaults to XDG_STATE_HOME/discboeing/vz
 	cfg.VZDataDir = getEnv("VZ_DATA_DIR", filepath.Join(xdg.StateHome, appName, "vz"))
 	cfg.VZConsoleLogDir = getEnv("VZ_CONSOLE_LOG_DIR", cfg.VZDataDir) // Default to same as VZDataDir
 	cfg.VZKernelPath = getEnv("VZ_KERNEL_PATH", "")
@@ -291,10 +291,10 @@ func Load() (*Config, error) {
 	cfg.HCSIdleTimeout = getEnvDuration("HCS_IDLE_TIMEOUT", 0)
 
 	// WSL-specific settings (Windows Subsystem for Linux)
-	// WSL state defaults to XDG_STATE_HOME/discobot/wsl so development builds keep
+	// WSL state defaults to XDG_STATE_HOME/discboeing/wsl so development builds keep
 	// all runtime-managed state under the same application directory structure.
 	cfg.WSLEnabled = getEnvBool("WSL_ENABLED", false)
-	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", "Discobot")
+	cfg.WSLDistroName = getEnv("WSL_DISTRO_NAME", "Discboeing")
 	cfg.WSLInstallDir = getEnv("WSL_INSTALL_DIR", filepath.Join(xdg.StateHome, appName, "wsl", "distro"))
 	cfg.WSLStateDir = getEnv("WSL_STATE_DIR", filepath.Join(xdg.StateHome, appName, "wsl"))
 	cfg.WSLVarDiskPath = getEnv("WSL_VAR_DISK_PATH", filepath.Join(xdg.StateHome, appName, "wsl", "var.vhdx"))
@@ -306,10 +306,10 @@ func Load() (*Config, error) {
 
 	// Local provider settings
 	cfg.LocalProviderEnabled = getEnvBool("LOCAL_PROVIDER_ENABLED", false)
-	cfg.LocalAgentBinary = getEnv("LOCAL_AGENT_BINARY", "obot-agent-api")
+	cfg.LocalAgentBinary = getEnv("LOCAL_AGENT_BINARY", "boeing-agent-api")
 
 	// SSH server settings
-	// SSH host key defaults to XDG_STATE_HOME/discobot/ssh_host_key
+	// SSH host key defaults to XDG_STATE_HOME/discboeing/ssh_host_key
 	cfg.SSHEnabled = getEnvBool("SSH_ENABLED", true)
 	cfg.SSHPort = getEnvInt("SSH_PORT", 3333)
 	cfg.SSHHostKeyPath = getEnv("SSH_HOST_KEY_PATH", filepath.Join(xdg.StateHome, appName, "ssh_host_key"))
@@ -354,18 +354,18 @@ func Load() (*Config, error) {
 	cfg.ValidateAPIKeys = getEnvBool("VALIDATE_API_KEYS", true)
 
 	// Desktop shell settings
-	cfg.DesktopRuntime = strings.ToLower(getEnv("DISCOBOT_DESKTOP_RUNTIME", ""))
+	cfg.DesktopRuntime = strings.ToLower(getEnv("DISCBOEING_DESKTOP_RUNTIME", ""))
 	switch cfg.DesktopRuntime {
 	case "", "electron":
 	default:
-		return nil, fmt.Errorf("DISCOBOT_DESKTOP_RUNTIME must be electron")
+		return nil, fmt.Errorf("DISCBOEING_DESKTOP_RUNTIME must be electron")
 	}
 	cfg.DesktopMode = cfg.DesktopRuntime != ""
-	cfg.DesktopSecret = getEnv("DISCOBOT_DESKTOP_SECRET", getEnv("DISCOBOT_SECRET", ""))
+	cfg.DesktopSecret = getEnv("DISCBOEING_DESKTOP_SECRET", getEnv("DISCBOEING_SECRET", ""))
 	if cfg.DesktopMode && cfg.DesktopSecret == "" {
-		return nil, fmt.Errorf("DISCOBOT_DESKTOP_SECRET (or DISCOBOT_SECRET) is required when DISCOBOT_DESKTOP_RUNTIME is set")
+		return nil, fmt.Errorf("DISCBOEING_DESKTOP_SECRET (or DISCBOEING_SECRET) is required when DISCBOEING_DESKTOP_RUNTIME is set")
 	}
-	cfg.DesktopIconPath = getEnv("DISCOBOT_DESKTOP_ICON_PATH", "")
+	cfg.DesktopIconPath = getEnv("DISCBOEING_DESKTOP_ICON_PATH", "")
 
 	return cfg, nil
 }

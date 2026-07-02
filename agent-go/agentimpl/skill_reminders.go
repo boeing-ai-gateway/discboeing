@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func currentVisibleSkillLikeEntries(sessionCfg *sessionconfig.SessionConfig, tools []providers.ToolDefinition) []thread.CommunicatedSkillLikeEntry {

@@ -1,6 +1,6 @@
 # Browser smoke tests
 
-These Playwright tests cover basic Discobot UI flows against a running app.
+These Playwright tests cover basic Discboeing UI flows against a running app.
 They are intended for QA smoke validation after larger frontend changes.
 
 ## Run

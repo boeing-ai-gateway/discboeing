@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/obot-platform/discobot/proxy/internal/config"
-	"github.com/obot-platform/discobot/proxy/internal/logger"
-	"github.com/obot-platform/discobot/proxy/internal/proxy"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/logger"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/proxy"
 )
 
 func testLogger(t *testing.T) *logger.Logger {

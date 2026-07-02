@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 type requestCommitPullInput struct {
@@ -33,7 +33,7 @@ const (
 	requestCommitPullSucceededKey         = "__request_commit_pull_succeeded__"
 	requestCommitPullFailedKey            = "__request_commit_pull_failed__"
 	requestCommitPullResultKey            = "__request_commit_pull_result__"
-	requestCommitPullDefaultQuestion      = "Allow Discobot to pull the prepared sandbox commit into the host workspace?"
+	requestCommitPullDefaultQuestion      = "Allow Discboeing to pull the prepared sandbox commit into the host workspace?"
 	requestCommitPullDefaultHeader        = "Sandbox commit pull"
 	requestCommitPullApprovedResponseText = "The user approved pulling the prepared sandbox commit into the host workspace."
 )
@@ -186,7 +186,7 @@ func (e *Executor) resolveRequestCommitPull(call message.ToolCallPart, req api.A
 	if strings.TrimSpace(req.Answers[requestCommitPullSucceededKey]) != "" {
 		result := strings.TrimSpace(req.Answers[requestCommitPullResultKey])
 		if result == "" {
-			result = "Discobot successfully pulled the prepared sandbox commit into the host workspace."
+			result = "Discboeing successfully pulled the prepared sandbox commit into the host workspace."
 		}
 		return message.ToolResultPart{
 			ToolCallID: call.ToolCallID,
@@ -197,7 +197,7 @@ func (e *Executor) resolveRequestCommitPull(call message.ToolCallPart, req api.A
 	if strings.TrimSpace(req.Answers[requestCommitPullFailedKey]) != "" {
 		result := strings.TrimSpace(req.Answers[requestCommitPullResultKey])
 		if result == "" {
-			result = "Discobot failed to pull the prepared sandbox commit into the host workspace."
+			result = "Discboeing failed to pull the prepared sandbox commit into the host workspace."
 		}
 		return message.ToolResultPart{
 			ToolCallID: call.ToolCallID,

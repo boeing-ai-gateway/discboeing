@@ -220,7 +220,7 @@
 			>
 				<Resizable.PaneGroup
 					direction="horizontal"
-					autoSaveId="discobot-ui-sidebar-layout"
+					autoSaveId="discboeing-ui-sidebar-layout"
 					class="min-h-0 min-w-0 flex-1"
 				>
 					<Resizable.Pane

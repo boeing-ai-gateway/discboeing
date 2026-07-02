@@ -9,13 +9,13 @@ set -euo pipefail
 #
 # Optional:
 #   EXEDEV_ENDPOINT=https://exe.dev/exec
-#   EXEDEV_VM_NAME=discobot-curl-test-123
+#   EXEDEV_VM_NAME=discboeing-curl-test-123
 #   EXEDEV_IMAGE=ubuntu:22.04
 #   KEEP_EXEDEV_VM=1
 
 endpoint="${EXEDEV_ENDPOINT:-https://exe.dev/exec}"
 token="${EXEDEV_TOKEN:-}"
-vm_name="${EXEDEV_VM_NAME:-discobot-curl-test-$(date +%s)-$RANDOM}"
+vm_name="${EXEDEV_VM_NAME:-discboeing-curl-test-$(date +%s)-$RANDOM}"
 image="${EXEDEV_IMAGE:-}"
 keep_vm="${KEEP_EXEDEV_VM:-0}"
 

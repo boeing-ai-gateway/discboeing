@@ -10,7 +10,7 @@ import {
 } from "$lib/context/initial-state";
 
 type TrackingWebSocket = {
-	__discobotUrl: string;
+	__discboeingUrl: string;
 	readyState: number;
 	close(code?: number, reason?: string): void;
 };
@@ -22,7 +22,7 @@ class TrackingWebSocketWrapper {
 	static CLOSING = 2;
 	static CLOSED = 3;
 
-	__discobotUrl: string;
+	__discboeingUrl: string;
 	onopen: ((event: Event) => void) | null = null;
 	onmessage: ((event: MessageEvent) => void) | null = null;
 	onerror: ((event: Event) => void) | null = null;
@@ -34,7 +34,7 @@ class TrackingWebSocketWrapper {
 		url: string | URL,
 		protocols?: string | string[],
 	) {
-		this.__discobotUrl = String(url);
+		this.__discboeingUrl = String(url);
 		this.inner = new NativeWebSocket(url, protocols);
 		this.inner.onopen = (event) => this.onopen?.(event);
 		this.inner.onmessage = (event) => {
@@ -62,9 +62,9 @@ class TrackingWebSocketWrapper {
 	}
 }
 
-const LIVE_E2E_ENABLED = process.env.DISCOBOT_LIVE_E2E === "1";
+const LIVE_E2E_ENABLED = process.env.DISCBOEING_LIVE_E2E === "1";
 const LIVE_E2E_API_ROOT =
-	process.env.DISCOBOT_LIVE_E2E_API_ROOT ?? "http://localhost:3001/api";
+	process.env.DISCBOEING_LIVE_E2E_API_ROOT ?? "http://localhost:3001/api";
 const LIVE_E2E_TIMEOUT_MS = 120_000;
 const LIVE_E2E_DELTA_TIMEOUT_MS = 30_000;
 const WAIT_INTERVAL_MS = 100;
@@ -85,7 +85,7 @@ beforeEach(() => {
 		writable: true,
 		value: {
 			...globalThis,
-			__DISCOBOT_CONFIG__: {
+			__DISCBOEING_CONFIG__: {
 				apiRoot: LIVE_E2E_API_ROOT,
 			},
 			location: {
@@ -101,7 +101,7 @@ beforeEach(() => {
 
 	if (originalWebSocket) {
 		const NativeWebSocket = originalWebSocket;
-		function DiscobotTrackingWebSocket(
+		function DiscboeingTrackingWebSocket(
 			this: TrackingWebSocket,
 			url: string | URL,
 			protocols?: string | string[],
@@ -114,14 +114,14 @@ beforeEach(() => {
 			sockets.push(socket);
 			return socket;
 		}
-		DiscobotTrackingWebSocket.CONNECTING = TrackingWebSocketWrapper.CONNECTING;
-		DiscobotTrackingWebSocket.OPEN = TrackingWebSocketWrapper.OPEN;
-		DiscobotTrackingWebSocket.CLOSING = TrackingWebSocketWrapper.CLOSING;
-		DiscobotTrackingWebSocket.CLOSED = TrackingWebSocketWrapper.CLOSED;
+		DiscboeingTrackingWebSocket.CONNECTING = TrackingWebSocketWrapper.CONNECTING;
+		DiscboeingTrackingWebSocket.OPEN = TrackingWebSocketWrapper.OPEN;
+		DiscboeingTrackingWebSocket.CLOSING = TrackingWebSocketWrapper.CLOSING;
+		DiscboeingTrackingWebSocket.CLOSED = TrackingWebSocketWrapper.CLOSED;
 		Object.defineProperty(globalThis, "WebSocket", {
 			configurable: true,
 			writable: true,
-			value: DiscobotTrackingWebSocket,
+			value: DiscboeingTrackingWebSocket,
 		});
 	}
 });
@@ -162,7 +162,7 @@ liveTest(
 		const sessionId = `ng-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		const initialThreadId = `${sessionId}-thread-a`;
 		const recoveredThreadId = `${sessionId}-thread-b`;
-		const filePath = `discobot-ng-e2e-${Date.now()}.txt`;
+		const filePath = `discboeing-ng-e2e-${Date.now()}.txt`;
 
 		try {
 			await withTimeout(
@@ -198,7 +198,7 @@ liveTest(
 			expect(record.diff.status.state).toBe("ready");
 
 			expect(sockets.length).toBe(1);
-			expect(sockets[0].__discobotUrl).toContain("/api/projects/local/ws");
+			expect(sockets[0].__discboeingUrl).toContain("/api/projects/local/ws");
 
 			await api.createThread(sessionId, {
 				id: initialThreadId,
@@ -308,7 +308,7 @@ liveTest(
 		const context = createPlainContext();
 		const sessionId = `ng-e2e-stop-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 		const threadId = `${sessionId}-thread`;
-		const filePath = `discobot-ng-stop-e2e-${Date.now()}.txt`;
+		const filePath = `discboeing-ng-stop-e2e-${Date.now()}.txt`;
 
 		try {
 			await withTimeout(

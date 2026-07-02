@@ -21,22 +21,22 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	agenthooks "github.com/obot-platform/discobot/agent-go/internal/hooks"
-	"github.com/obot-platform/discobot/agent-go/mcp"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
-	"github.com/obot-platform/discobot/modelsdev"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	agenthooks "github.com/boeing-ai-gateway/discboeing/agent-go/internal/hooks"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/mcp"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/modelsdev"
 )
 
 // MCPConfig holds MCP OAuth and connectivity settings.
 type MCPConfig struct {
 	redirectBase      string // base URL for OAuth callbacks (MCPOAuthRedirectBase)
 	sessionID         string // session ID used in OAuth redirect URL
-	discobotServerURL string // Discobot server URL for token persistence
+	discboeingServerURL string // Discboeing server URL for token persistence
 	projectID         string // project ID for token persistence
 }
 
@@ -179,11 +179,11 @@ func NewDefaultAgent(
 }
 
 // NewMCPConfig creates an MCPConfig from individual configuration values.
-func NewMCPConfig(redirectBase, sessionID, discobotServerURL, projectID string) MCPConfig {
+func NewMCPConfig(redirectBase, sessionID, discboeingServerURL, projectID string) MCPConfig {
 	return MCPConfig{
 		redirectBase:      redirectBase,
 		sessionID:         sessionID,
-		discobotServerURL: discobotServerURL,
+		discboeingServerURL: discboeingServerURL,
 		projectID:         projectID,
 	}
 }
@@ -994,7 +994,7 @@ func (a *DefaultAgent) resolveMCPManager(ctx context.Context) *mcp.Manager {
 			a.mcpMgr = nil
 		}
 		if len(state.Servers) > 0 {
-			callback := mcp.MakeTokenCallback(a.mcpCfg.discobotServerURL, a.mcpCfg.projectID)
+			callback := mcp.MakeTokenCallback(a.mcpCfg.discboeingServerURL, a.mcpCfg.projectID)
 			a.mcpMgr = mcp.NewManager(a.cwd, callback)
 			a.mcpMgr.Connect(ctx, state.Servers, a.mcpCfg.redirectBase, a.mcpCfg.sessionID)
 		}
@@ -1028,7 +1028,7 @@ func buildTurnPreludeMessages(credentialReminder, skillLikeChangeReminder, works
 			Synthetic: true,
 			Parts: []message.Part{message.TextPart{
 				Text: credentialReminder,
-				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscboeingPartMetadata{
 					ReminderKind: "credentials",
 				}),
 			}},
@@ -1041,7 +1041,7 @@ func buildTurnPreludeMessages(credentialReminder, skillLikeChangeReminder, works
 			Synthetic: true,
 			Parts: []message.Part{message.TextPart{
 				Text: skillLikeChangeReminder,
-				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscboeingPartMetadata{
 					ReminderKind: "skills",
 				}),
 			}},
@@ -1054,7 +1054,7 @@ func buildTurnPreludeMessages(credentialReminder, skillLikeChangeReminder, works
 			Synthetic: true,
 			Parts: []message.Part{message.TextPart{
 				Text: workspaceChangeReminder,
-				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscboeingPartMetadata{
 					ReminderKind: "workspace-changes",
 				}),
 			}},
@@ -1608,7 +1608,7 @@ func compactionUIAssistantMessage(id, leafID, summaryText string) message.Messag
 
 func compactionMessageMetadata(leafID string) json.RawMessage {
 	data, err := json.Marshal(map[string]any{
-		"discobot": map[string]any{
+		"discboeing": map[string]any{
 			"kind":          "compaction",
 			"compactionFor": leafID,
 			"turnId":        "compaction-" + leafID,
@@ -1742,12 +1742,12 @@ func mergeTurnIDIntoMessageMetadata(metadata json.RawMessage, turnID string) jso
 			return metadata
 		}
 	}
-	discobot := map[string]any{}
-	if current, ok := payload["discobot"].(map[string]any); ok {
-		maps.Copy(discobot, current)
+	discboeing := map[string]any{}
+	if current, ok := payload["discboeing"].(map[string]any); ok {
+		maps.Copy(discboeing, current)
 	}
-	discobot["turnId"] = turnID
-	payload["discobot"] = discobot
+	discboeing["turnId"] = turnID
+	payload["discboeing"] = discboeing
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return metadata
@@ -1917,14 +1917,14 @@ func (a *DefaultAgent) bootstrapNewThreadMessages(
 		return "", fmt.Errorf("save recent threads reminder: %w", err)
 	}
 
-	servicesReminder := sessionconfig.FormatDiscobotServicesReminder(sessionCfg.DiscobotServicesConfigured)
-	if err := appendMessage("discobot-services-"+agent.GenerateID(), "user", servicesReminder); err != nil {
-		return "", fmt.Errorf("save Discobot services reminder: %w", err)
+	servicesReminder := sessionconfig.FormatDiscboeingServicesReminder(sessionCfg.DiscboeingServicesConfigured)
+	if err := appendMessage("discboeing-services-"+agent.GenerateID(), "user", servicesReminder); err != nil {
+		return "", fmt.Errorf("save Discboeing services reminder: %w", err)
 	}
 
-	hooksReminder := sessionconfig.FormatDiscobotHooksReminder(sessionCfg.DiscobotHooksConfigured)
-	if err := appendMessage("discobot-hooks-"+agent.GenerateID(), "user", hooksReminder); err != nil {
-		return "", fmt.Errorf("save Discobot hooks reminder: %w", err)
+	hooksReminder := sessionconfig.FormatDiscboeingHooksReminder(sessionCfg.DiscboeingHooksConfigured)
+	if err := appendMessage("discboeing-hooks-"+agent.GenerateID(), "user", hooksReminder); err != nil {
+		return "", fmt.Errorf("save Discboeing hooks reminder: %w", err)
 	}
 
 	if hasNamedTool(tools, "Task") {
@@ -2075,7 +2075,7 @@ func (a *DefaultAgent) ListCommands() ([]api.Command, error) {
 			Name:        s.Name,
 			Description: s.Description,
 			Kind:        s.Kind,
-			Discobot:    discobotCommandMetadata(s.Discobot),
+			Discboeing:    discboeingCommandMetadata(s.Discboeing),
 		})
 	}
 	for _, script := range sessionCfg.Scripts {
@@ -2086,7 +2086,7 @@ func (a *DefaultAgent) ListCommands() ([]api.Command, error) {
 			Name:        script.Name,
 			Description: script.Description,
 			Kind:        string(agent.CommandKindScript),
-			Discobot:    discobotCommandMetadata(script.Discobot),
+			Discboeing:    discboeingCommandMetadata(script.Discboeing),
 		})
 	}
 	commands = append(commands, builtinCommands...)
@@ -2096,11 +2096,11 @@ func (a *DefaultAgent) ListCommands() ([]api.Command, error) {
 // resolveSlashCommand checks whether the user parts contain a single text
 // message starting with "/command-name [args]".
 //
-// Skills (.claude/skills/ or .discobot/skills/) take precedence. When found,
+// Skills (.claude/skills/ or .discboeing/skills/) take precedence. When found,
 // the original text is passed through unchanged so the model can decide whether
-// to invoke the Skill tool, but discobot metadata is attached for UI/state.
+// to invoke the Skill tool, but discboeing metadata is attached for UI/state.
 //
-// Legacy commands (.claude/commands/ or .discobot/commands/) are expanded
+// Legacy commands (.claude/commands/ or .discboeing/commands/) are expanded
 // programmatically to match Claude Code behavior. The returned original text
 // preserves the raw slash command for message-level UI metadata.
 func resolveSlashCommand(cwd string, parts []message.UIPart) ([]message.UIPart, string, string, *thread.UserSlashCommandMetadata) {

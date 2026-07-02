@@ -11,7 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 // Common errors

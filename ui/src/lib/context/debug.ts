@@ -18,7 +18,7 @@ const MAX_PERSISTED_DEBUG_REQUEST_ENTRIES = 50;
 const MAX_PERSISTED_DEBUG_EVENT_ENTRIES = 50;
 const MAX_PERSISTED_DEBUG_STATE_CHANGE_ENTRIES = 10;
 const MAX_PERSISTED_DEBUG_STORAGE_LENGTH = 200_000;
-const DEBUG_STORAGE_KEY = "discobot.ng.debug";
+const DEBUG_STORAGE_KEY = "discboeing.ng.debug";
 
 let nextDebugId = 1;
 let persistTimer: number | undefined;

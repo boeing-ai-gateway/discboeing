@@ -17,10 +17,10 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/go-chi/chi/v5"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/terminal"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/terminal"
 )
 
 // Minimum terminal dimensions to prevent zero-size PTY
@@ -28,7 +28,7 @@ const (
 	minTermRows = 20
 	minTermCols = 80
 
-	terminalWorkspaceDir = "/home/discobot/workspace"
+	terminalWorkspaceDir = "/home/discboeing/workspace"
 )
 
 // TerminalWebSocket handles WebSocket terminal connections.
@@ -110,8 +110,8 @@ func (h *Handler) TerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 
 		terminalEnv := maps.Clone(envVars)
-		terminalEnv["DISCOBOT_SUDO_RUNTIME"] = "console"
-		terminalEnv["DISCOBOT_SUDO_TOKEN"] = consoleSudoToken
+		terminalEnv["DISCBOEING_SUDO_RUNTIME"] = "console"
+		terminalEnv["DISCBOEING_SUDO_TOKEN"] = consoleSudoToken
 
 		execUser := ""
 		if runAsRoot {

@@ -7,7 +7,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 // ProjectVM represents a VM instance that hosts Docker daemon for multiple sessions.
@@ -93,7 +93,7 @@ type Config struct {
 
 	// ConsoleLogDir is where VM console logs are written.
 	// Each project VM writes to {ConsoleLogDir}/project-{projectID}/console.log
-	// Example: "~/.local/state/discobot/vz" for XDG compliance
+	// Example: "~/.local/state/discboeing/vz" for XDG compliance
 	ConsoleLogDir string
 
 	// KernelPath is the path to the Linux kernel (for VZ, KVM).
@@ -108,7 +108,7 @@ type Config struct {
 
 	// ImageRef is the Docker registry image reference for auto-downloading
 	// kernel and base disk if KernelPath and BaseDiskPath are not set.
-	// Example: "ghcr.io/obot-platform/discobot-vz:main"
+	// Example: "ghcr.io/boeing-ai-gateway/discboeing-vz:main"
 	ImageRef string
 
 	// LauncherPath is the path to an external VM launcher binary, when the

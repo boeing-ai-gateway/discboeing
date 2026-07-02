@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	credentialstore "github.com/obot-platform/discobot/agent-go/internal/credentials"
+	credentialstore "github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
 )
 
 func TestCredentialsRequiresAuthenticatedRequest(t *testing.T) {

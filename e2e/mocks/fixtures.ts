@@ -1,7 +1,7 @@
-import { FakeDiscobotApi } from "./fake-api";
+import { FakeDiscboeingApi } from "./fake-api";
 
-export function createFakeDiscobotApi() {
-	return new FakeDiscobotApi();
+export function createFakeDiscboeingApi() {
+	return new FakeDiscboeingApi();
 }
 
-export { FakeDiscobotApi };
+export { FakeDiscboeingApi };

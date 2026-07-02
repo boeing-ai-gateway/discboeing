@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 func TestWaitForJobCompletion_AlreadyCompleted(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 
 const (
 	// cacheVolumePrefix is the prefix for project-scoped cache volume names.
-	cacheVolumePrefix = "discobot-cache-"
+	cacheVolumePrefix = "discboeing-cache-"
 )
 
 // cacheVolumeName generates a cache volume name from project ID.
@@ -37,9 +37,9 @@ func (p *Provider) ensureCacheVolume(ctx context.Context, projectID string) (str
 	_, err = p.client.VolumeCreate(ctx, volumeTypes.CreateOptions{
 		Name: volName,
 		Labels: map[string]string{
-			"discobot.project.id": projectID,
-			"discobot.managed":    "true",
-			"discobot.type":       "cache",
+			"discboeing.project.id": projectID,
+			"discboeing.managed":    "true",
+			"discboeing.type":       "cache",
 		},
 	})
 	if err != nil {
@@ -76,7 +76,7 @@ func (p *Provider) ClearCache(ctx context.Context, projectID string) error {
 	containers, err := p.client.ContainerList(ctx, containerTypes.ListOptions{
 		All: true,
 		Filters: filters.NewArgs(
-			filters.Arg("label", "discobot.managed=true"),
+			filters.Arg("label", "discboeing.managed=true"),
 			filters.Arg("volume", volName),
 		),
 	})
@@ -96,7 +96,7 @@ func (p *Provider) ClearCache(ctx context.Context, projectID string) error {
 			return fmt.Errorf("failed to remove cache container %s: %w", ctr.ID, err)
 		}
 
-		if sessionID := ctr.Labels["discobot.session.id"]; sessionID != "" {
+		if sessionID := ctr.Labels["discboeing.session.id"]; sessionID != "" {
 			p.clearContainerID(sessionID)
 		}
 		log.Printf("Removed cache-attached container %s for project %s", ctr.ID[:12], projectID)
@@ -121,11 +121,11 @@ func containerUsesVolume(container containerTypes.Summary, volumeName string) bo
 // ListCacheVolumes returns all cache volumes, optionally filtered by project ID.
 func (p *Provider) ListCacheVolumes(ctx context.Context, projectID string) ([]*volumeTypes.Volume, error) {
 	filters := filters.NewArgs()
-	filters.Add("label", "discobot.managed=true")
-	filters.Add("label", "discobot.type=cache")
+	filters.Add("label", "discboeing.managed=true")
+	filters.Add("label", "discboeing.type=cache")
 
 	if projectID != "" {
-		filters.Add("label", fmt.Sprintf("discobot.project.id=%s", projectID))
+		filters.Add("label", fmt.Sprintf("discboeing.project.id=%s", projectID))
 	}
 
 	resp, err := p.client.VolumeList(ctx, volumeTypes.ListOptions{

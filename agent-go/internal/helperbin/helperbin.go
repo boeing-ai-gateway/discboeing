@@ -10,13 +10,13 @@ import (
 func Dir() string {
 	home := strings.TrimSpace(os.Getenv("HOME"))
 	if home != "" {
-		return filepath.Join(home, ".discobot", "bin")
+		return filepath.Join(home, ".discboeing", "bin")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
-		return filepath.Join(".discobot", "bin")
+		return filepath.Join(".discboeing", "bin")
 	}
-	return filepath.Join(home, ".discobot", "bin")
+	return filepath.Join(home, ".discboeing", "bin")
 }
 
 func ScriptPath(name string) string {

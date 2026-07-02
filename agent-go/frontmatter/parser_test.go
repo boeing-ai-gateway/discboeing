@@ -3,26 +3,26 @@ package frontmatter
 import (
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
-type testDiscobotCredentialApprovedUse struct {
+type testDiscboeingCredentialApprovedUse struct {
 	Description string `yaml:"description"`
 }
 
-type testDiscobotCredentialRequest struct {
+type testDiscboeingCredentialRequest struct {
 	EnvVar       string                              `yaml:"env-var"`
-	ApprovedUses []testDiscobotCredentialApprovedUse `yaml:"approved-uses"`
+	ApprovedUses []testDiscboeingCredentialApprovedUse `yaml:"approved-uses"`
 }
 
 type testScriptFrontmatter struct {
 	Name              string                          `yaml:"name"`
 	ArgumentHint      string                          `yaml:"argument-hint"`
 	Visible           *bool                           `yaml:"visible"`
-	LegacyDiscobotUI  *bool                           `yaml:"discobot-ui"`
-	LegacyActiveLabel string                          `yaml:"discobot-active-label"`
-	LegacyIcon        string                          `yaml:"discobot-icon"`
-	LegacyCredential  []testDiscobotCredentialRequest `yaml:"discobot-credential-request"`
+	LegacyDiscboeingUI  *bool                           `yaml:"discboeing-ui"`
+	LegacyActiveLabel string                          `yaml:"discboeing-active-label"`
+	LegacyIcon        string                          `yaml:"discboeing-icon"`
+	LegacyCredential  []testDiscboeingCredentialRequest `yaml:"discboeing-credential-request"`
 }
 
 type testSubAgentFrontmatter struct {
@@ -49,10 +49,10 @@ func TestParseMarkdown_NormalizesKeyStyles(t *testing.T) {
 name: release
 argument_hint: optional range
 visible: false
-discobot_ui: true
-discobot-active-label: Running
-discobot_icon: rocket
-discobot-credential-request:
+discboeing_ui: true
+discboeing-active-label: Running
+discboeing_icon: rocket
+discboeing-credential-request:
   - env_var: GH_TOKEN
     approved_uses:
       - description: create GitHub releases
@@ -75,8 +75,8 @@ Body.`
 	if doc.Metadata.Visible == nil || *doc.Metadata.Visible {
 		t.Fatalf("visible = %#v, want false", doc.Metadata.Visible)
 	}
-	if doc.Metadata.LegacyDiscobotUI == nil || !*doc.Metadata.LegacyDiscobotUI {
-		t.Fatal("expected discobot ui metadata")
+	if doc.Metadata.LegacyDiscboeingUI == nil || !*doc.Metadata.LegacyDiscboeingUI {
+		t.Fatal("expected discboeing ui metadata")
 	}
 	if doc.Metadata.LegacyActiveLabel != "Running" {
 		t.Fatalf("active label = %q, want Running", doc.Metadata.LegacyActiveLabel)

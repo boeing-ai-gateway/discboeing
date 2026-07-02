@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // WaitForJobCompletion waits for a job to complete for a specific resource.

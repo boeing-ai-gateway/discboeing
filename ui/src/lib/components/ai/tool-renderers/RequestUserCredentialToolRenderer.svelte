@@ -50,7 +50,7 @@
 	const REQUEST_REJECTED_KEY = "__request_user_credential_rejected__";
 	const REQUEST_REJECTED_REASON_KEY =
 		"__request_user_credential_rejection_reason__";
-	const SUDO_TOKEN_ENV_VAR = "DISCOBOT_SUDO_TOKEN";
+	const SUDO_TOKEN_ENV_VAR = "DISCBOEING_SUDO_TOKEN";
 
 	type PendingCredentialLike = {
 		toolUseID: string;
@@ -541,7 +541,7 @@
 		sessionAssignments = response.credentials;
 		if (typeof window !== "undefined") {
 			window.dispatchEvent(
-				new CustomEvent("discobot:session-credentials-changed", {
+				new CustomEvent("discboeing:session-credentials-changed", {
 					detail: { sessionId },
 				}),
 			);

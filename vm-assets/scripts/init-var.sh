@@ -4,8 +4,8 @@
 # - On WSL, /var is mounted from a host-managed VHD attached as a raw block device.
 set -euo pipefail
 
-PLATFORM="${DISCOBOT_GUEST_PLATFORM:-vz}"
-VAR_DISK_LABEL="${DISCOBOT_VAR_DISK_LABEL:-discobot-var}"
+PLATFORM="${DISCBOEING_GUEST_PLATFORM:-vz}"
+VAR_DISK_LABEL="${DISCBOEING_VAR_DISK_LABEL:-discboeing-var}"
 
 log() {
     echo "init-var: $*"

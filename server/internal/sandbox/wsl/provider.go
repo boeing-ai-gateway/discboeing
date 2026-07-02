@@ -6,10 +6,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
-	"github.com/obot-platform/discobot/server/internal/startup"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/startup"
 )
 
 const (
@@ -93,7 +93,7 @@ func (p *Provider) Definition() sandbox.ProviderDefinition {
 		Description: "WSL2 sandbox driver",
 		ConfigFields: []sandbox.ProviderConfigField{
 			{Key: "distro", Label: "Distro", Type: "text", Placeholder: "Ubuntu", Description: "WSL distro used for sandbox execution."},
-			{Key: "installRoot", Label: "Install root", Type: "text", Placeholder: "C:\\Users\\me\\AppData\\Local\\Discobot\\wsl", Description: "Optional location for Discobot-managed WSL data.", Advanced: true},
+			{Key: "installRoot", Label: "Install root", Type: "text", Placeholder: "C:\\Users\\me\\AppData\\Local\\Discboeing\\wsl", Description: "Optional location for Discboeing-managed WSL data.", Advanced: true},
 		},
 	}
 }

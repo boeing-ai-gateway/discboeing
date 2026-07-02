@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/providers/transport"
-	"github.com/obot-platform/discobot/modelsdev"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers/transport"
+	"github.com/boeing-ai-gateway/discboeing/modelsdev"
 )
 
 // configUseWebSocket is the Config key that opts the provider into WebSocket
@@ -837,7 +837,7 @@ func convertTools(tools []providers.ToolDefinition, customToolNames map[string]s
 	result := make([]map[string]any, 0, len(tools))
 	includedNativeWebSearch := false
 	for _, t := range tools {
-		if serverSideWebSearchType != "" && isDiscobotWebTool(t) {
+		if serverSideWebSearchType != "" && isDiscboeingWebTool(t) {
 			if !includedNativeWebSearch {
 				result = append(result, map[string]any{
 					"type":                serverSideWebSearchType,
@@ -881,7 +881,7 @@ func isProviderExecutedWebSearchCall(call message.ToolCallPart) bool {
 	return call.ToolName == webSearchToolName && call.ProviderExecuted != nil && *call.ProviderExecuted
 }
 
-func isDiscobotWebSearchTool(tool providers.ToolDefinition) bool {
+func isDiscboeingWebSearchTool(tool providers.ToolDefinition) bool {
 	if tool.Type != "" || tool.Name != webSearchToolName || tool.Format != nil {
 		return false
 	}
@@ -904,7 +904,7 @@ func isDiscobotWebSearchTool(tool providers.ToolDefinition) bool {
 	return len(schema.Required) == 1 && schema.Required[0] == "query"
 }
 
-func isDiscobotWebFetchTool(tool providers.ToolDefinition) bool {
+func isDiscboeingWebFetchTool(tool providers.ToolDefinition) bool {
 	if tool.Type != "" || tool.Name != "WebFetch" || tool.Format != nil {
 		return false
 	}
@@ -925,8 +925,8 @@ func isDiscobotWebFetchTool(tool providers.ToolDefinition) bool {
 	return len(schema.Required) == 1 && schema.Required[0] == "url"
 }
 
-func isDiscobotWebTool(tool providers.ToolDefinition) bool {
-	return isDiscobotWebSearchTool(tool) || isDiscobotWebFetchTool(tool)
+func isDiscboeingWebTool(tool providers.ToolDefinition) bool {
+	return isDiscboeingWebSearchTool(tool) || isDiscboeingWebFetchTool(tool)
 }
 
 // --- SSE stream parsing ---

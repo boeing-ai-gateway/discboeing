@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // mockProvider is a minimal Provider implementation for testing.

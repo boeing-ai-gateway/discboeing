@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
 )
 
 // FileDiffEntry represents a single changed file in the diff.
@@ -25,7 +25,7 @@ type DiffResult = api.DiffResponse
 // CommitsResult is the successful result of getting commit patches.
 type CommitsResult = api.CommitsResponse
 
-// WorkspaceChangeCommit describes a Discobot workspace change commit.
+// WorkspaceChangeCommit describes a Discboeing workspace change commit.
 type WorkspaceChangeCommit = api.WorkspaceChangeCommit
 
 // WorkspaceChangeCommitsResult is the successful result of listing workspace change commits.
@@ -64,9 +64,9 @@ func HeadCommitSHA(workspaceRoot string) string {
 	return strings.TrimSpace(out)
 }
 
-// ListWorkspaceChangeCommits returns Discobot workspace change commits for one session. Results
+// ListWorkspaceChangeCommits returns Discboeing workspace change commits for one session. Results
 // are sorted newest-first by committer date.
-const workspaceChangeCommitRefPrefix = "refs/discobot/workspace-change-commits"
+const workspaceChangeCommitRefPrefix = "refs/discboeing/workspace-change-commits"
 
 func ListWorkspaceChangeCommits(workspaceRoot, sessionID string) (*WorkspaceChangeCommitsResult, error) {
 	if _, err := gitCmdCombined(workspaceRoot, "rev-parse", "--is-inside-work-tree"); err != nil {
@@ -606,7 +606,7 @@ func synthesizePatchAgainstTarget(workspaceRoot, target, headCommit string) (str
 		return "", err
 	}
 
-	tmpDir, err := os.MkdirTemp("", "discobot-target-patch-*")
+	tmpDir, err := os.MkdirTemp("", "discboeing-target-patch-*")
 	if err != nil {
 		return "", fmt.Errorf("create temp worktree dir: %w", err)
 	}
@@ -624,7 +624,7 @@ func synthesizePatchAgainstTarget(workspaceRoot, target, headCommit string) (str
 		return "", fmt.Errorf("generate target diff: %w", err)
 	}
 
-	patchPath := filepath.Join(tmpDir, ".discobot-target.patch")
+	patchPath := filepath.Join(tmpDir, ".discboeing-target.patch")
 	if err := os.WriteFile(patchPath, []byte(diffOutput), 0600); err != nil {
 		return "", fmt.Errorf("write target diff: %w", err)
 	}
@@ -632,7 +632,7 @@ func synthesizePatchAgainstTarget(workspaceRoot, target, headCommit string) (str
 		return "", fmt.Errorf("apply target diff: %w", err)
 	}
 
-	messagePath := filepath.Join(tmpDir, ".discobot-target-message.txt")
+	messagePath := filepath.Join(tmpDir, ".discboeing-target-message.txt")
 	if err := os.WriteFile(messagePath, []byte(headMetadata.message), 0600); err != nil {
 		return "", fmt.Errorf("write synthetic commit message: %w", err)
 	}
@@ -685,7 +685,7 @@ func readCommitMetadata(workspaceRoot, commit string) (*commitMetadata, error) {
 		committerDate:  strings.TrimSpace(parts[6]),
 	}
 	if metadata.message == "" {
-		metadata.message = "Discobot synthetic patch"
+		metadata.message = "Discboeing synthetic patch"
 	}
 	if metadata.committerName == "" {
 		metadata.committerName = metadata.authorName

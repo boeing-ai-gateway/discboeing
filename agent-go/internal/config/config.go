@@ -10,13 +10,13 @@ import (
 // Config holds all configuration for the agent-go process.
 type Config struct {
 	// Server settings (HTTP API mode)
-	Port       int    // HTTP server port (DISCOBOT_PORT, default: 3002)
-	SecretHash string // Legacy auth secret for API access (DISCOBOT_SECRET)
-	TrustKey   string // Public key for signed API access tokens (DISCOBOT_TRUST_KEY)
+	Port       int    // HTTP server port (DISCBOEING_PORT, default: 3002)
+	SecretHash string // Legacy auth secret for API access (DISCBOEING_SECRET)
+	TrustKey   string // Public key for signed API access tokens (DISCBOEING_TRUST_KEY)
 
 	// Agent settings
-	AgentCwd        string // Working directory for the agent (DISCOBOT_AGENT_CWD, default: cwd)
-	Model           string // Default model in "providerId/modelId" format (DISCOBOT_MODEL)
+	AgentCwd        string // Working directory for the agent (DISCBOEING_AGENT_CWD, default: cwd)
+	Model           string // Default model in "providerId/modelId" format (DISCBOEING_MODEL)
 	WorkspaceSource string // Workspace source path or git URL (WORKSPACE_SOURCE)
 	WorkspaceOrigin string // Original workspace mount path (WORKSPACE_ORIGIN_PATH)
 	WorkspaceType   string // Workspace source type (WORKSPACE_SOURCE_TYPE)
@@ -24,17 +24,17 @@ type Config struct {
 	WorkspaceRef    string // Workspace target ref (WORKSPACE_TARGET_REF)
 
 	// Storage
-	DataDir    string // Root data directory (DISCOBOT_DATA_DIR, default: ~/.discobot)
-	ThreadsDir string // Thread persistence directory (DISCOBOT_THREADS_DIR)
+	DataDir    string // Root data directory (DISCBOEING_DATA_DIR, default: ~/.discboeing)
+	ThreadsDir string // Thread persistence directory (DISCBOEING_THREADS_DIR)
 
 	// Hooks
-	HooksEnabled bool   // Enable file hooks (DISCOBOT_HOOKS_ENABLED)
-	SessionID    string // Session ID for hooks (DISCOBOT_SESSION_ID, default: "default")
+	HooksEnabled bool   // Enable file hooks (DISCBOEING_HOOKS_ENABLED)
+	SessionID    string // Session ID for hooks (DISCBOEING_SESSION_ID, default: "default")
 
 	// MCP OAuth settings
-	MCPOAuthRedirectBase string // Base URL for OAuth callbacks (DISCOBOT_MCP_OAUTH_REDIRECT_BASE)
-	DiscobotServerURL    string // Discobot server URL for posting tokens (DISCOBOT_SERVER_URL)
-	DiscobotProjectID    string // Project ID for the token POST path (DISCOBOT_PROJECT_ID)
+	MCPOAuthRedirectBase string // Base URL for OAuth callbacks (DISCBOEING_MCP_OAUTH_REDIRECT_BASE)
+	DiscboeingServerURL    string // Discboeing server URL for posting tokens (DISCBOEING_SERVER_URL)
+	DiscboeingProjectID    string // Project ID for the token POST path (DISCBOEING_PROJECT_ID)
 
 	// Bootstrap/configure settings
 	EnableGitControlSocket bool // Enable the git control socket bridge
@@ -44,7 +44,7 @@ type Config struct {
 // lightweight bootstrap state and wait for POST /configure before serving the
 // agent API.
 func (c *Config) DynamicConfigRequired() bool {
-	return getEnvBool("DISCOBOT_WAIT_FOR_CONFIG", false)
+	return getEnvBool("DISCBOEING_WAIT_FOR_CONFIG", false)
 }
 
 // Load reads configuration from environment variables.
@@ -55,36 +55,36 @@ func Load() *Config {
 	cfg := &Config{}
 
 	// Server
-	cfg.Port = getEnvInt("DISCOBOT_PORT", 3002)
-	cfg.SecretHash = getEnv("DISCOBOT_SECRET", "")
-	cfg.TrustKey = getEnv("DISCOBOT_TRUST_KEY", "")
+	cfg.Port = getEnvInt("DISCBOEING_PORT", 3002)
+	cfg.SecretHash = getEnv("DISCBOEING_SECRET", "")
+	cfg.TrustKey = getEnv("DISCBOEING_TRUST_KEY", "")
 
 	// Agent
-	cfg.AgentCwd = getEnv("DISCOBOT_AGENT_CWD", getEnv("WORKSPACE_PATH", cwd))
-	cfg.Model = getEnv("DISCOBOT_MODEL", "")
+	cfg.AgentCwd = getEnv("DISCBOEING_AGENT_CWD", getEnv("WORKSPACE_PATH", cwd))
+	cfg.Model = getEnv("DISCBOEING_MODEL", "")
 	cfg.WorkspaceSource = getEnv("WORKSPACE_SOURCE", "")
 	cfg.WorkspaceOrigin = getEnv("WORKSPACE_ORIGIN_PATH", "")
-	cfg.WorkspaceType = getEnv("WORKSPACE_SOURCE_TYPE", getEnv("DISCOBOT_WORKSPACE_SOURCE_TYPE", ""))
+	cfg.WorkspaceType = getEnv("WORKSPACE_SOURCE_TYPE", getEnv("DISCBOEING_WORKSPACE_SOURCE_TYPE", ""))
 	cfg.WorkspaceCommit = getEnv("WORKSPACE_COMMIT", "")
 	cfg.WorkspaceRef = getEnv("WORKSPACE_TARGET_REF", "")
 
-	// Storage — default to ~/.discobot
+	// Storage — default to ~/.discboeing
 	home, _ := os.UserHomeDir()
 	if home == "" {
 		home = cwd
 	}
-	cfg.DataDir = getEnv("DISCOBOT_DATA_DIR", filepath.Join(home, ".discobot"))
-	cfg.ThreadsDir = getEnv("DISCOBOT_THREADS_DIR", filepath.Join(cfg.DataDir, "threads"))
+	cfg.DataDir = getEnv("DISCBOEING_DATA_DIR", filepath.Join(home, ".discboeing"))
+	cfg.ThreadsDir = getEnv("DISCBOEING_THREADS_DIR", filepath.Join(cfg.DataDir, "threads"))
 
 	// Hooks
-	cfg.HooksEnabled = getEnvBool("DISCOBOT_HOOKS_ENABLED", false)
-	cfg.SessionID = getEnv("DISCOBOT_SESSION_ID", "default")
+	cfg.HooksEnabled = getEnvBool("DISCBOEING_HOOKS_ENABLED", false)
+	cfg.SessionID = getEnv("DISCBOEING_SESSION_ID", "default")
 
 	// MCP OAuth
-	cfg.MCPOAuthRedirectBase = getEnv("DISCOBOT_MCP_OAUTH_REDIRECT_BASE", "")
-	cfg.DiscobotServerURL = getEnv("DISCOBOT_SERVER_URL", "")
-	cfg.DiscobotProjectID = getEnv("DISCOBOT_PROJECT_ID", "")
-	cfg.EnableGitControlSocket = getEnvBool("DISCOBOT_ENABLE_GIT_CONTROL_SOCKET", false)
+	cfg.MCPOAuthRedirectBase = getEnv("DISCBOEING_MCP_OAUTH_REDIRECT_BASE", "")
+	cfg.DiscboeingServerURL = getEnv("DISCBOEING_SERVER_URL", "")
+	cfg.DiscboeingProjectID = getEnv("DISCBOEING_PROJECT_ID", "")
+	cfg.EnableGitControlSocket = getEnvBool("DISCBOEING_ENABLE_GIT_CONTROL_SOCKET", false)
 
 	return cfg
 }

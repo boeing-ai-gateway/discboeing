@@ -62,7 +62,7 @@ test("saved sessions use the active thread id for draft storage", () => {
 			threadId: "thread-123",
 			sessionId: "session-123",
 		}),
-		"discobot:composer-draft:thread-123",
+		"discboeing:composer-draft:thread-123",
 	);
 });
 
@@ -73,7 +73,7 @@ test("saved sessions fall back to the session id when no thread id is available"
 			threadId: null,
 			sessionId: "session-123",
 		}),
-		"discobot:composer-draft:session-123",
+		"discboeing:composer-draft:session-123",
 	);
 });
 

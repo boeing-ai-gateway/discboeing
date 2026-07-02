@@ -55,7 +55,7 @@ function generateSecret(): string {
 }
 
 async function getLogFilePath(): Promise<string> {
-  const logDir = path.join(app.getPath("logs"), "discobot");
+  const logDir = path.join(app.getPath("logs"), "discboeing");
   await mkdir(logDir, { recursive: true });
   return path.join(logDir, "server.log");
 }
@@ -65,7 +65,7 @@ function getDevRendererOrigin(): string {
 }
 
 function getProductionRendererOrigin(): string {
-  return "app://discobot";
+  return "app://discboeing";
 }
 
 function resolveServerBinaryPath(): string {
@@ -83,7 +83,7 @@ function resolveServerBinaryPath(): string {
         : arch === "arm64"
           ? "aarch64-pc-windows-msvc"
           : "x86_64-pc-windows-msvc";
-  const executable = `discobot-server-${targetTriple}${platform === "win32" ? ".exe" : ""}`;
+  const executable = `discboeing-server-${targetTriple}${platform === "win32" ? ".exe" : ""}`;
   const candidates = [
     path.join(process.resourcesPath, "binaries", executable),
     path.join(app.getAppPath(), "electron", "binaries", executable),
@@ -117,7 +117,7 @@ function resolveBundledVZEnv(): Record<string, string> {
 
   for (const vzDir of candidates) {
     const kernelPath = path.join(vzDir, "vmlinux");
-    const rootfsPath = path.join(vzDir, "discobot-rootfs.squashfs");
+    const rootfsPath = path.join(vzDir, "discboeing-rootfs.squashfs");
     try {
       accessSync(kernelPath, constants.R_OK);
       accessSync(rootfsPath, constants.R_OK);
@@ -140,20 +140,20 @@ function resolveBundledWSLEnv(): Record<string, string> {
 
   const env: Record<string, string> = {};
   const rootfsCandidates = [
-    path.join(process.resourcesPath, "wsl", "discobot-rootfs.tar.zst"),
+    path.join(process.resourcesPath, "wsl", "discboeing-rootfs.tar.zst"),
     path.join(
       app.getAppPath(),
       "electron",
       "resources",
       "wsl",
-      "discobot-rootfs.tar.zst",
+      "discboeing-rootfs.tar.zst",
     ),
     path.join(
       process.cwd(),
       "electron",
       "resources",
       "wsl",
-      "discobot-rootfs.tar.zst",
+      "discboeing-rootfs.tar.zst",
     ),
   ];
   const iconCandidates = [
@@ -173,7 +173,7 @@ function resolveBundledWSLEnv(): Record<string, string> {
   for (const iconPath of iconCandidates) {
     try {
       accessSync(iconPath, constants.R_OK);
-      env.DISCOBOT_DESKTOP_ICON_PATH = iconPath;
+      env.DISCBOEING_DESKTOP_ICON_PATH = iconPath;
       break;
     } catch {
       // keep searching
@@ -196,7 +196,7 @@ function resolveBundledHCSEnv(): Record<string, string> {
   for (const hcsDir of candidates) {
     const launcherPath = path.join(hcsDir, "HcsLinuxVmLauncher.exe");
     const kernelPath = path.join(hcsDir, "wsl-kernel");
-    const rootDiskPath = path.join(hcsDir, "discobot-rootfs.vhd");
+    const rootDiskPath = path.join(hcsDir, "discboeing-rootfs.vhd");
     try {
       accessSync(launcherPath, constants.X_OK);
       accessSync(kernelPath, constants.R_OK);
@@ -252,8 +252,8 @@ export async function startBundledServer(
         getProductionRendererOrigin(),
         getDevRendererOrigin(),
       ].join(","),
-      DISCOBOT_DESKTOP_RUNTIME: "electron",
-      DISCOBOT_DESKTOP_SECRET: state.secret,
+      DISCBOEING_DESKTOP_RUNTIME: "electron",
+      DISCBOEING_DESKTOP_SECRET: state.secret,
       SUGGESTIONS_ENABLED: "true",
       STDIN_KEEPALIVE: "true",
       LOG_FILE: serverLogPath,
@@ -266,18 +266,18 @@ export async function startBundledServer(
   });
 
   child.stdout.on("data", (chunk) => {
-    process.stdout.write(`[discobot-server] ${chunk}`);
+    process.stdout.write(`[discboeing-server] ${chunk}`);
     serverLog.write(chunk);
   });
   child.stderr.on("data", (chunk) => {
-    process.stderr.write(`[discobot-server] ${chunk}`);
+    process.stderr.write(`[discboeing-server] ${chunk}`);
     serverLog.write(chunk);
   });
   child.on("close", () => {
     serverLog.end();
   });
   child.on("error", (error) => {
-    serverLog.write(`[discobot-server] failed to start: ${error.message}\n`);
+    serverLog.write(`[discboeing-server] failed to start: ${error.message}\n`);
     serverLog.end();
   });
 
@@ -296,7 +296,7 @@ export function getDesktopServerConfig(
 }
 
 export function getElectronRendererURL(): string {
-  return app.isPackaged ? "app://discobot/" : `${getDevRendererOrigin()}/`;
+  return app.isPackaged ? "app://discboeing/" : `${getDevRendererOrigin()}/`;
 }
 
 export function getElectronRendererOrigin(): string {

@@ -9,9 +9,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
 )
 
 // GetSuggestions returns autocomplete suggestions for directory paths.

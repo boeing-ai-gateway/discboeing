@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // StandaloneApplyPatch executes apply_patch in a fresh process context.

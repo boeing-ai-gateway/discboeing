@@ -5,7 +5,7 @@ import (
 	"os/user"
 	"strconv"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
 )
 
 // Root handles GET / — service status check.

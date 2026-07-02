@@ -7,7 +7,7 @@
  * electron/resources/wsl/ for bundling into the Windows app.
  *
  * Usage: node scripts/extract-wsl-image.mjs [image-ref] [arch]
- *   image-ref: Docker image reference (defaults to ghcr.io/obot-platform/discobot-wsl:main)
+ *   image-ref: Docker image reference (defaults to ghcr.io/boeing-platform/discboeing-wsl:main)
  *   arch: Architecture (amd64 or arm64, defaults to host arch)
  */
 
@@ -21,7 +21,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const projectRoot = join(__dirname, "..");
 const resourcesDir = join(projectRoot, "electron", "resources", "wsl");
 
-const imageRef = process.argv[2] || "ghcr.io/obot-platform/discobot-wsl:main";
+const imageRef = process.argv[2] || "ghcr.io/boeing-platform/discboeing-wsl:main";
 const arch = process.argv[3] || (process.arch === "arm64" ? "arm64" : "amd64");
 
 mkdirSync(resourcesDir, { recursive: true });
@@ -73,8 +73,8 @@ console.log(`Extracting WSL image files for ${arch}...`);
 console.log(`Image: ${imageRef}`);
 console.log(`Output directory: ${resourcesDir}`);
 
-const extractFiles = ["discobot-rootfs.tar.zst"];
-const tempDir = mkdtempSync(join(os.tmpdir(), "discobot-wsl-image-"));
+const extractFiles = ["discboeing-rootfs.tar.zst"];
+const tempDir = mkdtempSync(join(os.tmpdir(), "discboeing-wsl-image-"));
 const tempTarPath = join(tempDir, "image.tar");
 
 try {

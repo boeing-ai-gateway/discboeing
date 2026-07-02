@@ -10,9 +10,9 @@ import (
 
 	"aidanwoods.dev/go-paseto"
 
-	"github.com/obot-platform/discobot/server/internal/encryption"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/encryption"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 const sandboxAuthTokenTTL = 12 * time.Hour

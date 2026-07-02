@@ -65,7 +65,7 @@ next-env.d.ts
 !/electron/binaries/.gitkeep
 
 # Binaries
-proxy/discobot-proxy
+proxy/discboeing-proxy
 server/server
 agent/agent
 /meta/build/
@@ -89,8 +89,8 @@ __pycache__/
 # misc
 /TODO
 /dev.log
-/discobot/build
-/discobot/build-errors.log
-/discobot/node_modules
+/discboeing/build
+/discboeing/build-errors.log
+/discboeing/node_modules
 /vscode-lite/web/node_modules
 /vscode-lite/web/dist

@@ -1,6 +1,6 @@
 # Proxy Architecture
 
-This document describes the architecture of the Discobot Proxy, a multi-protocol proxy server with HTTP interception and header injection capabilities.
+This document describes the architecture of the Discboeing Proxy, a multi-protocol proxy server with HTTP interception and header injection capabilities.
 
 ## Overview
 
@@ -220,7 +220,7 @@ The proxy owns CA certificate creation and exposes it through the
 func EnsureCA(certDir string) (certPath string, generated bool, err error)
 ```
 
-`proxy init-certs -config config.yaml -user discobot` loads `tls.cert_dir`,
+`proxy init-certs -config config.yaml -user discboeing` loads `tls.cert_dir`,
 generates or reuses `ca.crt`/`ca.key`, installs the CA into the Linux system
 trust store, and optionally imports it into the runtime user's NSS database for
 Chromium-based browsers. The server also calls the same CA initialization path

@@ -8,7 +8,7 @@ import {
 
 test("getPathBasename returns the final path segment", () => {
 	assert.equal(
-		getPathBasename("/home/discobot/workspace/ui/src/lib/example.ts"),
+		getPathBasename("/home/discboeing/workspace/ui/src/lib/example.ts"),
 		"example.ts",
 	);
 	assert.equal(getPathBasename("relative/path/example.ts"), "example.ts");
@@ -19,7 +19,7 @@ test("parseNumberedToolOutput parses numbered lines", () => {
 	const parsed = parseNumberedToolOutput(
 		[
 			"     1→",
-			"     2→> discobot@0.0.0-dev check:fix /home/discobot/workspace",
+			"     2→> discboeing@0.0.0-dev check:fix /home/discboeing/workspace",
 			"     3→> pnpm check:frontend:fix && pnpm check:backend:fix && pnpm check:shell",
 		].join("\n"),
 	);
@@ -30,7 +30,7 @@ test("parseNumberedToolOutput parses numbered lines", () => {
 		{ lineNumber: "1", text: "" },
 		{
 			lineNumber: "2",
-			text: "> discobot@0.0.0-dev check:fix /home/discobot/workspace",
+			text: "> discboeing@0.0.0-dev check:fix /home/discboeing/workspace",
 		},
 		{
 			lineNumber: "3",
@@ -42,10 +42,10 @@ test("parseNumberedToolOutput parses numbered lines", () => {
 test("parseNumberedToolOutput parses truncated numbered output", () => {
 	const parsed = parseNumberedToolOutput(
 		[
-			"[Output too long (78308 chars). Full output written to: /home/discobot/.discobot/threads/q5umIkXNz0uXeUOx/output/call_Cxv9colwxGehRIajegv4Pf8e.txt]",
+			"[Output too long (78308 chars). Full output written to: /home/discboeing/.discboeing/threads/q5umIkXNz0uXeUOx/output/call_Cxv9colwxGehRIajegv4Pf8e.txt]",
 			"",
 			"     1→",
-			"     2→> discobot@0.0.0-dev check:fix /home/discobot/workspace",
+			"     2→> discboeing@0.0.0-dev check:fix /home/discboeing/workspace",
 			"     3→> pnpm check:frontend:fix && pnpm check:backend:fix && pnpm check:shell",
 		].join("\n"),
 	);
@@ -53,13 +53,13 @@ test("parseNumberedToolOutput parses truncated numbered output", () => {
 	assert.equal(parsed.isTruncated, true);
 	assert.equal(
 		parsed.truncationFilePath,
-		"/home/discobot/.discobot/threads/q5umIkXNz0uXeUOx/output/call_Cxv9colwxGehRIajegv4Pf8e.txt",
+		"/home/discboeing/.discboeing/threads/q5umIkXNz0uXeUOx/output/call_Cxv9colwxGehRIajegv4Pf8e.txt",
 	);
 	assert.deepEqual(parsed.lines, [
 		{ lineNumber: "1", text: "" },
 		{
 			lineNumber: "2",
-			text: "> discobot@0.0.0-dev check:fix /home/discobot/workspace",
+			text: "> discboeing@0.0.0-dev check:fix /home/discboeing/workspace",
 		},
 		{
 			lineNumber: "3",

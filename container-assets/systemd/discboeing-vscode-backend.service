@@ -1,0 +1,23 @@
+[Unit]
+Description=Discboeing VS Code backend (code-server)
+After=discboeing-sandbox-init.service
+Requires=discboeing-sandbox-init.service
+
+[Service]
+Type=simple
+User=discboeing
+Group=discboeing
+WorkingDirectory=/home/discboeing/workspace
+Environment=HOME=/home/discboeing
+EnvironmentFile=-/run/discboeing/agent-env
+ExecStartPre=/usr/bin/mkdir -p /home/discboeing/.local/share/discboeing-code-server/User /home/discboeing/.local/share/discboeing-code-server/extensions
+ExecStartPre=/bin/bash -lc 'cp -r --update=none /opt/discboeing/code-server-defaults/User/. /home/discboeing/.local/share/discboeing-code-server/User/'
+ExecStartPre=/bin/bash -lc 'cp -r --update=none /opt/discboeing/code-server-defaults/extensions/. /home/discboeing/.local/share/discboeing-code-server/extensions/'
+ExecStartPre=/bin/bash -lc 'rm -rf /home/discboeing/.local/share/discboeing-code-server/extensions/discboeing.discboeing-theme && cp -r /opt/discboeing/code-server-defaults/extensions/discboeing.discboeing-theme /home/discboeing/.local/share/discboeing-code-server/extensions/'
+ExecStartPre=/bin/bash -lc 'rm -f /home/discboeing/.local/share/discboeing-code-server/extensions/extensions.json /home/discboeing/.local/share/discboeing-code-server/extensions/.obsolete /home/discboeing/.local/share/discboeing-code-server/CachedProfilesData/__default__profile__/extensions.user.cache'
+ExecStart=/usr/bin/code-server --bind-addr 127.0.0.1:13338 --auth none --disable-telemetry --disable-update-check --user-data-dir /home/discboeing/.local/share/discboeing-code-server --extensions-dir /home/discboeing/.local/share/discboeing-code-server/extensions /home/discboeing/workspace
+Restart=on-failure
+RestartSec=2
+
+StandardOutput=journal+console
+StandardError=journal+console

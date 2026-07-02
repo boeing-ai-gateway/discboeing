@@ -81,7 +81,7 @@ Cache behavior is fully streaming:
 
 ```bash
 # Start the proxy
-./discobot-proxy
+./discboeing-proxy
 
 # Use proxy for Docker commands
 export HTTP_PROXY=http://localhost:17080
@@ -325,7 +325,7 @@ tls:
 
 cache:
   enabled: true
-  dir: /var/cache/discobot-proxy
+  dir: /var/cache/discboeing-proxy
   max_size: 107374182400  # 100GB
 
 allowlist:
@@ -339,7 +339,7 @@ allowlist:
 logging:
   level: info
   format: json
-  file: /var/log/discobot-proxy.log
+  file: /var/log/discboeing-proxy.log
 ```
 
 Team setup:

@@ -1,4 +1,4 @@
-# Discobot Proxy Configuration
+# Discboeing Proxy Configuration
 # Copy this file to config.yaml and customize as needed.
 
 # Proxy server settings
@@ -38,13 +38,13 @@ headers:
   # Example: Set headers (replaces any existing value)
   "api.anthropic.com":
     set:
-      "X-Request-Source": "discobot-proxy"
+      "X-Request-Source": "discboeing-proxy"
       # "Authorization": "Bearer sk-ant-xxx"  # Set via API
 
   # Example: Both set and append
   "*.github.com":
     set:
-      "X-Request-Source": "discobot-proxy"
+      "X-Request-Source": "discboeing-proxy"
     append:
       # Appends to existing header with ", " separator
       # e.g., "1.2.3.4" becomes "1.2.3.4, proxy.internal"
@@ -62,7 +62,7 @@ headers:
       "Authorization": "Bearer prod-token"
       "X-Custom-Header": "custom-value"
     append:
-      "Via": "1.1 discobot-proxy"
+      "Via": "1.1 discboeing-proxy"
 
 # Logging configuration
 logging:

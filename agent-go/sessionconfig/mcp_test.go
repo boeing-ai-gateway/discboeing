@@ -197,17 +197,17 @@ func TestDiscoverMCPServers_ProjectLevel(t *testing.T) {
 	}
 }
 
-func TestDiscoverMCPState_LoadsDiscobotUserConfig(t *testing.T) {
+func TestDiscoverMCPState_LoadsDiscboeingUserConfig(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))
-	mkdirAll(t, filepath.Join(home, ".discobot"))
+	mkdirAll(t, filepath.Join(home, ".discboeing"))
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	writeFile(t, filepath.Join(home, ".discobot", "mcp.json"), `{
+	writeFile(t, filepath.Join(home, ".discboeing", "mcp.json"), `{
 		"mcpServers": {
-			"discobot-user": {"command": "discobot-mcp"}
+			"discboeing-user": {"command": "discboeing-mcp"}
 		}
 	}`)
 
@@ -218,13 +218,13 @@ func TestDiscoverMCPState_LoadsDiscobotUserConfig(t *testing.T) {
 
 	found := false
 	for _, s := range state.Servers {
-		if s.Name == "discobot-user" {
+		if s.Name == "discboeing-user" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected to discover ~/.discobot/mcp.json server, got %#v", state.Servers)
+		t.Fatalf("expected to discover ~/.discboeing/mcp.json server, got %#v", state.Servers)
 	}
 }
 
@@ -232,16 +232,16 @@ func TestDiscoverMCPState_LoadsSystemConfig(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 	mkdirAll(t, filepath.Join(root, ".git"))
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
 	writeFile(t, filepath.Join(systemRoot, "mcp.json"), `{
 		"mcpServers": {
-			"discobot-system": {"command": "system-mcp"}
+			"discboeing-system": {"command": "system-mcp"}
 		}
 	}`)
 
@@ -252,7 +252,7 @@ func TestDiscoverMCPState_LoadsSystemConfig(t *testing.T) {
 
 	found := false
 	for _, s := range state.Servers {
-		if s.Name == "discobot-system" {
+		if s.Name == "discboeing-system" {
 			found = true
 			break
 		}
@@ -266,7 +266,7 @@ func TestDiscoverMCPState_ReloadTokenChangesWhenFilesChange(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))
-	mkdirAll(t, filepath.Join(home, ".discobot"))
+	mkdirAll(t, filepath.Join(home, ".discboeing"))
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 

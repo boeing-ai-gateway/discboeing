@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	_ "github.com/obot-platform/discobot/agent-go/providers/anthropic"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	_ "github.com/boeing-ai-gateway/discboeing/agent-go/providers/anthropic"
 )
 
 const anthropicTestModel = "claude-haiku-4-5-20251001"

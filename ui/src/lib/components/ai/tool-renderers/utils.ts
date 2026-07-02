@@ -1,5 +1,5 @@
 export function shortenPath(path: string): string {
-	return path.replace(/^\/home\/discobot/, "~");
+	return path.replace(/^\/home\/discboeing/, "~");
 }
 
 export function getPathBasename(path: string): string {

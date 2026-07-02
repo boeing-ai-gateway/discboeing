@@ -1,6 +1,6 @@
 import { getContext, setContext } from "svelte";
 
-const CODE_BLOCK_CONTEXT_KEY = Symbol.for("discobot-ui-ai-code-block-context");
+const CODE_BLOCK_CONTEXT_KEY = Symbol.for("discboeing-ui-ai-code-block-context");
 
 export type CodeBlockContextValue = {
 	code: string;

@@ -4,8 +4,8 @@ tmp_dir = "build"
 
 [build]
   args_bin = []
-  entrypoint = "./build/discobot"
-  cmd = "go build -gcflags=\"all=-N -l\" -o ./build/discobot ./cmd/server && if [ \"$(uname)\" = \"Darwin\" ]; then codesign --entitlements discobot-server.entitlements --force --sign - ./build/discobot; fi"
+  entrypoint = "./build/discboeing"
+  cmd = "go build -gcflags=\"all=-N -l\" -o ./build/discboeing ./cmd/server && if [ \"$(uname)\" = \"Darwin\" ]; then codesign --entitlements discboeing-server.entitlements --force --sign - ./build/discboeing; fi"
   delay = 1000
   exclude_dir = ["assets", "buid", "vendor", "testdata", "node_modules", "workspaces", "static/ui/dist"]
   exclude_file = []

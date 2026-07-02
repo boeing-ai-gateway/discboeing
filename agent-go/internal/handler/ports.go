@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/portwatcher"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/portwatcher"
 )
 
 // ListPorts handles GET /ports — lists TCP listening ports owned by visible processes.

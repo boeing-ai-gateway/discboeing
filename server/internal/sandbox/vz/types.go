@@ -1,6 +1,6 @@
 package vz
 
-import "github.com/obot-platform/discobot/server/internal/sandbox/vm"
+import "github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 
 // StatusDetails contains VZ-specific status details returned in ProviderStatus.Details.
 type StatusDetails struct {

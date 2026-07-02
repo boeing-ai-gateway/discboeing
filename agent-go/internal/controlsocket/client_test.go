@@ -14,7 +14,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	shared "github.com/obot-platform/discobot/controlsocket"
+	shared "github.com/boeing-ai-gateway/discboeing/controlsocket"
 )
 
 func newTestSocket(t *testing.T) (*Client, *shared.Conn, func()) {

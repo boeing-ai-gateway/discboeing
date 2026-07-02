@@ -267,7 +267,7 @@ function renderMermaidBlock(
 	status.textContent = "Rendering diagram…";
 	container.append(status);
 
-	const id = `discobot-mermaid-${++mermaidId}`;
+	const id = `discboeing-mermaid-${++mermaidId}`;
 	if (!mermaid) {
 		return container;
 	}

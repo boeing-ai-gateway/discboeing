@@ -8,7 +8,7 @@ import (
 
 	regexp "github.com/grafana/regexp"
 
-	"github.com/obot-platform/discobot/agent-go/internal/grep/literal"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/grep/literal"
 )
 
 // GrepOptions configures a grep operation.

@@ -8,11 +8,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/cli"
-	"github.com/obot-platform/discobot/hcs-go/internal/hcn"
-	"github.com/obot-platform/discobot/hcs-go/internal/hcs"
-	"github.com/obot-platform/discobot/hcs-go/internal/hvsocket"
-	"github.com/obot-platform/discobot/hcs-go/internal/networking"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/hcn"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/hcs"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/hvsocket"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/networking"
 )
 
 func main() {
@@ -237,7 +237,7 @@ func printGvproxySummary(options cli.Options) {
 	fmt.Printf("gvproxy command: %s\n", networking.CommandLine(options.GvproxyPath))
 	fmt.Printf("Launcher bridge: %s -> tcp://127.0.0.1:<auto>\n", networking.HVSocketListenURI(options.VMID, options.GvproxyServiceID()))
 	fmt.Printf("Hyper-V socket service GUID: %s\n", options.GvproxyServiceID())
-	fmt.Printf("Guest static config: discobot=ip=%s,netmask=%s,gateway=%s,dns=%s\n", options.UsernetIP, options.UsernetNetmask, options.UsernetGateway, options.UsernetDNS)
+	fmt.Printf("Guest static config: discboeing=ip=%s,netmask=%s,gateway=%s,dns=%s\n", options.UsernetIP, options.UsernetNetmask, options.UsernetGateway, options.UsernetDNS)
 	fmt.Println("Guest prerequisite: run gvforwarder in the VM with hv_sock and tun support available.")
 }
 

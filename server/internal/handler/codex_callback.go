@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/oauth"
-	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/oauth"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 const (
@@ -333,7 +333,7 @@ func (s *OAuthCallbackServer) renderSuccess(w http.ResponseWriter, providerName 
 <head>
     <title>Authorization Successful</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Rboeingo, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
         .container { text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         h1 { color: #22c55e; margin-bottom: 1rem; }
         p { color: #666; }
@@ -342,7 +342,7 @@ func (s *OAuthCallbackServer) renderSuccess(w http.ResponseWriter, providerName 
 <body>
     <div class="container">
         <h1>✓ Authorization Successful!</h1>
-        <p>You can close this window and return to Discobot.</p>
+        <p>You can close this window and return to Discboeing.</p>
         <p>Your %s credential has been saved.</p>
     </div>
 </body>
@@ -357,7 +357,7 @@ func (s *OAuthCallbackServer) renderError(w http.ResponseWriter, message string)
 <head>
     <title>Authorization Failed</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Rboeingo, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
         .container { text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; }
         h1 { color: #ef4444; margin-bottom: 1rem; }
         p { color: #666; }
@@ -382,7 +382,7 @@ func (s *OAuthCallbackServer) renderCodeForCopy(w http.ResponseWriter, code stri
 <head>
     <title>Authorization Code</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Rboeingo, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }
         .container { text-align: center; padding: 2rem; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 500px; }
         h1 { color: #22c55e; margin-bottom: 1rem; }
         p { color: #666; }
@@ -394,7 +394,7 @@ func (s *OAuthCallbackServer) renderCodeForCopy(w http.ResponseWriter, code stri
 <body>
     <div class="container">
         <h1>Authorization Code Received</h1>
-        <p>Copy this code and paste it back into Discobot:</p>
+        <p>Copy this code and paste it back into Discboeing:</p>
         <div class="code" id="code">%s</div>
         <button onclick="navigator.clipboard.writeText(document.getElementById('code').textContent)">Copy Code</button>
     </div>

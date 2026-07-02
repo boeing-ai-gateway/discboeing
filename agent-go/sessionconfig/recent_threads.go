@@ -84,7 +84,7 @@ func FormatRecentThreadsReminder(currentThreadID, readerScriptPath, listScriptPa
 		fmt.Fprintf(&b, "Use %s <thread-id> to print a thread transcript.\n", readerScriptPath)
 	}
 	if strings.TrimSpace(listScriptPath) != "" {
-		fmt.Fprintf(&b, "Use %s to list available thread IDs and names. It skips the current thread automatically when DISCOBOT_SESSION_ID is set.\n", listScriptPath)
+		fmt.Fprintf(&b, "Use %s to list available thread IDs and names. It skips the current thread automatically when DISCBOEING_SESSION_ID is set.\n", listScriptPath)
 	}
 	b.WriteString("\n")
 	for _, ref := range refs {

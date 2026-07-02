@@ -11,9 +11,9 @@ import (
 	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 func TestAuthService_GetOIDCConfig_DynamicClientRegistration(t *testing.T) {
@@ -35,16 +35,16 @@ func TestAuthService_GetOIDCConfig_DynamicClientRegistration(t *testing.T) {
 			registrationCalls++
 			var req struct {
 				RedirectURIs           []string `json:"redirect_uris"`
-				DiscobotInstallationID string   `json:"discobot_installation_id"`
+				DiscboeingInstallationID string   `json:"discboeing_installation_id"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				t.Fatalf("failed to decode registration request: %v", err)
 			}
-			if len(req.RedirectURIs) != 1 || req.RedirectURIs[0] != "https://discobot.example.com/auth/callback" {
+			if len(req.RedirectURIs) != 1 || req.RedirectURIs[0] != "https://discboeing.example.com/auth/callback" {
 				t.Fatalf("unexpected redirect URIs: %#v", req.RedirectURIs)
 			}
-			if req.DiscobotInstallationID == "" {
-				t.Fatal("discobot_installation_id was not sent")
+			if req.DiscboeingInstallationID == "" {
+				t.Fatal("discboeing_installation_id was not sent")
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"client_id":                  "dynamic-client-id",
@@ -65,10 +65,10 @@ func TestAuthService_GetOIDCConfig_DynamicClientRegistration(t *testing.T) {
 		EncryptionKey:  []byte("01234567890123456789012345678901"),
 		OIDCIssuerURL:  issuer.URL,
 		OIDCClientID:   "dynamic",
-		PublicHostname: "discobot.example.com",
+		PublicHostname: "discboeing.example.com",
 	})
 
-	oidcConfig, err := authService.getOIDCConfig(context.Background(), "https://discobot.example.com/auth/callback")
+	oidcConfig, err := authService.getOIDCConfig(context.Background(), "https://discboeing.example.com/auth/callback")
 	if err != nil {
 		t.Fatalf("getOIDCConfig() error = %v", err)
 	}
@@ -83,7 +83,7 @@ func TestAuthService_GetOIDCConfig_DynamicClientRegistration(t *testing.T) {
 		t.Fatalf("AuthStyle = %v, want %v", oidcConfig.Endpoint.AuthStyle, oauth2.AuthStyleInParams)
 	}
 
-	storedRegistration, err := authService.store.GetOIDCClientRegistration(context.Background(), issuer.URL, "https://discobot.example.com")
+	storedRegistration, err := authService.store.GetOIDCClientRegistration(context.Background(), issuer.URL, "https://discboeing.example.com")
 	if err != nil {
 		t.Fatalf("GetOIDCClientRegistration() error = %v", err)
 	}
@@ -117,7 +117,7 @@ func TestAuthService_GetOIDCConfig_DynamicClientRegistration(t *testing.T) {
 		t.Fatal("stored InstallationID is empty")
 	}
 
-	oidcConfig, err = authService.getOIDCConfig(context.Background(), "https://discobot.example.com/auth/callback")
+	oidcConfig, err = authService.getOIDCConfig(context.Background(), "https://discboeing.example.com/auth/callback")
 	if err != nil {
 		t.Fatalf("second getOIDCConfig() error = %v", err)
 	}
@@ -144,13 +144,13 @@ func TestConfig_PublicBaseURL(t *testing.T) {
 		},
 		{
 			name: "uses https for public hostname",
-			cfg:  &config.Config{PublicHostname: "discobot.example.com", Port: 3001},
-			want: "https://discobot.example.com",
+			cfg:  &config.Config{PublicHostname: "discboeing.example.com", Port: 3001},
+			want: "https://discboeing.example.com",
 		},
 		{
 			name: "preserves explicit scheme",
-			cfg:  &config.Config{PublicHostname: "https://discobot.example.com/app", Port: 3001},
-			want: "https://discobot.example.com/app",
+			cfg:  &config.Config{PublicHostname: "https://discboeing.example.com/app", Port: 3001},
+			want: "https://discboeing.example.com/app",
 		},
 	}
 

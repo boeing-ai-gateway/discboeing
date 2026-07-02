@@ -44,7 +44,7 @@ Once implementation starts, the preferred flow is to keep source JSDoc,
 ## Non-goals for the first version
 
 - Replacing `ui/src/lib/components/app/ConversationPane.svelte`.
-- Matching every current Discobot-only affordance in the first pass.
+- Matching every current Discboeing-only affordance in the first pass.
 - Exposing a long-lived `conversation.messages = [...]` rendering source.
 - Requiring consumers to use Svelte.
 
@@ -95,7 +95,7 @@ are ordered parts such as metadata, reasoning, tool calls, browser activity, and
 content; when an assistant message ends with content, preceding assistant work
 may be wrapped in a `<disco-step-group>` inside that same assistant message.
 Turn boundaries are not inferred by the web component. The host template or
-Discobot adapter creates turn elements and decides which messages belong to
+Discboeing adapter creates turn elements and decides which messages belong to
 each turn. `open` defaults to true for turns.
 
 Expandable conversation elements use a shared boolean `open` attribute/property
@@ -170,7 +170,7 @@ of parts.
 				<script type="application/json">
 					{
 						"originalText": "Can you inspect this file?",
-						"discobot": { "turnId": "turn-1" }
+						"discboeing": { "turnId": "turn-1" }
 					}
 				</script>
 			</disco-metadata>
@@ -205,7 +205,7 @@ of parts.
 				<script type="application/json">
 					{
 						"model": "gpt-5.5",
-						"discobot": { "turnId": "turn-1" }
+						"discboeing": { "turnId": "turn-1" }
 					}
 				</script>
 			</disco-metadata>
@@ -509,7 +509,7 @@ event.open = true;
 
 All creation/update methods should mutate the light DOM.
 
-The Discobot app wrapper should render custom-element HTML declaratively from
+The Discboeing app wrapper should render custom-element HTML declaratively from
 Svelte. It should not call the imperative DOM helper methods during normal
 rendering. The helper methods exist for non-Svelte consumers and targeted
 streaming updates.
@@ -521,7 +521,7 @@ conversation components use the same token layering as `<disco-markdown>`:
 
 1. common app/design-system tokens such as `--background`, `--foreground`,
    `--border`, `--primary`, and `--font-sans`
-2. shared Discobot tokens such as `--disco-background`,
+2. shared Discboeing tokens such as `--disco-background`,
    `--disco-foreground`, `--disco-border`, and `--disco-font-sans`
 3. conversation-family tokens such as `--disco-conversation-background`
 4. element-specific tokens such as `--disco-message-user-max-width`
@@ -632,7 +632,7 @@ It should observe child/text mutations so streaming updates re-render.
 
 ## Deferred implementation questions
 
-- Which Discobot-specific metadata deserves first-class attributes versus JSON
+- Which Discboeing-specific metadata deserves first-class attributes versus JSON
   metadata?
 - Should large tool outputs remain in light DOM JSON scripts, or should helper
   methods store large payloads as properties while rendering a summarized DOM

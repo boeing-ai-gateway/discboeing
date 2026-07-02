@@ -16,15 +16,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/llm-responses"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/llm-responses"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 const (
 	ProviderID        = "e2e-mock-llm"
 	defaultModelID    = "mock"
-	fixtureDirEnv     = "DISCOBOT_E2E_MOCK_LLM_RESPONSES_DIR"
+	fixtureDirEnv     = "DISCBOEING_E2E_MOCK_LLM_RESPONSES_DIR"
 	defaultTextID     = "mock-text-0"
 	defaultToolCallID = "mock-tool-0"
 )

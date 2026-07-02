@@ -34,7 +34,7 @@ go run ./vscode-lite/cmd/vscode-lite --workspace /path/to/repo --addr :3333
 
 The Vite dev server proxies `/api` and LSP WebSockets to the Go server.
 
-## Discobot service
+## Discboeing service
 
 A workspace service is available as **VSCode Lite**. It exposes the Vite frontend
 on port `3334` and starts the Go API/LSP server on port `3333`.

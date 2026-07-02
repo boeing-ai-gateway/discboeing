@@ -46,7 +46,7 @@ func TestFormatRecentThreadsReminder(t *testing.T) {
 	if !strings.Contains(got, "Use /tmp/read-thread <thread-id> to print a thread transcript.") {
 		t.Fatalf("expected reader command in reminder, got %q", got)
 	}
-	if !strings.Contains(got, "Use /tmp/list-threads to list available thread IDs and names. It skips the current thread automatically when DISCOBOT_SESSION_ID is set.") {
+	if !strings.Contains(got, "Use /tmp/list-threads to list available thread IDs and names. It skips the current thread automatically when DISCBOEING_SESSION_ID is set.") {
 		t.Fatalf("expected list command in reminder, got %q", got)
 	}
 	if !strings.Contains(got, "Fix the thread bootstrap bug") {

@@ -3,7 +3,7 @@
 	"tags": [
 		{
 			"name": "disco-markdown",
-			"description": "Renders Markdown content with Discobot-compatible streaming, code, math, CJK, and diagram support.",
+			"description": "Renders Markdown content with Discboeing-compatible streaming, code, math, CJK, and diagram support.",
 			"attributes": [
 				{
 					"name": "markdown",

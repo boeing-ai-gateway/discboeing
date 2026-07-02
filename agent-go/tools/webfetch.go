@@ -14,9 +14,9 @@ import (
 	readability "codeberg.org/readeck/go-readability/v2"
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 type webFetchInput struct {
@@ -24,7 +24,7 @@ type webFetchInput struct {
 	Prompt string `json:"prompt"`
 }
 
-const defaultWebFetchUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Discobot/1.0 Safari/537.36"
+const defaultWebFetchUserAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Discboeing/1.0 Safari/537.36"
 
 var tavilyExtractURL = "https://api.tavily.com/extract"
 

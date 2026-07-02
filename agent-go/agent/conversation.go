@@ -7,8 +7,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // CompletionListener observes completion lifecycle events.
@@ -725,7 +725,7 @@ func interruptedTurnStartupRequest() PromptRequest {
 		UserParts: []message.UIPart{message.UITextPart{
 			Type: "text",
 			Text: interruptedTurnStartupNotification,
-			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+			ProviderMetadata: message.MarshalProviderMetadata(message.DiscboeingPartMetadata{
 				ReminderKind: "startup-interruption",
 			}),
 		}},

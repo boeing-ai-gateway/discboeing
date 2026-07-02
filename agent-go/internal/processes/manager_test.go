@@ -142,13 +142,13 @@ func TestManagerAttachReplaysStdoutAndStderrSeparately(t *testing.T) {
 }
 
 func TestDefaultShellIgnoresMissingShellEnv(t *testing.T) {
-	t.Setenv("SHELL", "/usr/bin/definitely-missing-discobot-shell")
+	t.Setenv("SHELL", "/usr/bin/definitely-missing-discboeing-shell")
 
 	got := defaultShell("")
 	if len(got) == 0 {
 		t.Fatal("defaultShell() returned no command")
 	}
-	if got[0] == "/usr/bin/definitely-missing-discobot-shell" {
+	if got[0] == "/usr/bin/definitely-missing-discboeing-shell" {
 		t.Fatalf("defaultShell() used missing SHELL env: %#v", got)
 	}
 }
@@ -205,7 +205,7 @@ func TestNewManagerDoesNotCleanupCurrentProcessGroupFromStaleMetadata(t *testing
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	sessionDir := filepath.Join(homeDir, ".discobot", "processes", "stale")
+	sessionDir := filepath.Join(homeDir, ".discboeing", "processes", "stale")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() failed: %v", err)
 	}
@@ -246,7 +246,7 @@ func TestNewManagerDoesNotCleanupProcessWithoutSessionMarker(t *testing.T) {
 		_, _ = cmd.Process.Wait()
 	})
 
-	sessionDir := filepath.Join(homeDir, ".discobot", "processes", "stale")
+	sessionDir := filepath.Join(homeDir, ".discboeing", "processes", "stale")
 	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll() failed: %v", err)
 	}

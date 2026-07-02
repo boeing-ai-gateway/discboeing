@@ -1,7 +1,7 @@
 import { readStorage, writeStorage } from "$lib/local-storage";
 import type { ConversationComment } from "$lib/context/context.types";
 
-const CONVERSATION_COMMENTS_STORAGE_PREFIX = "discobot:conversation-comments:";
+const CONVERSATION_COMMENTS_STORAGE_PREFIX = "discboeing:conversation-comments:";
 export const PENDING_CONVERSATION_COMMENTS_STORAGE_KEY = `${CONVERSATION_COMMENTS_STORAGE_PREFIX}pending`;
 
 export function resolveConversationCommentsStorageKey({

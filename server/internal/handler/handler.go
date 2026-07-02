@@ -6,24 +6,24 @@ import (
 	"net/http"
 	"sync"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/conntrack"
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/service"
-	"github.com/obot-platform/discobot/server/internal/startup"
-	"github.com/obot-platform/discobot/server/internal/store"
-	"github.com/obot-platform/discobot/server/internal/terminal"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/conntrack"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/startup"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/terminal"
 )
 
 const (
-	sessionCookieName      = "discobot_session"
-	stateCookieName        = "discobot_oauth_state"
-	nonceCookieName        = "discobot_oidc_nonce"
-	pkceVerifierCookieName = "discobot_oidc_pkce_verifier"
-	returnToCookieName     = "discobot_oidc_return_to"
+	sessionCookieName      = "discboeing_session"
+	stateCookieName        = "discboeing_oauth_state"
+	nonceCookieName        = "discboeing_oidc_nonce"
+	pkceVerifierCookieName = "discboeing_oidc_pkce_verifier"
+	returnToCookieName     = "discboeing_oidc_return_to"
 )
 
 // Handler contains all HTTP handlers

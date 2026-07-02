@@ -8,7 +8,7 @@ package api //nolint:revive
 import (
 	"encoding/json"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // ============================================================================
@@ -258,7 +258,7 @@ type CommandCredentialRequest struct {
 	ApprovedUses  []CommandApprovedUse `json:"approvedUses,omitempty"`
 }
 
-type CommandDiscobotMetadata struct {
+type CommandDiscboeingMetadata struct {
 	UI                bool                       `json:"ui,omitempty"`
 	Label             string                     `json:"label,omitempty"`
 	ActiveLabel       string                     `json:"activeLabel,omitempty"`
@@ -272,7 +272,7 @@ type Command struct {
 	Name        string                  `json:"name"`
 	Description string                  `json:"description,omitempty"`
 	Kind        string                  `json:"kind"`
-	Discobot    CommandDiscobotMetadata `json:"discobot"`
+	Discboeing    CommandDiscboeingMetadata `json:"discboeing"`
 }
 
 type ListCommandsResponse struct {
@@ -464,7 +464,7 @@ type CommitsResponse struct {
 	HeadCommit  string `json:"headCommit"`
 }
 
-// WorkspaceChangeCommit is one Discobot workspace change commit.
+// WorkspaceChangeCommit is one Discboeing workspace change commit.
 type WorkspaceChangeCommit struct {
 	CreatedAt string    `json:"createdAt"`
 	Hash      string    `json:"hash"`

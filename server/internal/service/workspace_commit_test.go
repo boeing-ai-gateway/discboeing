@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 // TestCommitSession_Success tests that CommitSession enqueues a job with the correct payload.

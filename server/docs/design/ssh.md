@@ -142,7 +142,7 @@ The `Stream` interface provides:
 - `Close() error` - Terminate the stream
 - `Wait(ctx) (int, error)` - Wait for exit code
 
-When SSH exec uses the agent-side process supervisor, Discobot attaches to an
+When SSH exec uses the agent-side process supervisor, Discboeing attaches to an
 always-framed WebSocket output stream so stdout and stderr stay separate. This
 keeps binary protocols such as Zed's remote server proxy on stdout from being
 corrupted by stderr log lines.
@@ -214,7 +214,7 @@ Integration tests in `integration/ssh_test.go` cover:
 ## Dependencies
 
 - `golang.org/x/crypto/ssh` - SSH protocol implementation
-- `github.com/obot-platform/discobot/server/internal/sandbox` - Sandbox provider interface
+- `github.com/boeing-ai-gateway/discboeing/server/internal/sandbox` - Sandbox provider interface
 
 ### Container Requirements
 

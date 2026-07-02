@@ -74,4 +74,4 @@ const desktopAPI: DesktopRendererBridge = {
   },
 };
 
-contextBridge.exposeInMainWorld("__DISCOBOT_DESKTOP__", desktopAPI);
+contextBridge.exposeInMainWorld("__DISCBOEING_DESKTOP__", desktopAPI);

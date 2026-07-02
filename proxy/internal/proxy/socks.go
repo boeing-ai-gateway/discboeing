@@ -7,8 +7,8 @@ import (
 
 	"github.com/things-go/go-socks5"
 
-	"github.com/obot-platform/discobot/proxy/internal/filter"
-	"github.com/obot-platform/discobot/proxy/internal/logger"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/filter"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/logger"
 )
 
 // SOCKSProxy wraps go-socks5 for SOCKS5 proxying.

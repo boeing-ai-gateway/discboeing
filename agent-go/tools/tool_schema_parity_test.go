@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
 )
 
 func TestBuiltinToolSchemasMatchImplementationInputFields(t *testing.T) {

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 type credentialValidationMockResolver struct {
@@ -154,7 +154,7 @@ func TestCredentialUseAuthorizer_SkipsModelForSudoToken(t *testing.T) {
 			"category":            sudoauth.TokenCategory,
 			"envVar":              sudoauth.TokenEnvVar,
 			"value":               "sudo-token",
-			"provider":            "discobot",
+			"provider":            "discboeing",
 			"authType":            "approval",
 			"agentVisible":        true,
 		},

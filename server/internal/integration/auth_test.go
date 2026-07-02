@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 func TestAuthMe_Unauthenticated(t *testing.T) {
@@ -96,7 +96,7 @@ func TestNoAuthMode_AuthMe(t *testing.T) {
 	}
 }
 
-func TestNoAuthMode_AuthProvidersIncludeDiscobotMetadata(t *testing.T) {
+func TestNoAuthMode_AuthProvidersIncludeDiscboeingMetadata(t *testing.T) {
 	t.Parallel()
 	ts := NewTestServerNoAuth(t)
 
@@ -114,17 +114,17 @@ func TestNoAuthMode_AuthProvidersIncludeDiscobotMetadata(t *testing.T) {
 	ParseJSON(t, resp, &result)
 
 	for _, provider := range result.AuthProviders {
-		if provider["id"] != "discobot" {
+		if provider["id"] != "discboeing" {
 			continue
 		}
-		if provider["configuredName"] != "Discobot ID" {
-			t.Errorf("Expected configuredName 'Discobot ID', got %v", provider["configuredName"])
+		if provider["configuredName"] != "Discboeing ID" {
+			t.Errorf("Expected configuredName 'Discboeing ID', got %v", provider["configuredName"])
 		}
 		if provider["secretDescription"] != "Used to identify you for cloud services." {
-			t.Errorf("Expected secretDescription for Discobot, got %v", provider["secretDescription"])
+			t.Errorf("Expected secretDescription for Discboeing, got %v", provider["secretDescription"])
 		}
 		return
 	}
 
-	t.Fatal("Expected Discobot auth provider to be returned")
+	t.Fatal("Expected Discboeing auth provider to be returned")
 }

@@ -2,7 +2,7 @@
 # Docker wrapper that ensures build commands:
 # 1. Import and export a local BuildKit cache stored on the project cache volume.
 #
-# The cache lives at $HOME/.cache/discobot/buildkit, writable by the
+# The cache lives at $HOME/.cache/discboeing/buildkit, writable by the
 # container user without any special permissions.
 #
 # Build commands ("docker build" or "docker buildx build") are transparently
@@ -20,7 +20,7 @@
 set -euo pipefail
 
 REAL_DOCKER=/usr/bin/docker
-CACHE_DIR="$HOME/.cache/discobot/buildkit"
+CACHE_DIR="$HOME/.cache/discboeing/buildkit"
 
 # Returns 0 if this is a build subcommand (handles both
 # "docker build ..." and "docker buildx build ...").

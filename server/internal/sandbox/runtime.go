@@ -19,7 +19,7 @@ type Provider interface {
 	// Image returns the configured sandbox image name.
 	Image() string
 
-	// List returns all sandboxes managed by discobot.
+	// List returns all sandboxes managed by discboeing.
 	// This includes sandboxes in any state (running, stopped, failed).
 	List(ctx context.Context) ([]*Sandbox, error)
 
@@ -94,7 +94,7 @@ type CleanupUnusedImagesProvider interface {
 }
 
 // LocalityProvider is an optional provider capability that reports whether a
-// provider runs sandboxes on the same host as Discobot. Local providers can use
+// provider runs sandboxes on the same host as Discboeing. Local providers can use
 // developer-built local images; remote providers need a remotely pullable image.
 type LocalityProvider interface {
 	IsLocal() bool
@@ -233,7 +233,7 @@ func ParseRemoveOptions(opts []RemoveOption) RemoveConfig {
 // Sandbox represents a running or stopped sandbox instance.
 type Sandbox struct {
 	ID        string            // Runtime-specific sandbox ID
-	SessionID string            // Discobot session ID (1:1 mapping)
+	SessionID string            // Discboeing session ID (1:1 mapping)
 	Status    Status            // created, running, stopped, failed
 	Image     string            // Sandbox image used
 	CreatedAt time.Time         // When the sandbox was created
@@ -320,7 +320,7 @@ type CreateOptions struct {
 	// MCPOAuthRedirectBase is the base URL for MCP OAuth callbacks.
 	MCPOAuthRedirectBase string
 
-	// AgentServerURL is the URL the agent uses to reach the Discobot server
+	// AgentServerURL is the URL the agent uses to reach the Discboeing server
 	// (e.g. for posting MCP tokens after OAuth).
 	AgentServerURL string
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 func TestDiscoverBuiltinSubAgents_IncludesGeneralPurpose(t *testing.T) {
@@ -261,12 +261,12 @@ func TestDiscoverSubAgents_MultipleAgents(t *testing.T) {
 	}
 }
 
-func TestDiscoverSubAgents_DiscobotAndAgentsPrecedeProviderFallbacks(t *testing.T) {
+func TestDiscoverSubAgents_DiscboeingAndAgentsPrecedeProviderFallbacks(t *testing.T) {
 	root := t.TempDir()
 
-	discobotDir := filepath.Join(root, ".discobot", "agents")
-	mkdirAll(t, discobotDir)
-	writeFile(t, filepath.Join(discobotDir, "reviewer.md"), "---\nname: reviewer\ndescription: Discobot reviewer\n---\nDiscobot prompt.")
+	discboeingDir := filepath.Join(root, ".discboeing", "agents")
+	mkdirAll(t, discboeingDir)
+	writeFile(t, filepath.Join(discboeingDir, "reviewer.md"), "---\nname: reviewer\ndescription: Discboeing reviewer\n---\nDiscboeing prompt.")
 
 	agentsDir := filepath.Join(root, ".agents", "agents")
 	mkdirAll(t, agentsDir)
@@ -293,8 +293,8 @@ func TestDiscoverSubAgents_DiscobotAndAgentsPrecedeProviderFallbacks(t *testing.
 	if len(byName) != 3 {
 		t.Fatalf("expected 3 project agents, got %d: %#v", len(byName), agents)
 	}
-	if byName["reviewer"].Description != "Discobot reviewer" {
-		t.Fatalf("reviewer = %q, want Discobot reviewer", byName["reviewer"].Description)
+	if byName["reviewer"].Description != "Discboeing reviewer" {
+		t.Fatalf("reviewer = %q, want Discboeing reviewer", byName["reviewer"].Description)
 	}
 	if byName["planner"].Description != "Agents planner" {
 		t.Fatalf("planner = %q, want Agents planner", byName["planner"].Description)

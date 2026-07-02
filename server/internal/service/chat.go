@@ -8,14 +8,14 @@ import (
 	"log"
 	"slices"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/encryption"
-	"github.com/obot-platform/discobot/server/internal/events"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/encryption"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // JobEnqueuer is an interface for enqueuing background jobs.
@@ -666,7 +666,7 @@ func (c *ChatService) GetDiff(ctx context.Context, projectID, sessionID, path, f
 	return client.GetDiff(ctx, path, format, targetCommit)
 }
 
-// ListWorkspaceChangeCommits retrieves Discobot workspace change commits from the sandbox.
+// ListWorkspaceChangeCommits retrieves Discboeing workspace change commits from the sandbox.
 // The sandbox is automatically reconciled if not running.
 func (c *ChatService) ListWorkspaceChangeCommits(ctx context.Context, projectID, sessionID string) (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
 	if _, err := c.GetSession(ctx, projectID, sessionID); err != nil {

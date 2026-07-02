@@ -8,8 +8,8 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 type globInput struct {
@@ -73,7 +73,7 @@ func (e *Executor) executeGlob(call message.ToolCallPart) (thread.ToolExecuteRes
 					return filepath.SkipDir
 				}
 				// Skip hidden directories unless the pattern explicitly targets them.
-				// For example, ".discobot/**/*" should descend into ".discobot".
+				// For example, ".discboeing/**/*" should descend into ".discboeing".
 				if strings.HasPrefix(name, ".") {
 					rel, relErr := filepath.Rel(root, path)
 					if relErr != nil {

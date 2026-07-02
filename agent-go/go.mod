@@ -1,13 +1,13 @@
-module github.com/obot-platform/discobot/agent-go
+module github.com/boeing-ai-gateway/discboeing/agent-go
 
 go 1.26
 
 require (
 	github.com/go-chi/chi/v5 v5.3.0
-	github.com/obot-platform/discobot/modelsdev v0.0.0
+	github.com/boeing-ai-gateway/discboeing/modelsdev v0.0.0
 )
 
-replace github.com/obot-platform/discobot/modelsdev => ../modelsdev
+replace github.com/boeing-ai-gateway/discboeing/modelsdev => ../modelsdev
 
 require (
 	aidanwoods.dev/go-paseto v1.6.0
@@ -175,7 +175,7 @@ require (
 	github.com/nishanths/exhaustive v0.12.0 // indirect
 	github.com/nishanths/predeclared v0.2.2 // indirect
 	github.com/nunnatsa/ginkgolinter v0.21.2 // indirect
-	github.com/obot-platform/discobot/controlsocket v0.0.0
+	github.com/boeing-ai-gateway/discboeing/controlsocket v0.0.0
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/prometheus/client_golang v1.12.1 // indirect
@@ -254,4 +254,4 @@ require (
 
 tool github.com/golangci/golangci-lint/v2/cmd/golangci-lint
 
-replace github.com/obot-platform/discobot/controlsocket => ../controlsocket
+replace github.com/boeing-ai-gateway/discboeing/controlsocket => ../controlsocket

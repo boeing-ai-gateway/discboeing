@@ -131,7 +131,7 @@ func TestDiscoverInstructions_Rules(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))
 
-	rulesDir := filepath.Join(root, ".discobot", "rules")
+	rulesDir := filepath.Join(root, ".discboeing", "rules")
 	mkdirAll(t, rulesDir)
 	writeFile(t, filepath.Join(rulesDir, "formatting.md"), "Use tabs.")
 	writeFile(t, filepath.Join(rulesDir, "testing.md"), "Write tests.")
@@ -149,7 +149,7 @@ func TestDiscoverInstructions_Rules(t *testing.T) {
 	if entries[0].Content != "Use tabs." {
 		t.Errorf("first rule content = %q", entries[0].Content)
 	}
-	if entries[0].Path != ".discobot/rules/formatting.md" {
+	if entries[0].Path != ".discboeing/rules/formatting.md" {
 		t.Errorf("first rule path = %q", entries[0].Path)
 	}
 	if entries[0].Description != "project rule" {
@@ -163,9 +163,9 @@ func TestDiscoverInstructions_Rules(t *testing.T) {
 func TestDiscoverInstructions_SystemFiles(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 	mkdirAll(t, filepath.Join(root, ".git"))
 
 	writeFile(t, filepath.Join(systemRoot, "CLAUDE.md"), "System instructions")
@@ -196,15 +196,15 @@ func TestDiscoverInstructions_SystemFiles(t *testing.T) {
 
 func TestInstructionDisplayPath(t *testing.T) {
 	t.Run("relative prefix uses slash path", func(t *testing.T) {
-		got := instructionDisplayPath(".discobot/rules", "policy.md")
-		if got != ".discobot/rules/policy.md" {
+		got := instructionDisplayPath(".discboeing/rules", "policy.md")
+		if got != ".discboeing/rules/policy.md" {
 			t.Fatalf("got %q", got)
 		}
 	})
 
 	t.Run("windows absolute prefix keeps windows separators", func(t *testing.T) {
-		got := instructionDisplayPath(`C:\discobot\rules`, "policy.md")
-		if got != `C:\discobot\rules\policy.md` {
+		got := instructionDisplayPath(`C:\discboeing\rules`, "policy.md")
+		if got != `C:\discboeing\rules\policy.md` {
 			t.Fatalf("got %q", got)
 		}
 	})

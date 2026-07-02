@@ -1,5 +1,5 @@
 // Package services provides service discovery, process management, and proxying.
-// Services are executable scripts in .discobot/services/ with YAML front matter.
+// Services are executable scripts in .discboeing/services/ with YAML front matter.
 package services
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 // ServicesDir is the directory within the workspace where services are defined.
-const ServicesDir = ".discobot/services"
+const ServicesDir = ".discboeing/services"
 
 // ServiceInfo represents a discovered service definition with runtime state.
 type ServiceInfo struct {

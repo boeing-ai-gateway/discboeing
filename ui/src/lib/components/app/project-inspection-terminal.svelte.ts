@@ -287,7 +287,7 @@ export function createProjectInspectionTerminal({
 				cursorBlink: true,
 				cursorStyle: "block",
 				fontFamily:
-					'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
+					'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Rboeingo Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
 				fontSize: 13,
 				scrollback: 5000,
 				theme: getTerminalTheme(),

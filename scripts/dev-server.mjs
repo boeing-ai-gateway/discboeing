@@ -22,7 +22,7 @@ function defaultStateHome() {
 function resolveServerLogPath() {
   return (
     process.env.SERVER_LOG_PATH ??
-    join(defaultStateHome(), "discobot", "logs", "server.log")
+    join(defaultStateHome(), "discboeing", "logs", "server.log")
   );
 }
 

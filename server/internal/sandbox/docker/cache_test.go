@@ -12,15 +12,15 @@ func TestContainerUsesVolume(t *testing.T) {
 	container := containerTypes.Summary{
 		Mounts: []containerTypes.MountPoint{
 			{Type: "bind", Name: "", Destination: "/.workspace"},
-			{Type: "volume", Name: "discobot-cache-project-a", Destination: "/.data/cache"},
-			{Type: "volume", Name: "discobot-data-session-1", Destination: "/.data"},
+			{Type: "volume", Name: "discboeing-cache-project-a", Destination: "/.data/cache"},
+			{Type: "volume", Name: "discboeing-data-session-1", Destination: "/.data"},
 		},
 	}
 
-	if !containerUsesVolume(container, "discobot-cache-project-a") {
+	if !containerUsesVolume(container, "discboeing-cache-project-a") {
 		t.Fatal("expected exact cache volume match")
 	}
-	if containerUsesVolume(container, "discobot-cache-project-b") {
+	if containerUsesVolume(container, "discboeing-cache-project-b") {
 		t.Fatal("did not expect different cache volume to match")
 	}
 }

@@ -1,4 +1,4 @@
-# Discobot Go API Implementation Plan
+# Discboeing Go API Implementation Plan
 
 This document outlines the plan to replace the mock TypeScript API with a full Go backend.
 

@@ -28,7 +28,7 @@ dotnet build
 dotnet format --verify-no-changes
 ```
 
-In this Discobot Linux sandbox, the SDK may be installed under `~/.dotnet`; use:
+In this Discboeing Linux sandbox, the SDK may be installed under `~/.dotnet`; use:
 
 ```bash
 PATH="$HOME/.dotnet:$PATH" dotnet build

@@ -155,7 +155,7 @@ func (m *Manager) Get(envVarName string) *EnvVar {
 	return nil
 }
 
-// parseHeader parses the X-Discobot-Credentials JSON array header.
+// parseHeader parses the X-Discboeing-Credentials JSON array header.
 func parseHeader(headerValue string) []EnvVar {
 	if headerValue == "" {
 		return nil

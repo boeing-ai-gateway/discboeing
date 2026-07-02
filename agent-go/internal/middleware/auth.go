@@ -51,7 +51,7 @@ func Auth(secretHash, trustKey string) func(http.Handler) http.Handler {
 
 			// Validate bearer token. For local in-sandbox clients, also accept the
 			// configured hashed secret value directly as a bearer token so callers
-			// that only know DISCOBOT_SECRET can still reach the API.
+			// that only know DISCBOEING_SECRET can still reach the API.
 			auth := r.Header.Get("Authorization")
 			if !strings.HasPrefix(auth, "Bearer ") {
 				logAuthRejected(r, authResult{

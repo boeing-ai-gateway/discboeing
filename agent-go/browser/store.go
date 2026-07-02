@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/files"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/files"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 // Store owns thread-local browser event and artifact persistence.

@@ -70,7 +70,7 @@ tags:
   - ui
   - markdown
 metadata:
-  owner: discobot
+  owner: discboeing
 ---
 
 # Hello`);
@@ -89,7 +89,7 @@ metadata:
 		["title", "Release notes"],
 		["draft", "false"],
 		["tags", "ui, markdown"],
-		["metadata.owner", "discobot"],
+		["metadata.owner", "discboeing"],
 	]);
 
 	const heading = container.querySelector("h1");
@@ -194,7 +194,7 @@ test("renderMarkdownTree renders Mermaid fences with the Mermaid plugin", async 
 
 	const svg = diagram?.querySelector("svg");
 	expect(svg).toBeTruthy();
-	expect(svg?.id).toMatch(/^discobot-mermaid-/);
+	expect(svg?.id).toMatch(/^discboeing-mermaid-/);
 	expect(svg?.textContent).toContain("graph TD");
 	container.remove();
 });
@@ -270,7 +270,7 @@ test("renderMarkdownTree removes Mermaid body artifacts after failures", async (
 
 	await waitForRender();
 
-	expect(document.body.querySelector('[id^="ddiscobot-mermaid-"]')).toBeNull();
+	expect(document.body.querySelector('[id^="ddiscboeing-mermaid-"]')).toBeNull();
 	expect(document.body.textContent).not.toContain("Syntax error in text");
 	container.remove();
 });

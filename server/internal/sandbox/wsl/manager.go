@@ -21,10 +21,10 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"golang.org/x/sys/windows"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
-	"github.com/obot-platform/discobot/server/internal/startup"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/startup"
 )
 
 const (
@@ -33,10 +33,10 @@ const (
 	defaultReadyPollDelay        = 500 * time.Millisecond
 	defaultTempCleanupRetryDelay = 250 * time.Millisecond
 	defaultTempCleanupMaxRetries = 20
-	rootfsArchiveName            = "discobot-rootfs.tar.zst"
+	rootfsArchiveName            = "discboeing-rootfs.tar.zst"
 	staleRootfsTempFileMaxAge    = 10 * time.Minute
 	ext4VolumeLabelMaxLength     = 16
-	discobotWSLEnvPath           = "etc/default/discobot-wsl"
+	discboeingWSLEnvPath           = "etc/default/discboeing-wsl"
 )
 
 var (
@@ -150,9 +150,9 @@ func (m *DistroManager) varDiskSizeGB() int {
 func (m *DistroManager) varDiskLabel() string {
 	base := strings.TrimSpace(m.cfg.WSLDistroName)
 	if base == "" {
-		base = "discobot"
+		base = "discboeing"
 	}
-	return truncateLowerDashName(sanitizeLowerDashName(base+"-var", "discobot-var"), "discobot-var", ext4VolumeLabelMaxLength)
+	return truncateLowerDashName(sanitizeLowerDashName(base+"-var", "discboeing-var"), "discboeing-var", ext4VolumeLabelMaxLength)
 }
 
 func sanitizeLowerDashName(value string, fallback string) string {
@@ -317,7 +317,7 @@ func (m *DistroManager) decompressRootfsArchive(rootfsArchivePath string) (strin
 	}
 	defer decoder.Close()
 
-	tempFile, err := os.CreateTemp(m.cfg.WSLStateDir, "discobot-rootfs-*.tar")
+	tempFile, err := os.CreateTemp(m.cfg.WSLStateDir, "discboeing-rootfs-*.tar")
 	if err != nil {
 		return "", nil, fmt.Errorf("create temp rootfs tar: %w", err)
 	}
@@ -346,7 +346,7 @@ func (m *DistroManager) prepareImportRootfsTar(rootfsArchivePath string) (string
 		return "", nil, err
 	}
 
-	importTarPath, importCleanup, err := customizeImportRootfsTar(baseTarPath, m.cfg.WSLStateDir, m.buildDiscobotWSLEnvFile())
+	importTarPath, importCleanup, err := customizeImportRootfsTar(baseTarPath, m.cfg.WSLStateDir, m.buildDiscboeingWSLEnvFile())
 	if err != nil {
 		baseCleanup()
 		return "", nil, err
@@ -358,10 +358,10 @@ func (m *DistroManager) prepareImportRootfsTar(rootfsArchivePath string) (string
 	}, nil
 }
 
-func (m *DistroManager) buildDiscobotWSLEnvFile() string {
+func (m *DistroManager) buildDiscboeingWSLEnvFile() string {
 	return strings.Join([]string{
-		"DISCOBOT_GUEST_PLATFORM=" + quoteShellEnvValue("wsl"),
-		"DISCOBOT_VAR_DISK_LABEL=" + quoteShellEnvValue(m.varDiskLabel()),
+		"DISCBOEING_GUEST_PLATFORM=" + quoteShellEnvValue("wsl"),
+		"DISCBOEING_VAR_DISK_LABEL=" + quoteShellEnvValue(m.varDiskLabel()),
 		"",
 	}, "\n")
 }
@@ -377,7 +377,7 @@ func customizeImportRootfsTar(sourceTarPath string, outputDir string, envFileCon
 	}
 	defer src.Close()
 
-	dst, err := os.CreateTemp(outputDir, "discobot-rootfs-import-*.tar")
+	dst, err := os.CreateTemp(outputDir, "discboeing-rootfs-import-*.tar")
 	if err != nil {
 		return "", nil, fmt.Errorf("create customized rootfs tar: %w", err)
 	}
@@ -404,7 +404,7 @@ func customizeImportRootfsTar(sourceTarPath string, outputDir string, envFileCon
 		if err != nil {
 			return fail(fmt.Errorf("read temp rootfs tar %q: %w", sourceTarPath, err))
 		}
-		if normalizeTarPath(hdr.Name) == discobotWSLEnvPath {
+		if normalizeTarPath(hdr.Name) == discboeingWSLEnvPath {
 			continue
 		}
 
@@ -422,16 +422,16 @@ func customizeImportRootfsTar(sourceTarPath string, outputDir string, envFileCon
 
 	envBytes := []byte(envFileContents)
 	if err := tw.WriteHeader(&tar.Header{
-		Name:     "./" + discobotWSLEnvPath,
+		Name:     "./" + discboeingWSLEnvPath,
 		Mode:     0644,
 		Size:     int64(len(envBytes)),
 		Typeflag: tar.TypeReg,
 		ModTime:  time.Unix(0, 0),
 	}); err != nil {
-		return fail(fmt.Errorf("write customized rootfs header %q: %w", discobotWSLEnvPath, err))
+		return fail(fmt.Errorf("write customized rootfs header %q: %w", discboeingWSLEnvPath, err))
 	}
 	if _, err := tw.Write(envBytes); err != nil {
-		return fail(fmt.Errorf("write customized rootfs contents %q: %w", discobotWSLEnvPath, err))
+		return fail(fmt.Errorf("write customized rootfs contents %q: %w", discboeingWSLEnvPath, err))
 	}
 	if err := tw.Close(); err != nil {
 		_ = dst.Close()
@@ -507,7 +507,7 @@ func cleanupTempRootfsFile(path string) error {
 
 func isRootfsTempTarName(name string) bool {
 	return strings.HasSuffix(name, ".tar") &&
-		(strings.HasPrefix(name, "discobot-rootfs-") || strings.HasPrefix(name, "discobot-rootfs-import-"))
+		(strings.HasPrefix(name, "discboeing-rootfs-") || strings.HasPrefix(name, "discboeing-rootfs-import-"))
 }
 
 func isRetryableCleanupError(err error) bool {
@@ -1006,7 +1006,7 @@ func (m *DistroManager) applyVarDiskSize(ctx context.Context, varDiskPath string
 		return fmt.Errorf("create WSL /var disk parent directory: %w", err)
 	}
 
-	diskPartScript, err := os.CreateTemp("", "discobot-wsl-resize-*.txt")
+	diskPartScript, err := os.CreateTemp("", "discboeing-wsl-resize-*.txt")
 	if err != nil {
 		return fmt.Errorf("create WSL /var disk resize script: %w", err)
 	}

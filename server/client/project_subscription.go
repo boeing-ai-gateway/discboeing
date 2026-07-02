@@ -8,7 +8,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
 )
 
 // ProjectThreadSubscription identifies one subscribed thread chat stream.

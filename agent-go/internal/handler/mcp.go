@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/mcp"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/mcp"
 )
 
 // ListMCPServers handles GET /mcp/servers.

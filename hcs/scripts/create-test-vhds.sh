@@ -20,7 +20,7 @@ When GVFORWARDER is set, the root disk also includes:
   /sbin/udhcpc       tiny static network helper used by gvforwarder
 
 The helper reads static user networking settings from the kernel command line:
-  discobot=ip=192.168.127.2,netmask=255.255.255.0,gateway=192.168.127.1,dns=192.168.127.1
+  discboeing=ip=192.168.127.2,netmask=255.255.255.0,gateway=192.168.127.1,dns=192.168.127.1
 It configures tap0, verifies gvproxy DNS for host.containers.internal, and
 writes /data/usernet-ok.txt.
 
@@ -578,7 +578,7 @@ static int configure_static(const char* mode, const char* iface, uint32_t ip, ui
     return 0;
 }
 
-static bool parse_discobot_config(uint32_t* ip, uint32_t* mask, uint32_t* router, uint32_t* dns)
+static bool parse_discboeing_config(uint32_t* ip, uint32_t* mask, uint32_t* router, uint32_t* dns)
 {
     char buffer[4096];
     int fd = open("/proc/cmdline", O_RDONLY | O_CLOEXEC);
@@ -588,9 +588,9 @@ static bool parse_discobot_config(uint32_t* ip, uint32_t* mask, uint32_t* router
     if (n <= 0) return false;
     buffer[n] = '\0';
 
-    char* start = strstr(buffer, "discobot=");
+    char* start = strstr(buffer, "discboeing=");
     if (!start) return false;
-    start += strlen("discobot=");
+    start += strlen("discboeing=");
     char* end = start;
     while (*end && *end != ' ' && *end != '\n' && *end != '\r' && *end != '\t') end++;
     *end = '\0';
@@ -637,8 +637,8 @@ int main(int argc, char** argv)
     uint32_t static_mask = 0;
     uint32_t static_router = 0;
     uint32_t static_dns = 0;
-    if (parse_discobot_config(&static_ip, &static_mask, &static_router, &static_dns)) {
-        log_msg("mini-udhcpc: configuring static discobot usernet\n");
+    if (parse_discboeing_config(&static_ip, &static_mask, &static_router, &static_dns)) {
+        log_msg("mini-udhcpc: configuring static discboeing usernet\n");
         return configure_static("kernel-cmdline-static", iface, static_ip, static_mask, static_router, static_dns);
     }
 

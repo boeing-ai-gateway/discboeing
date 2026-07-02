@@ -19,10 +19,10 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
-	"github.com/obot-platform/discobot/server/internal/sysinfo"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sysinfo"
 )
 
 const gracefulLauncherStopTimeout = 15 * time.Second
@@ -290,7 +290,7 @@ func (m *VMManager) startLauncher(projectID string, vmID windows.GUID, dataDiskP
 	// since that can expose SSH keys, cloud credentials, browser data, and
 	// other project secrets to the guest.
 	if m.config.HomeDir != "" {
-		args = append(args, "--share", "home="+m.config.HomeDir, "--append-kernel-cmdline", "discobot.homedir=/mnt/home")
+		args = append(args, "--share", "home="+m.config.HomeDir, "--append-kernel-cmdline", "discboeing.homedir=/mnt/home")
 	}
 
 	cmd := exec.Command(launcherPath, args...)

@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/events"
-	discogit "github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/events"
+	discogit "github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // expandPath expands ~ to the user's home directory and cleans the path.
@@ -231,8 +231,8 @@ func (s *WorkspaceService) initializeLocalRepository(ctx context.Context, path s
 		return fmt.Errorf("failed to initialize git repository: %w", err)
 	}
 
-	gitUserName := "Discobot"
-	gitUserEmail := "discobot@localhost"
+	gitUserName := "Discboeing"
+	gitUserEmail := "discboeing@localhost"
 	if s.gitProvider != nil {
 		providerName, providerEmail := s.gitProvider.GetUserConfig(ctx)
 		if providerName != "" {

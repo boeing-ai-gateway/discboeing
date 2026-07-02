@@ -201,7 +201,7 @@
 		);
 	}
 
-	const WORKSPACE_PATH = "/home/discobot/workspace";
+	const WORKSPACE_PATH = "/home/discboeing/workspace";
 
 	const standardIdeOptions = $derived.by(() =>
 		preferences.ideOptions.filter((option) => option.family === "standard"),
@@ -452,22 +452,22 @@
 							id: crypto.randomUUID(),
 							role: "user",
 							parts: buildUserMessageParts(
-								`Create a Discobot service for this workspace based on the user's description below.
+								`Create a Discboeing service for this workspace based on the user's description below.
 
 User description:
 ${description}
 
-Please inspect the project first, then add or update the appropriate service file under .discobot/services. Use the documented Discobot service conventions:
+Please inspect the project first, then add or update the appropriate service file under .discboeing/services. Use the documented Discboeing service conventions:
 - executable services have a shebang, executable bit, front matter, and a script body
 - passive services declare an externally-managed HTTP/HTTPS port and have no body
 - http/https fields enable web previews and proxy URLs
-- non-passive service output is available in Discobot logs
+- non-passive service output is available in Discboeing logs
 
 When you are done, respond with:
 - what service was created or changed
 - the exact file path
 - the full contents of the service file
-- how to start, restart, or stop it from Discobot when applicable
+- how to start, restart, or stop it from Discboeing when applicable
 - what web page, preview URL/path, or logs will be available`,
 							),
 						},
@@ -499,7 +499,7 @@ When you are done, respond with:
 							id: crypto.randomUUID(),
 							role: "user",
 							parts: buildUserMessageParts(
-								"Please explain Discobot services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discobot/services` or `.discobot/hooks`.",
+								"Please explain Discboeing services and hooks and how they could be used with the current application. Include concrete examples of services or hooks that would accelerate this project's development lifecycle, and mention what files would need to be added under `.discboeing/services` or `.discboeing/hooks`.",
 							),
 						},
 					],
@@ -507,7 +507,7 @@ When you are done, respond with:
 			);
 			learnMoreDialogOpen = false;
 		} catch (error) {
-			console.error("Failed to ask agent about Discobot services:", error);
+			console.error("Failed to ask agent about Discboeing services:", error);
 		} finally {
 			submittingLearnMorePrompt = false;
 		}
@@ -539,7 +539,7 @@ When you are done, respond with:
 			commands: AgentCommand[];
 		}> = [];
 		for (const command of uiCommands) {
-			const label = command.discobot?.group?.trim() || null;
+			const label = command.discboeing?.group?.trim() || null;
 			const key = label ?? "__ungrouped__";
 			const existing = groups.find((group) => group.key === key);
 			if (existing) {
@@ -563,7 +563,7 @@ When you are done, respond with:
 
 	$effect(() => {
 		for (const iconName of uiCommands
-			.map((command) => normalizeLucideIconName(command.discobot?.icon))
+			.map((command) => normalizeLucideIconName(command.discboeing?.icon))
 			.filter((iconName): iconName is string => iconName !== null)) {
 			if (attemptedCommandIcons.has(iconName)) {
 				continue;
@@ -596,7 +596,7 @@ When you are done, respond with:
 		const activeCommand =
 			uiCommands.find((command) => command.name === activeCommandName) ?? null;
 		const primaryLabel =
-			primaryCommand?.discobot?.label || primaryCommand?.name || "Run";
+			primaryCommand?.discboeing?.label || primaryCommand?.name || "Run";
 		return {
 			activeCommandName,
 			showSplitButton: secondaryCommands.length > 0,
@@ -605,8 +605,8 @@ When you are done, respond with:
 			buttonLabel: isPending
 				? "Pending..."
 				: activeCommand
-					? activeCommand.discobot?.activeLabel?.trim() ||
-						`${activeCommand.discobot?.label || activeCommand.name}...`
+					? activeCommand.discboeing?.activeLabel?.trim() ||
+						`${activeCommand.discboeing?.label || activeCommand.name}...`
 					: activeCommandName
 						? `${activeCommandName}...`
 						: primaryLabel,
@@ -621,7 +621,7 @@ When you are done, respond with:
 	);
 
 	function commandLabel(command: AgentCommand): string {
-		return command.discobot?.label?.trim() || command.name;
+		return command.discboeing?.label?.trim() || command.name;
 	}
 
 	function normalizeLucideIconName(
@@ -638,7 +638,7 @@ When you are done, respond with:
 	}
 
 	function commandIcon(command: AgentCommand): LucideIcon | null {
-		const iconName = normalizeLucideIconName(command.discobot?.icon);
+		const iconName = normalizeLucideIconName(command.discboeing?.icon);
 		if (!iconName) {
 			return null;
 		}
@@ -1166,23 +1166,23 @@ When you are done, respond with:
 <Dialog bind:open={addServiceDialogOpen}>
 	<DialogContent class="sm:max-w-lg">
 		<DialogHeader class="space-y-2">
-			<DialogTitle>Add a Discobot service</DialogTitle>
+			<DialogTitle>Add a Discboeing service</DialogTitle>
 			<DialogDescription class="space-y-2">
 				<span class="block">
 					Services are workspace automation files in
-					<code>.discobot/services</code>. They can start dev servers,
+					<code>.discboeing/services</code>. They can start dev servers,
 					background workers, databases, or declare an externally managed
 					service.
 				</span>
 				<span class="block">
 					Services with HTTP/HTTPS ports get web previews, proxy URLs, and logs
-					in Discobot.
+					in Discboeing.
 				</span>
 			</DialogDescription>
 		</DialogHeader>
 		<div class="space-y-2">
 			<label for="add-service-description" class="text-sm font-medium">
-				What service should Discobot start?
+				What service should Discboeing start?
 			</label>
 			<Textarea
 				id="add-service-description"
@@ -1222,7 +1222,7 @@ When you are done, respond with:
 		<AlertDialogHeader>
 			<AlertDialogTitle>Learn about services and hooks?</AlertDialogTitle>
 			<AlertDialogDescription>
-				This project does not have Discobot services configured yet. Would you
+				This project does not have Discboeing services configured yet. Would you
 				like the agent to explain how services and hooks could help run,
 				preview, and automate this application?
 			</AlertDialogDescription>

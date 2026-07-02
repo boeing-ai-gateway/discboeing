@@ -84,7 +84,7 @@
 {:else if showDock}
 	<Resizable.PaneGroup
 		direction="horizontal"
-		autoSaveId="discobot-ui-thread-layout"
+		autoSaveId="discboeing-ui-thread-layout"
 		class="min-h-0 min-w-0 flex-1"
 	>
 		<Resizable.Pane defaultSize={35} minSize={25} class="min-h-0 min-w-0">

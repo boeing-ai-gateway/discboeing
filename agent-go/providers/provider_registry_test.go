@@ -6,7 +6,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // testProvider is a minimal Provider implementation for registry tests.
@@ -139,7 +139,7 @@ func TestProviderRegistry_ResolveModel_NoProvidersAvailable(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error when no providers are available")
 	}
-	if got := err.Error(); got != "no model providers are available; configure a provider, set DISCOBOT_MODEL, or pass --model" {
+	if got := err.Error(); got != "no model providers are available; configure a provider, set DISCBOEING_MODEL, or pass --model" {
 		t.Fatalf("unexpected error: %q", got)
 	}
 }
@@ -153,7 +153,7 @@ func TestProviderRegistry_ResolveModel_NoDefaultIncludesAvailableProviders(t *te
 	if err == nil {
 		t.Fatal("expected error when no provider has a default model")
 	}
-	if got := err.Error(); got != `no provider available with a default model for tasks "chat"; available providers: anthropic, openai; set DISCOBOT_MODEL or pass --model` {
+	if got := err.Error(); got != `no provider available with a default model for tasks "chat"; available providers: anthropic, openai; set DISCBOEING_MODEL or pass --model` {
 		t.Fatalf("unexpected error: %q", got)
 	}
 }

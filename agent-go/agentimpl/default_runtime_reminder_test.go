@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func TestFormatRuntimeEnvironmentReminder_IncludesSnapshotDetails(t *testing.T) {
@@ -189,7 +189,7 @@ func TestBootstrapNewThreadMessages_IncludesRecentThreadsReminder(t *testing.T) 
 	if !strings.Contains(recentReminder, "Use "+readThreadScriptPath()+" <thread-id> to print a thread transcript.") {
 		t.Fatalf("expected reader script path in reminder, got %q", recentReminder)
 	}
-	if !strings.Contains(recentReminder, "Use "+listThreadsScriptPath()+" to list available thread IDs and names. It skips the current thread automatically when DISCOBOT_SESSION_ID is set.") {
+	if !strings.Contains(recentReminder, "Use "+listThreadsScriptPath()+" to list available thread IDs and names. It skips the current thread automatically when DISCBOEING_SESSION_ID is set.") {
 		t.Fatalf("expected list script path in reminder, got %q", recentReminder)
 	}
 	if strings.Contains(recentReminder, "- current-thread (thread ID: current-thread)") {
@@ -333,8 +333,8 @@ func TestBuildWorkspaceChangeReminder_WritesFullListAndTruncatesInlineOutput(t *
 	store := thread.NewStore(t.TempDir())
 	workspace := t.TempDir()
 	runGit(t, workspace, "init", "-q")
-	runGit(t, workspace, "config", "user.email", "discobot@example.com")
-	runGit(t, workspace, "config", "user.name", "Discobot")
+	runGit(t, workspace, "config", "user.email", "discboeing@example.com")
+	runGit(t, workspace, "config", "user.name", "Discboeing")
 	agent := NewDefaultAgent(store, nil, nil, workspace, MCPConfig{})
 	threadID := "thread-workspace-changes"
 
@@ -465,7 +465,7 @@ func TestEnsureHelperScripts_SkipsUnchangedScript(t *testing.T) {
 func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	store := thread.NewStore(filepath.Join(home, ".discboeing", "threads"))
 	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
 	agent.ensureHelperScripts()
 
@@ -491,8 +491,8 @@ func TestListThreadsScript_SkipsCurrentThread(t *testing.T) {
 	}
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
-		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
-		"DISCOBOT_SESSION_ID=thread-current",
+		"DISCBOEING_THREADS_DIR="+filepath.Join(home, ".discboeing", "threads"),
+		"DISCBOEING_SESSION_ID=thread-current",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -518,7 +518,7 @@ func TestReadThreadScript_PrintsToolResultOutput(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	store := thread.NewStore(filepath.Join(home, ".discboeing", "threads"))
 	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
 	agent.ensureHelperScripts()
 
@@ -583,7 +583,7 @@ func TestReadThreadScript_PrintsToolResultOutput(t *testing.T) {
 	}
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
-		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
+		"DISCBOEING_THREADS_DIR="+filepath.Join(home, ".discboeing", "threads"),
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -609,7 +609,7 @@ func TestListThreadsPowerShellScript_Windows(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	store := thread.NewStore(filepath.Join(home, ".discboeing", "threads"))
 	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
 	agent.ensureHelperScripts()
 
@@ -639,8 +639,8 @@ func TestListThreadsPowerShellScript_Windows(t *testing.T) {
 	}
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
-		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
-		"DISCOBOT_SESSION_ID=thread-current",
+		"DISCBOEING_THREADS_DIR="+filepath.Join(home, ".discboeing", "threads"),
+		"DISCBOEING_SESSION_ID=thread-current",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -666,7 +666,7 @@ func TestReadThreadPowerShellScript_Windows(t *testing.T) {
 
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	store := thread.NewStore(filepath.Join(home, ".discobot", "threads"))
+	store := thread.NewStore(filepath.Join(home, ".discboeing", "threads"))
 	agent := NewDefaultAgent(store, nil, nil, t.TempDir(), MCPConfig{})
 	agent.ensureHelperScripts()
 
@@ -714,7 +714,7 @@ func TestReadThreadPowerShellScript_Windows(t *testing.T) {
 	}
 	cmd.Env = append(os.Environ(),
 		"HOME="+home,
-		"DISCOBOT_THREADS_DIR="+filepath.Join(home, ".discobot", "threads"),
+		"DISCBOEING_THREADS_DIR="+filepath.Join(home, ".discboeing", "threads"),
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
 )
 
 func TestParseExecEventQuery(t *testing.T) {

@@ -84,7 +84,7 @@ function trackSSRBuild(): Plugin {
 }
 
 export default defineConfig(() => {
-	const apiProxyTarget = process.env.VITE_DISCOBOT_API_PROXY_TARGET;
+	const apiProxyTarget = process.env.VITE_DISCBOEING_API_PROXY_TARGET;
 
 	return {
 		plugins: [trackSSRBuild(), fixNoVncCjs(), sveltekit(), tailwindcss()],

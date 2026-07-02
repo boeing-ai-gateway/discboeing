@@ -18,7 +18,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-const logPrefix = "discobot-vsock-port-proxy"
+const logPrefix = "discboeing-vsock-port-proxy"
 
 // Run watches Docker events for managed containers with published ports and
 // creates socat VSOCK listeners that forward those ports to the host.
@@ -48,7 +48,7 @@ func Run() error {
 
 	containers, err := cli.ContainerList(ctx, container.ListOptions{
 		Filters: filters.NewArgs(
-			filters.Arg("label", "discobot.managed=true"),
+			filters.Arg("label", "discboeing.managed=true"),
 			filters.Arg("status", "running"),
 		),
 	})
@@ -244,7 +244,7 @@ func processEvents(ctx context.Context, cli *client.Client, mu *sync.Mutex, soca
 			if containerID == "" {
 				continue
 			}
-			if msg.Actor.Attributes["discobot.managed"] != "true" {
+			if msg.Actor.Attributes["discboeing.managed"] != "true" {
 				continue
 			}
 

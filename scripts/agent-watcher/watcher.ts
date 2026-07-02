@@ -154,7 +154,7 @@ export function resolveCommandInvocation(
 	platform = process.platform,
 	env: NodeJS.ProcessEnv = process.env,
 ): { command: string; args: string[] } {
-	const distro = env.DISCOBOT_DOCKER_WSL_DISTRO?.trim();
+	const distro = env.DISCBOEING_DOCKER_WSL_DISTRO?.trim();
 	if (platform === "win32" && distro && isDockerCommand(command)) {
 		return {
 			command: "wsl.exe",
@@ -368,10 +368,10 @@ export class AgentWatcher {
 		const imageId = inspectResult.stdout.trim();
 		const shortId = imageId.replace(/^sha256:/, "").slice(0, 8);
 
-		// Create a tag with discobot-local/ prefix using the short image ID
+		// Create a tag with discboeing-local/ prefix using the short image ID
 		// This allows the image to be recognized as a local build and ensures
 		// the tag is stable for the same image content
-		const localImageRef = `discobot-local/${this.config.imageName}:${shortId}`;
+		const localImageRef = `discboeing-local/${this.config.imageName}:${shortId}`;
 
 		// Tag the image with the ID-based reference
 		const tagResult = await this.runCommand(

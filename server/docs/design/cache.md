@@ -10,7 +10,7 @@ The cache volume system provides persistent, project-scoped cache storage that i
 
 ### Cache Volume Scoping
 
-- **One cache volume per project**: `discobot-cache-{projectID}`
+- **One cache volume per project**: `discboeing-cache-{projectID}`
 - **Shared across all containers**: Every container in the same project mounts the same cache volume
 - **Persistent across container rebuilds**: Cache survives container deletion and recreation
 
@@ -19,11 +19,11 @@ The cache volume system provides persistent, project-scoped cache storage that i
 Each cache path gets its own subdirectory within the volume to prevent conflicts:
 
 ```
-discobot-cache-abc123/
-├── home/discobot/.npm/
-├── home/discobot/.pnpm-store/
-├── home/discobot/.cache/pip/
-├── home/discobot/go/pkg/mod/
+discboeing-cache-abc123/
+├── home/discboeing/.npm/
+├── home/discboeing/.pnpm-store/
+├── home/discboeing/.cache/pip/
+├── home/discboeing/go/pkg/mod/
 └── ... (other cache directories)
 ```
 
@@ -32,7 +32,7 @@ discobot-cache-abc123/
 The cache system uses a two-stage mounting approach:
 
 1. **Docker Provider (Host)**: Mounts the cache volume at `/.data/cache` inside the container
-2. **Agent (Container)**: After setting up the overlay filesystem for `/home/discobot`, bind-mounts individual cache directories from `/.data/cache` on top of the overlay
+2. **Agent (Container)**: After setting up the overlay filesystem for `/home/discboeing`, bind-mounts individual cache directories from `/.data/cache` on top of the overlay
 
 This approach ensures cache directories don't write to the container's overlay layer, improving performance and reducing disk usage.
 
@@ -48,15 +48,15 @@ CACHE_ENABLED=false  # Default: true
 
 ### Workspace Configuration
 
-Users can define additional cache paths by creating `.discobot/cache.json` in their workspace repository:
+Users can define additional cache paths by creating `.discboeing/cache.json` in their workspace repository:
 
-**Location:** `<user-workspace>/.discobot/cache.json` (inside the container at `/home/discobot/workspace/.discobot/cache.json`)
+**Location:** `<user-workspace>/.discboeing/cache.json` (inside the container at `/home/discboeing/workspace/.discboeing/cache.json`)
 
 ```json
 {
   "additionalPaths": [
-    "/home/discobot/.custom-cache",
-    "/home/discobot/.local/share/my-tool"
+    "/home/discboeing/.custom-cache",
+    "/home/discboeing/.local/share/my-tool"
   ]
 }
 ```
@@ -64,7 +64,7 @@ Users can define additional cache paths by creating `.discobot/cache.json` in th
 The agent reads this file during container startup and merges the additional paths with well-known cache directories.
 
 **Security Validation:**
-- All paths must be within `/home/discobot/` (not equal to it)
+- All paths must be within `/home/discboeing/` (not equal to it)
 - Paths must be absolute and not contain `..` components
 - Invalid paths are logged and ignored
 - This prevents malicious workspaces from mounting sensitive system directories
@@ -79,48 +79,48 @@ The agent reads this file during container startup and merges the additional pat
 The agent automatically mounts the following well-known cache directories:
 
 ### Universal Cache Directory
-- `/home/discobot/.cache` - Universal cache directory (includes pip, yarn, go-build, pypoetry, uv, deno, bazel, sccache, git-lfs, and many others)
+- `/home/discboeing/.cache` - Universal cache directory (includes pip, yarn, go-build, pypoetry, uv, deno, bazel, sccache, git-lfs, and many others)
 
 ### Package Managers (not in .cache)
-- `/home/discobot/.npm` - npm cache
-- `/home/discobot/.pnpm-store` - pnpm store
-- `/home/discobot/.yarn` - yarn cache
+- `/home/discboeing/.npm` - npm cache
+- `/home/discboeing/.pnpm-store` - pnpm store
+- `/home/discboeing/.yarn` - yarn cache
 - `/nix` - Nix store for single-user installs
 
 ### Python
-- `/home/discobot/.local/share/uv` - uv data directory
+- `/home/discboeing/.local/share/uv` - uv data directory
 
 ### Go
-- `/home/discobot/go/pkg/mod` - Go module cache
+- `/home/discboeing/go/pkg/mod` - Go module cache
 
 ### Rust / Cargo
-- `/home/discobot/.cargo/registry` - Cargo registry
-- `/home/discobot/.cargo/git` - Cargo git dependencies
+- `/home/discboeing/.cargo/registry` - Cargo registry
+- `/home/discboeing/.cargo/git` - Cargo git dependencies
 
 ### Ruby
-- `/home/discobot/.bundle` - Bundler cache
-- `/home/discobot/.gem` - Gem cache
+- `/home/discboeing/.bundle` - Bundler cache
+- `/home/discboeing/.gem` - Gem cache
 
 ### Java / JVM
-- `/home/discobot/.m2/repository` - Maven repository
-- `/home/discobot/.gradle/caches` - Gradle caches
-- `/home/discobot/.gradle/wrapper` - Gradle wrapper
+- `/home/discboeing/.m2/repository` - Maven repository
+- `/home/discboeing/.gradle/caches` - Gradle caches
+- `/home/discboeing/.gradle/wrapper` - Gradle wrapper
 
 ### .NET
-- `/home/discobot/.nuget/packages` - NuGet packages
+- `/home/discboeing/.nuget/packages` - NuGet packages
 
 ### PHP
-- `/home/discobot/.composer/cache` - Composer cache
+- `/home/discboeing/.composer/cache` - Composer cache
 
 ### Other Tools
-- `/home/discobot/.bun/install/cache` - Bun cache
-- `/home/discobot/.docker/buildx` - Docker buildx cache
-- `/home/discobot/.ccache` - ccache
-- `/home/discobot/.local/share/discobot-code-server/User` - Discobot code-server user profile
-- `/home/discobot/.local/share/discobot-code-server/extensions` - Discobot code-server extensions
-- `/home/discobot/.vscode-server` - VS Code Server
-- `/home/discobot/.cursor-server` - Cursor Server
-- `/home/discobot/.zed_server` - Zed Server
+- `/home/discboeing/.bun/install/cache` - Bun cache
+- `/home/discboeing/.docker/buildx` - Docker buildx cache
+- `/home/discboeing/.ccache` - ccache
+- `/home/discboeing/.local/share/discboeing-code-server/User` - Discboeing code-server user profile
+- `/home/discboeing/.local/share/discboeing-code-server/extensions` - Discboeing code-server extensions
+- `/home/discboeing/.vscode-server` - VS Code Server
+- `/home/discboeing/.cursor-server` - Cursor Server
+- `/home/discboeing/.zed_server` - Zed Server
 
 ## API Endpoints
 
@@ -137,14 +137,14 @@ Returns all cache volumes for the project.
 {
   "volumes": [
     {
-      "Name": "discobot-cache-abc123",
+      "Name": "discboeing-cache-abc123",
       "Driver": "local",
-      "Mountpoint": "/var/lib/docker/volumes/discobot-cache-abc123/_data",
+      "Mountpoint": "/var/lib/docker/volumes/discboeing-cache-abc123/_data",
       "CreatedAt": "2024-01-15T10:30:00Z",
       "Labels": {
-        "discobot.project.id": "abc123",
-        "discobot.managed": "true",
-        "discobot.type": "cache"
+        "discboeing.project.id": "abc123",
+        "discboeing.managed": "true",
+        "discboeing.type": "cache"
       }
     }
   ]
@@ -169,16 +169,16 @@ Cache volumes are created lazily on first container creation:
 
 1. When creating a container, check if project has a cache volume
 2. If not, create volume with labels:
-   - `discobot.project.id`: projectID
-   - `discobot.managed`: "true"
-   - `discobot.type`: "cache"
+   - `discboeing.project.id`: projectID
+   - `discboeing.managed`: "true"
+   - `discboeing.type`: "cache"
 3. Mount the volume at `/.data/cache` inside the container
 
 ```go
 // In server/internal/sandbox/docker/provider.go
 hostConfig.Mounts = append(hostConfig.Mounts, mount.Mount{
     Type:   mount.TypeVolume,
-    Source: "discobot-cache-abc123",
+    Source: "discboeing-cache-abc123",
     Target: "/.data/cache",
 })
 ```
@@ -187,17 +187,17 @@ hostConfig.Mounts = append(hostConfig.Mounts, mount.Mount{
 
 After the overlay filesystem is mounted, the agent bind-mounts cache directories:
 
-1. Load cache configuration from `/.home/discobot/workspace/.discobot/cache.json`
+1. Load cache configuration from `/.home/discboeing/workspace/.discboeing/cache.json`
 2. Get all cache paths (well-known + additional from config)
 3. For each cache path:
-   - Create subdirectory in `/.data/cache` (e.g., `/.data/cache/home/discobot/.npm`)
-   - Create target directory in overlay (e.g., `/home/discobot/.npm`)
+   - Create subdirectory in `/.data/cache` (e.g., `/.data/cache/home/discboeing/.npm`)
+   - Create target directory in overlay (e.g., `/home/discboeing/.npm`)
    - Bind mount source to target using `syscall.Mount()`
 
 ```bash
-# In sandbox-init/discobot-sandbox-init.sh
+# In sandbox-init/discboeing-sandbox-init.sh
 source="/.data/cache/$sub_dir"
-target="/home/discobot/.npm"
+target="/home/discboeing/.npm"
 mount --bind "$source" "$target"
 ```
 
@@ -231,7 +231,7 @@ Consider adding volume size limits to prevent unbounded growth:
 
 ```json
 {
-  "additionalPaths": ["/home/discobot/.custom-cache"],
+  "additionalPaths": ["/home/discboeing/.custom-cache"],
   "sizeLimit": "10GB"
 }
 ```
@@ -255,7 +255,7 @@ Allow fine-grained control over specific tools:
   "tools": {
     "npm": {
       "enabled": true,
-      "path": "/home/discobot/.npm"
+      "path": "/home/discboeing/.npm"
     },
     "pip": {
       "enabled": false
@@ -269,7 +269,7 @@ Allow fine-grained control over specific tools:
 ### Cache Not Working
 
 1. Check if cache is enabled: `echo $CACHE_ENABLED`
-2. Verify volume exists: `docker volume ls | grep discobot-cache`
+2. Verify volume exists: `docker volume ls | grep discboeing-cache`
 3. Inspect container mounts: `docker inspect <container-id> | jq '.[].Mounts'`
 
 ### Clearing Cache
@@ -281,7 +281,7 @@ To clear cache for a project:
 curl -X DELETE http://localhost:3001/api/projects/local/cache
 
 # Or manually
-docker volume rm discobot-cache-{projectId}
+docker volume rm discboeing-cache-{projectId}
 ```
 
 ### Disk Space Issues
@@ -289,11 +289,11 @@ docker volume rm discobot-cache-{projectId}
 Check cache volume sizes:
 
 ```bash
-docker system df -v | grep discobot-cache
+docker system df -v | grep discboeing-cache
 ```
 
 Prune old volumes:
 
 ```bash
-docker volume prune -f --filter "label=discobot.type=cache"
+docker volume prune -f --filter "label=discboeing.type=cache"
 ```

@@ -31,7 +31,7 @@ function withTurnId(message: ChatMessage, turnId: string): ChatMessage {
 			...(message.metadata && typeof message.metadata === "object"
 				? message.metadata
 				: {}),
-			discobot: {
+			discboeing: {
 				turnId,
 			},
 		},
@@ -49,7 +49,7 @@ function makeCompactionMessage(
 		synthetic: true,
 		parts: [{ type: "text", text: "Compacted" }],
 		metadata: {
-			discobot: {
+			discboeing: {
 				kind: "compaction",
 				compactionFor,
 				turnId: `compaction-${compactionFor}`,

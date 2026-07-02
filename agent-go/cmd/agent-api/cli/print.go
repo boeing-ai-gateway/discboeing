@@ -11,15 +11,15 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
-	"github.com/obot-platform/discobot/agent-go/internal/clisession"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/thread"
-	"github.com/obot-platform/discobot/agent-go/tools"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agentimpl"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/clisession"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/tools"
 )
 
 // RunPrint runs one prompt, writes only the final assistant text to stdout, and exits.
@@ -47,8 +47,8 @@ func RunPrint(cfg *config.Config, flags *Flags, args []string) int {
 	mcpCfg := agentimpl.NewMCPConfig(
 		oauthBase,
 		cfg.SessionID,
-		cfg.DiscobotServerURL,
-		cfg.DiscobotProjectID,
+		cfg.DiscboeingServerURL,
+		cfg.DiscboeingProjectID,
 	)
 	a := agentimpl.NewDefaultAgent(store, reg, exec, cfg.AgentCwd, mcpCfg)
 	var session clisession.Session = clisession.NewLocal(a, store, cfg.AgentCwd)

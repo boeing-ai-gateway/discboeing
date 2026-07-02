@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Discobot Server API",
+    "title": "Discboeing Server API",
     "version": "0.0.0",
-    "description": "Authoritative contract for the Discobot server HTTP API. This schema is\ngenerated from the existing server route table and public Go DTOs, and is\nintended to become the source for generated server/client code.\n"
+    "description": "Authoritative contract for the Discboeing server HTTP API. This schema is\ngenerated from the existing server route table and public Go DTOs, and is\nintended to become the source for generated server/client code.\n"
   },
   "servers": [
     {
@@ -677,7 +677,7 @@
         },
         "description": "Multiplexed project WebSocket. Upgrades the HTTP request to a WebSocket connection for real-time communication.",
         "operationId": "connectProjectsByProjectId",
-        "x-discobot-websocket": {
+        "x-discboeing-websocket": {
           "requests": [
             {
               "$ref": "#/components/schemas/ProjectStreamRequest"
@@ -685,7 +685,7 @@
           ],
           "messages": [
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "subscribed"
               },
               "allOf": [
@@ -695,7 +695,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "unsubscribed"
               },
               "allOf": [
@@ -705,7 +705,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "complete"
               },
               "allOf": [
@@ -715,7 +715,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "error"
               },
               "allOf": [
@@ -725,7 +725,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "event"
               },
               "allOf": [
@@ -735,7 +735,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "event"
               },
               "allOf": [
@@ -745,7 +745,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "event"
               },
               "allOf": [
@@ -755,7 +755,7 @@
               ]
             },
             {
-              "x-discobot-discriminator": {
+              "x-discboeing-discriminator": {
                 "type": "event",
                 "stream": "session"
               },
@@ -4654,7 +4654,7 @@
           "Hooks"
         ],
         "summary": "List session workspace change commits",
-        "description": "List Discobot workspace change commits for a session sandbox.",
+        "description": "List Discboeing workspace change commits for a session sandbox.",
         "operationId": "listSessionWorkspaceChangeCommits",
         "parameters": [
           {
@@ -4724,7 +4724,7 @@
       "cookieAuth": {
         "type": "apiKey",
         "in": "cookie",
-        "name": "discobot_session"
+        "name": "discboeing_session"
       },
       "bearerAuth": {
         "type": "http",
@@ -5679,7 +5679,7 @@
             "items": {
               "$ref": "#/components/schemas/Message"
             },
-            "description": "Discobot UIMessage values accepted by the sandbox agent API.",
+            "description": "Discboeing UIMessage values accepted by the sandbox agent API.",
             "x-go-type-skip-optional-pointer": true
           },
           "trigger": {
@@ -7986,7 +7986,7 @@
           "type",
           "stream"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "subscribed"
         }
       },
@@ -8026,7 +8026,7 @@
           "type",
           "stream"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "unsubscribed"
         }
       },
@@ -8066,7 +8066,7 @@
           "type",
           "stream"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "complete"
         }
       },
@@ -8110,7 +8110,7 @@
           "type",
           "error"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "error"
         }
       },
@@ -8179,7 +8179,7 @@
           "stream",
           "event"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "event"
         }
       },
@@ -8237,7 +8237,7 @@
           "threadId",
           "event"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "event"
         }
       },
@@ -8330,7 +8330,7 @@
           "sessionId",
           "serviceId"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "event"
         }
       },
@@ -8604,7 +8604,7 @@
         ]
       },
       "Message": {
-        "description": "Discobot UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.",
+        "description": "Discboeing UIMessage JSON wire format. Authoritative Go type: agent-go/message.UIMessage.",
         "type": "object",
         "required": [
           "id",
@@ -8649,7 +8649,7 @@
         },
         "x-go-type": "message.UIMessage",
         "x-go-type-import": {
-          "path": "github.com/obot-platform/discobot/agent-go/message",
+          "path": "github.com/boeing-ai-gateway/discboeing/agent-go/message",
           "name": "message"
         }
       },
@@ -8686,7 +8686,7 @@
         },
         "x-go-type": "message.UIPart",
         "x-go-type-import": {
-          "path": "github.com/obot-platform/discobot/agent-go/message",
+          "path": "github.com/boeing-ai-gateway/discboeing/agent-go/message",
           "name": "message"
         }
       },
@@ -9058,7 +9058,7 @@
         "additionalProperties": false
       },
       "MessageChunk": {
-        "description": "Discobot stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.",
+        "description": "Discboeing stream chunk. Authoritative Go type and discriminator handling: agent-go/message.MessageChunk.",
         "type": "object",
         "required": [
           "type"
@@ -9074,7 +9074,7 @@
         "additionalProperties": true,
         "x-go-type": "message.MessageChunk",
         "x-go-type-import": {
-          "path": "github.com/obot-platform/discobot/agent-go/message",
+          "path": "github.com/boeing-ai-gateway/discboeing/agent-go/message",
           "name": "message"
         }
       },
@@ -9285,7 +9285,7 @@
           "sessionId",
           "event"
         ],
-        "x-discobot-discriminator": {
+        "x-discboeing-discriminator": {
           "type": "event"
         }
       }

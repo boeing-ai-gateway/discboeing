@@ -3,7 +3,7 @@ package providers
 import (
 	"strings"
 
-	"github.com/obot-platform/discobot/modelsdev"
+	"github.com/boeing-ai-gateway/discboeing/modelsdev"
 )
 
 // ModelInfo represents a model with its metadata.

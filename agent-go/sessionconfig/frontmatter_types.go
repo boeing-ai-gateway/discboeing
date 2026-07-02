@@ -3,13 +3,13 @@ package sessionconfig
 import (
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 type skillFrontmatter struct {
 	Name                     string `yaml:"name"`
 	Description              string `yaml:"description"`
-	discobotMetadataEnvelope `yaml:",inline"`
+	discboeingMetadataEnvelope `yaml:",inline"`
 }
 
 type scriptFrontmatter struct {
@@ -17,7 +17,7 @@ type scriptFrontmatter struct {
 	Description              string `yaml:"description"`
 	Visible                  *bool  `yaml:"visible"`
 	ArgumentHint             string `yaml:"argument-hint"`
-	discobotMetadataEnvelope `yaml:",inline"`
+	discboeingMetadataEnvelope `yaml:",inline"`
 }
 
 type subAgentFrontmatter struct {
@@ -34,77 +34,77 @@ type systemPromptFrontmatter struct {
 	AllowedTools []string `yaml:"allowed-tools"`
 }
 
-type discobotCommandMetadataFrontmatter struct {
+type discboeingCommandMetadataFrontmatter struct {
 	UI                *bool                                  `yaml:"ui"`
 	Label             string                                 `yaml:"label"`
 	ActiveLabel       string                                 `yaml:"active-label"`
 	Icon              string                                 `yaml:"icon"`
 	Group             string                                 `yaml:"group"`
 	Order             *int                                   `yaml:"order"`
-	CredentialRequest []discobotCredentialRequestFrontmatter `yaml:"credential-request"`
+	CredentialRequest []discboeingCredentialRequestFrontmatter `yaml:"credential-request"`
 }
 
-type discobotCredentialRequestFrontmatter struct {
+type discboeingCredentialRequestFrontmatter struct {
 	EnvVar        string                                     `yaml:"env-var"`
 	Name          string                                     `yaml:"name"`
 	Justification string                                     `yaml:"justification"`
-	ApprovedUses  []discobotCredentialApprovedUseFrontmatter `yaml:"approved-uses"`
+	ApprovedUses  []discboeingCredentialApprovedUseFrontmatter `yaml:"approved-uses"`
 }
 
-type discobotCredentialApprovedUseFrontmatter struct {
+type discboeingCredentialApprovedUseFrontmatter struct {
 	Description string `yaml:"description"`
 }
 
-type discobotMetadataEnvelope struct {
-	Discobot                  discobotCommandMetadataFrontmatter     `yaml:"discobot"`
-	LegacyDiscobotUI          *bool                                  `yaml:"discobot-ui"`
-	LegacyDiscobotLabel       string                                 `yaml:"discobot-label"`
-	LegacyDiscobotActiveLabel string                                 `yaml:"discobot-active-label"`
-	LegacyDiscobotIcon        string                                 `yaml:"discobot-icon"`
-	LegacyDiscobotGroup       string                                 `yaml:"discobot-group"`
-	LegacyDiscobotOrder       *int                                   `yaml:"discobot-order"`
-	LegacyCredentialRequest   []discobotCredentialRequestFrontmatter `yaml:"discobot-credential-request"`
+type discboeingMetadataEnvelope struct {
+	Discboeing                  discboeingCommandMetadataFrontmatter     `yaml:"discboeing"`
+	LegacyDiscboeingUI          *bool                                  `yaml:"discboeing-ui"`
+	LegacyDiscboeingLabel       string                                 `yaml:"discboeing-label"`
+	LegacyDiscboeingActiveLabel string                                 `yaml:"discboeing-active-label"`
+	LegacyDiscboeingIcon        string                                 `yaml:"discboeing-icon"`
+	LegacyDiscboeingGroup       string                                 `yaml:"discboeing-group"`
+	LegacyDiscboeingOrder       *int                                   `yaml:"discboeing-order"`
+	LegacyCredentialRequest   []discboeingCredentialRequestFrontmatter `yaml:"discboeing-credential-request"`
 }
 
-func (fm discobotMetadataEnvelope) discobotMetadata() DiscobotCommandMetadata {
-	meta := DiscobotCommandMetadata{}
-	if fm.Discobot.UI != nil {
-		meta.UI = *fm.Discobot.UI
+func (fm discboeingMetadataEnvelope) discboeingMetadata() DiscboeingCommandMetadata {
+	meta := DiscboeingCommandMetadata{}
+	if fm.Discboeing.UI != nil {
+		meta.UI = *fm.Discboeing.UI
 	}
-	if fm.Discobot.Label != "" {
-		meta.Label = strings.TrimSpace(fm.Discobot.Label)
+	if fm.Discboeing.Label != "" {
+		meta.Label = strings.TrimSpace(fm.Discboeing.Label)
 	}
-	if fm.Discobot.ActiveLabel != "" {
-		meta.ActiveLabel = strings.TrimSpace(fm.Discobot.ActiveLabel)
+	if fm.Discboeing.ActiveLabel != "" {
+		meta.ActiveLabel = strings.TrimSpace(fm.Discboeing.ActiveLabel)
 	}
-	if fm.Discobot.Icon != "" {
-		meta.Icon = strings.TrimSpace(fm.Discobot.Icon)
+	if fm.Discboeing.Icon != "" {
+		meta.Icon = strings.TrimSpace(fm.Discboeing.Icon)
 	}
-	if fm.Discobot.Group != "" {
-		meta.Group = strings.TrimSpace(fm.Discobot.Group)
+	if fm.Discboeing.Group != "" {
+		meta.Group = strings.TrimSpace(fm.Discboeing.Group)
 	}
-	if fm.Discobot.Order != nil {
-		meta.Order = *fm.Discobot.Order
+	if fm.Discboeing.Order != nil {
+		meta.Order = *fm.Discboeing.Order
 	}
-	meta.CredentialRequest = convertCredentialRequests(fm.Discobot.CredentialRequest)
+	meta.CredentialRequest = convertCredentialRequests(fm.Discboeing.CredentialRequest)
 
-	if fm.LegacyDiscobotUI != nil {
-		meta.UI = *fm.LegacyDiscobotUI
+	if fm.LegacyDiscboeingUI != nil {
+		meta.UI = *fm.LegacyDiscboeingUI
 	}
-	if fm.LegacyDiscobotLabel != "" {
-		meta.Label = strings.TrimSpace(fm.LegacyDiscobotLabel)
+	if fm.LegacyDiscboeingLabel != "" {
+		meta.Label = strings.TrimSpace(fm.LegacyDiscboeingLabel)
 	}
-	if fm.LegacyDiscobotActiveLabel != "" {
-		meta.ActiveLabel = strings.TrimSpace(fm.LegacyDiscobotActiveLabel)
+	if fm.LegacyDiscboeingActiveLabel != "" {
+		meta.ActiveLabel = strings.TrimSpace(fm.LegacyDiscboeingActiveLabel)
 	}
-	if fm.LegacyDiscobotIcon != "" {
-		meta.Icon = strings.TrimSpace(fm.LegacyDiscobotIcon)
+	if fm.LegacyDiscboeingIcon != "" {
+		meta.Icon = strings.TrimSpace(fm.LegacyDiscboeingIcon)
 	}
-	if fm.LegacyDiscobotGroup != "" {
-		meta.Group = strings.TrimSpace(fm.LegacyDiscobotGroup)
+	if fm.LegacyDiscboeingGroup != "" {
+		meta.Group = strings.TrimSpace(fm.LegacyDiscboeingGroup)
 	}
-	if fm.LegacyDiscobotOrder != nil {
-		meta.Order = *fm.LegacyDiscobotOrder
+	if fm.LegacyDiscboeingOrder != nil {
+		meta.Order = *fm.LegacyDiscboeingOrder
 	}
 	if len(fm.LegacyCredentialRequest) > 0 {
 		meta.CredentialRequest = convertCredentialRequests(fm.LegacyCredentialRequest)
@@ -112,25 +112,25 @@ func (fm discobotMetadataEnvelope) discobotMetadata() DiscobotCommandMetadata {
 	return meta
 }
 
-func convertCredentialRequests(items []discobotCredentialRequestFrontmatter) []DiscobotCredentialRequest {
+func convertCredentialRequests(items []discboeingCredentialRequestFrontmatter) []DiscboeingCredentialRequest {
 	if len(items) == 0 {
 		return nil
 	}
-	requests := make([]DiscobotCredentialRequest, 0, len(items))
+	requests := make([]DiscboeingCredentialRequest, 0, len(items))
 	for _, item := range items {
-		request := DiscobotCredentialRequest{
+		request := DiscboeingCredentialRequest{
 			EnvVar:        strings.TrimSpace(item.EnvVar),
 			Name:          strings.TrimSpace(item.Name),
 			Justification: strings.TrimSpace(item.Justification),
 		}
 		if len(item.ApprovedUses) > 0 {
-			request.ApprovedUses = make([]DiscobotCredentialApprovedUse, 0, len(item.ApprovedUses))
+			request.ApprovedUses = make([]DiscboeingCredentialApprovedUse, 0, len(item.ApprovedUses))
 			for _, use := range item.ApprovedUses {
 				description := strings.TrimSpace(use.Description)
 				if description == "" {
 					continue
 				}
-				request.ApprovedUses = append(request.ApprovedUses, DiscobotCredentialApprovedUse{Description: description})
+				request.ApprovedUses = append(request.ApprovedUses, DiscboeingCredentialApprovedUse{Description: description})
 			}
 		}
 		requests = append(requests, request)

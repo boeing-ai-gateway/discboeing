@@ -1,6 +1,6 @@
 package hcs
 
-import "github.com/obot-platform/discobot/hcs-go/internal/cli"
+import "github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
 
 const (
 	plan9ShareFlagsReadOnly      = 0x00000001

@@ -17,10 +17,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/agentexec"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/agentexec"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // Retry configuration for sandbox requests.
@@ -57,7 +57,7 @@ type SandboxAgentClient struct {
 	credentialFetcher CredentialFetcher
 
 	// gitUserName and gitUserEmail are sent on every request via
-	// X-Discobot-Git-User-Name and X-Discobot-Git-User-Email headers.
+	// X-Discboeing-Git-User-Name and X-Discboeing-Git-User-Email headers.
 	gitUserName  string
 	gitUserEmail string
 
@@ -233,7 +233,7 @@ func retryWithBackoff[T any](ctx context.Context, fn func() (T, int, error)) (T,
 
 // SSELine represents a raw SSE event from the sandbox.
 // The content is passed through without parsing - the sandbox
-// is expected to send data in Discobot UIMessage stream format.
+// is expected to send data in Discboeing UIMessage stream format.
 type SSELine struct {
 	// ID is the optional SSE event id.
 	ID string
@@ -545,16 +545,16 @@ func (c *SandboxAgentClient) applyRequestAuth(ctx context.Context, req *http.Req
 			if err != nil {
 				return fmt.Errorf("failed to marshal credentials: %w", err)
 			}
-			req.Header.Set("X-Discobot-Credentials", string(credJSON))
+			req.Header.Set("X-Discboeing-Credentials", string(credJSON))
 		}
 	}
 
 	// Add git user config headers from client configuration
 	if c.gitUserName != "" {
-		req.Header.Set("X-Discobot-Git-User-Name", c.gitUserName)
+		req.Header.Set("X-Discboeing-Git-User-Name", c.gitUserName)
 	}
 	if c.gitUserEmail != "" {
-		req.Header.Set("X-Discobot-Git-User-Email", c.gitUserEmail)
+		req.Header.Set("X-Discboeing-Git-User-Email", c.gitUserEmail)
 	}
 
 	return nil
@@ -569,8 +569,8 @@ type sandboxConfigureRequest struct {
 	WorkspaceTargetRef     string             `json:"workspaceTargetRef,omitempty"`
 	SessionID              string             `json:"sessionId,omitempty"`
 	MCPOAuthRedirectBase   string             `json:"mcpOAuthRedirectBase,omitempty"`
-	DiscobotServerURL      string             `json:"discobotServerUrl,omitempty"`
-	DiscobotProjectID      string             `json:"discobotProjectId,omitempty"`
+	DiscboeingServerURL      string             `json:"discboeingServerUrl,omitempty"`
+	DiscboeingProjectID      string             `json:"discboeingProjectId,omitempty"`
 	EnableGitControlSocket bool               `json:"enableGitControlSocket,omitempty"`
 	Credentials            []CredentialEnvVar `json:"credentials,omitempty"`
 	GitUserName            string             `json:"gitUserName,omitempty"`
@@ -841,7 +841,7 @@ func (c *SandboxAgentClient) StartChat(ctx context.Context, sessionID, threadID 
 }
 
 // SendMessages sends messages to the sandbox and returns a channel of raw SSE lines.
-// The sandbox is expected to respond with SSE events in Discobot UIMessage stream format.
+// The sandbox is expected to respond with SSE events in Discboeing UIMessage stream format.
 // Messages and responses are passed through without parsing.
 // Retries with exponential backoff on connection errors and 5xx responses.
 func (c *SandboxAgentClient) SendMessages(ctx context.Context, sessionID, threadID string, messages json.RawMessage, model string, opts *RequestOptions) (<-chan SSELine, error) {
@@ -2385,7 +2385,7 @@ func (c *SandboxAgentClient) GetCommits(ctx context.Context, sessionID string, c
 	return &result, nil
 }
 
-// ListWorkspaceChangeCommits retrieves Discobot workspace change commits from the sandbox.
+// ListWorkspaceChangeCommits retrieves Discboeing workspace change commits from the sandbox.
 func (c *SandboxAgentClient) ListWorkspaceChangeCommits(ctx context.Context, sessionID string) (*sandboxapi.WorkspaceChangeCommitsResponse, error) {
 	resp, err := retryWithBackoff(ctx, func() (*http.Response, int, error) {
 		lease, err := c.acquireHTTPClient(ctx, sessionID)

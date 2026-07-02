@@ -18,11 +18,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/controlsocket"
-	servergit "github.com/obot-platform/discobot/server/internal/git"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/controlsocket"
+	servergit "github.com/boeing-ai-gateway/discboeing/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 type serverGitStream struct {
@@ -369,7 +369,7 @@ func gitHTTPBackendEnv(workspacePath, sessionID string, start gitHTTPRequest) []
 		"REQUEST_METHOD="+start.Method,
 		"PATH_INFO="+pathInfo,
 		"QUERY_STRING="+start.Query,
-		"REMOTE_USER=discobot-agent",
+		"REMOTE_USER=discboeing-agent",
 		"GIT_CONFIG_COUNT=5",
 		"GIT_CONFIG_KEY_0=http.receivepack",
 		"GIT_CONFIG_VALUE_0=true",
@@ -454,7 +454,7 @@ func gitSuffixPath(path string) string {
 }
 
 func sessionPushRef(sessionID string) string {
-	return "refs/heads/discobot/" + sessionID
+	return "refs/heads/discboeing/" + sessionID
 }
 
 func firstHeader(headers map[string][]string, name string) string {

@@ -1,0 +1,10 @@
+[Unit]
+Description=Discboeing VS Code socket proxy
+Requires=discboeing-vscode.socket
+Wants=discboeing-vscode-backend.service
+After=discboeing-vscode-backend.service
+
+[Service]
+Type=notify
+ExecStartPre=/bin/bash -lc 'for i in {1..200}; do exec 3<>/dev/tcp/127.0.0.1/13338 && exec 3>&- && exit 0; sleep 0.1; done; exit 1'
+ExecStart=/usr/lib/systemd/systemd-socket-proxyd 127.0.0.1:13338

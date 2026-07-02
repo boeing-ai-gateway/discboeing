@@ -212,7 +212,7 @@ func TestListWorkspaceChangeCommitsReturnsDiffStat(t *testing.T) {
 	runGitCommand(t, repoDir, "add", "file.txt")
 	tree := strings.TrimSpace(runGitCommand(t, repoDir, "write-tree"))
 	commit := strings.TrimSpace(runGitCommand(t, repoDir, "commit-tree", tree, "-p", base, "-m", "workspace change"))
-	runGitCommand(t, repoDir, "update-ref", "refs/discobot/workspace-change-commits/session-123/snapshot-1", commit)
+	runGitCommand(t, repoDir, "update-ref", "refs/discboeing/workspace-change-commits/session-123/snapshot-1", commit)
 
 	result, err := ListWorkspaceChangeCommits(repoDir, "session-123")
 	if err != nil {

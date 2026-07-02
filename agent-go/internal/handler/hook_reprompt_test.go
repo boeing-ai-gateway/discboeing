@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
-	"github.com/obot-platform/discobot/agent-go/internal/hooks"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/promptqueue"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agentimpl"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/hooks"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/promptqueue"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
@@ -63,16 +63,16 @@ func TestStartHookFailureReprompt_SendsPromptRequest(t *testing.T) {
 		}
 
 		var meta struct {
-			Discobot hooks.HookFailureMessageMetadata `json:"discobot"`
+			Discboeing hooks.HookFailureMessageMetadata `json:"discboeing"`
 		}
 		if err := json.Unmarshal(req.Metadata, &meta); err != nil {
 			t.Fatalf("unmarshal metadata: %v", err)
 		}
-		if meta.Discobot.Kind != "hook-failure" {
-			t.Fatalf("kind = %q, want %q", meta.Discobot.Kind, "hook-failure")
+		if meta.Discboeing.Kind != "hook-failure" {
+			t.Fatalf("kind = %q, want %q", meta.Discboeing.Kind, "hook-failure")
 		}
-		if meta.Discobot.HookName != "Go Check" {
-			t.Fatalf("hook name = %q, want %q", meta.Discobot.HookName, "Go Check")
+		if meta.Discboeing.HookName != "Go Check" {
+			t.Fatalf("hook name = %q, want %q", meta.Discboeing.HookName, "Go Check")
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected prompt request")
@@ -296,13 +296,13 @@ func TestEnqueueHookFailureReprompt_PrependsQueuedPromptWithMetadata(t *testing.
 	}
 
 	var meta struct {
-		Discobot hooks.HookFailureMessageMetadata `json:"discobot"`
+		Discboeing hooks.HookFailureMessageMetadata `json:"discboeing"`
 	}
 	if err := json.Unmarshal(first.Message.Metadata, &meta); err != nil {
 		t.Fatalf("unmarshal metadata: %v", err)
 	}
-	if meta.Discobot.HookName != "Go Check" {
-		t.Fatalf("hook name = %q, want %q", meta.Discobot.HookName, "Go Check")
+	if meta.Discboeing.HookName != "Go Check" {
+		t.Fatalf("hook name = %q, want %q", meta.Discboeing.HookName, "Go Check")
 	}
 
 	second := queue[1]

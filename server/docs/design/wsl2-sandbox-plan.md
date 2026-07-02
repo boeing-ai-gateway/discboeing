@@ -6,7 +6,7 @@ resume work without reconstructing the design from scratch.
 
 ## Document Status
 
-- Owner: Discobot sandbox runtime work
+- Owner: Discboeing sandbox runtime work
 - Status: planned
 - Last updated: 2026-04-27
 - Related docs:
@@ -52,14 +52,14 @@ resume work without reconstructing the design from scratch.
 - [x] Added initial TCP bridge startup and readiness probing for Windows-to-WSL Docker access
 - [x] Updated WSL runtime state persistence to remember dynamically assigned TCP bridge ports
 - [x] Added shared host-runtime idle shutdown abstraction and wired WSL to use `WSLIdleTimeout` for managed distro shutdown
-- [x] Extended the shared guest image build to emit `discobot-rootfs.tar.zst` alongside the VZ squashfs artifact
+- [x] Extended the shared guest image build to emit `discboeing-rootfs.tar.zst` alongside the VZ squashfs artifact
 - [x] Added a local WSL development override (`WSL_ROOTFS_ARCHIVE_PATH`) and watcher script for rebuilding the rootfs archive into `server/.env`
 - [x] Start managed WSL distro setup and startup in the background during provider initialization and report task success/failure through system startup tasks
 - [x] Recover stale unregistered managed WSL install directories by moving them aside before re-import
 - [x] Report detailed WSL bootstrap progress phases for rootfs preparation, distro import, system startup, and Docker bridge readiness
 - [x] Enable systemd in the shared WSL guest image with `/etc/wsl.conf`
 - [x] Add shared guest-side `/var` persistence bootstrap for VZ and WSL
-- [x] Replace the separate `discobot-data` distro with a single persistent `/var` VHD mounted into WSL
+- [x] Replace the separate `discboeing-data` distro with a single persistent `/var` VHD mounted into WSL
 - [x] Mount `/var` from the attached WSL VHD by filesystem label inside the managed distro
 - [x] Preserve `/var` across main-distro upgrades by keeping mutable state on the VHD
 - [x] Remove the WSL guest role split while keeping the WSL-specific networking/resolver service drop-ins
@@ -67,7 +67,7 @@ resume work without reconstructing the design from scratch.
 - [x] Launch a constrained elevated helper for host VHD operations that require UAC
 - [x] Make WSL `/var` readiness rely on guest-side `mountpoint` checks without a guest-side timeout
 - [x] Make managed WSL startup readiness retry until caller cancellation and treat `systemd` `degraded` as ready
-- [x] Share host-to-runtime local sandbox image loading between VM/VZ and WSL so `discobot-local/...` and bare `sha256:...` images are copied into the managed runtime Docker daemon
+- [x] Share host-to-runtime local sandbox image loading between VM/VZ and WSL so `discboeing-local/...` and bare `sha256:...` images are copied into the managed runtime Docker daemon
 - [x] Verify the persistent WSL `/var` VHD attachment and label visibility from `wsl.exe --system` before distro checks
 - [x] Make provider runtime startup wait for background WSL install/bootstrap work to finish before running `EnsureRunning`
 - [x] Run `wsl.exe --system` host block-device probes as `root`, and recover broken `/var` VHD attachment state with `wsl.exe --shutdown`
@@ -87,11 +87,11 @@ resume work without reconstructing the design from scratch.
 
 ## Goals
 
-On Windows, Discobot should:
+On Windows, Discboeing should:
 
 - run sandboxes inside a managed WSL2 runtime
 - use Docker inside the managed WSL distro for session isolation
-- preserve the existing Discobot model of one container per session
+- preserve the existing Discboeing model of one container per session
 - reuse the same image build pipeline as VZ
 - manage distro install, startup, shutdown, and upgrades
 - translate Windows host paths into WSL-visible bind mount paths
@@ -106,7 +106,7 @@ The first implementation does not need to:
 - redesign the session/container abstraction
 - replace the existing Linux Docker or macOS VZ backends
 
-## Current Runtime Model in Discobot
+## Current Runtime Model in Discboeing
 
 ### Linux
 
@@ -115,7 +115,7 @@ Linux uses the plain Docker provider directly:
 - provider registration: `server/cmd/server/provider_linux.go`
 - implementation: `server/internal/sandbox/docker/provider.go`
 
-This gives Discobot one Docker container per session and direct access to the host Docker daemon.
+This gives Discboeing one Docker container per session and direct access to the host Docker daemon.
 
 ### macOS
 
@@ -133,7 +133,7 @@ Docker is reached through a VSOCK bridge.
 
 Windows should follow the same broad shape as macOS:
 
-- outer runtime boundary managed by Discobot
+- outer runtime boundary managed by Discboeing
 - Docker daemon running inside that boundary
 - one session container per session
 
@@ -144,15 +144,15 @@ shared persistent `/var` VHD instead of per-project VMs.
 
 ```text
 Windows host
-  ├── Discobot server
+  ├── Discboeing server
   ├── WSL manager
-  ├── Persistent /var VHD: discobot-var.vhdx
+  ├── Persistent /var VHD: discboeing-var.vhdx
   │     └── attached into WSL as a raw block device
-  ├── Managed WSL distro: discobot
+  ├── Managed WSL distro: discboeing
   │     ├── systemd
   │     ├── dockerd
-  │     ├── discobot docker bridge
-  │     ├── /var mounted from LABEL=discobot-var
+  │     ├── discboeing docker bridge
+  │     ├── /var mounted from LABEL=discboeing-var
   │     └── session containers
 ```
 
@@ -169,7 +169,7 @@ Reasoning:
 - simpler diagnostics and recovery
 - avoids forcing WSL into the current per-project VM abstraction
 - session isolation still comes from inner Docker containers
-- keeps rootfs replacement separate from persistent Docker and Discobot state
+- keeps rootfs replacement separate from persistent Docker and Discboeing state
 - removes reliance on a second distro that can wedge independently of the runtime
 
 ### 2. Dedicated `wsl.Provider`
@@ -204,11 +204,11 @@ for VZ and WSL runtime assets.
 Current VZ image contents include:
 
 - `vmlinuz`
-- `discobot-rootfs.squashfs`
+- `discboeing-rootfs.squashfs`
 
 The Windows/WSL plan is to publish a separate image that includes:
 
-- `discobot-rootfs.tar.zst`
+- `discboeing-rootfs.tar.zst`
 - `image-manifest.json`
 - optional `rootfs-filelist.txt`
 
@@ -221,7 +221,7 @@ Inside WSL, Docker should remain on:
 
 - `unix:///var/run/docker.sock`
 
-Discobot on Windows should talk to Docker through a Discobot-controlled bridge, not by exposing raw Docker widely.
+Discboeing on Windows should talk to Docker through a Discboeing-controlled bridge, not by exposing raw Docker widely.
 
 ### 5. Translate host paths before bind mounting
 
@@ -321,14 +321,14 @@ WSLIdleTimeout     time.Duration
 
 Suggested defaults:
 
-- `WSLDistroName=discobot`
-- `WSLVarDiskPath=%LOCALAPPDATA%/discobot/wsl/var.vhdx`
+- `WSLDistroName=discboeing`
+- `WSLVarDiskPath=%LOCALAPPDATA%/discboeing/wsl/var.vhdx`
 - `WSLVarDiskSizeGB=100`
 - `WSLImageRef=DefaultWSLImage()`
 - TCP Docker bridge transport with a random loopback port by default
 - install/state under `%LOCALAPPDATA%`
 
-For local Windows development, `DISCOBOT_DOCKER_WSL_DISTRO=<name>` can also
+For local Windows development, `DISCBOEING_DOCKER_WSL_DISTRO=<name>` can also
 proxy host-side Docker SDK access through
 `wsl.exe -d <name> -- docker system dial-stdio` so local image builds and
 host-to-VM image transfer reuse a user-managed Docker daemon running in
@@ -384,7 +384,7 @@ Use:
 
 - `wsl.exe --unregister <name>`
 
-Then delete Discobot-managed Windows-side state.
+Then delete Discboeing-managed Windows-side state.
 
 ## Distro Contents
 
@@ -392,8 +392,8 @@ The shared managed rootfs should include:
 
 - systemd-enabled base runtime
 - Docker daemon
-- Discobot Docker bridge service or helper
-- Discobot upgrade helper
+- Discboeing Docker bridge service or helper
+- Discboeing upgrade helper
 - basic diagnostics tooling needed for support and recovery
 
 Required config should include `/etc/wsl.conf` with systemd enabled. The
@@ -415,7 +415,7 @@ writable data disk before they start.
 
 ## Supported transport
 
-Discobot uses a long-running TCP bridge inside the managed WSL distro. The
+Discboeing uses a long-running TCP bridge inside the managed WSL distro. The
 previous Windows named-pipe bridge was removed because every Docker client
 connection required a fresh `wsl.exe -d ... socat ...` process, and `wsl.exe`
 startup is too slow for per-connection proxying.
@@ -434,8 +434,8 @@ Minimum rules:
 
 - Docker inside WSL stays on `/var/run/docker.sock`
 - raw Docker API must not be exposed broadly
-- Discobot bridge must only accept local clients
-- bridge access must be restricted to the current user or Discobot-owned process
+- Discboeing bridge must only accept local clients
+- bridge access must be restricted to the current user or Discboeing-owned process
 - if TCP is used, require a random bearer token and bind only to `127.0.0.1`
 
 ## Path Translation Rules
@@ -454,7 +454,7 @@ type HostPathTranslator interface {
 
 - absolute drive-letter paths
 - normalized local filesystem paths
-- Discobot-managed workspace paths on local drives
+- Discboeing-managed workspace paths on local drives
 
 ### Rejected in first version
 
@@ -494,7 +494,7 @@ Reimporting the runtime distro is simple and reliable once mutable state lives
 outside the runtime rootfs:
 
 - Docker images and layers stay under the mounted `/var` VHD
-- Discobot runtime state under `/var/lib/discobot` survives
+- Discboeing runtime state under `/var/lib/discboeing` survives
 - logs and apt cache under `/var` survive
 - the OS rootfs can be replaced atomically by unregistering and reimporting
 
@@ -522,8 +522,8 @@ distro on the next bootstrap or sandbox operation.
 
 Extend the existing OCI runtime image build so it emits:
 
-- `discobot-rootfs.squashfs` for VZ
-- `discobot-rootfs.tar.zst` for WSL
+- `discboeing-rootfs.squashfs` for VZ
+- `discboeing-rootfs.tar.zst` for WSL
 - metadata files used for install and upgrade
 
 The root filesystem should be defined once and exported in multiple formats.
@@ -673,7 +673,7 @@ When implementation resumes, start with these tasks in order:
 
 Implemented the missing-distro bootstrap path:
 
-- added `server/internal/sandbox/wsl/image_downloader.go` to download and cache `discobot-rootfs.tar.zst` from the shared OCI runtime image
+- added `server/internal/sandbox/wsl/image_downloader.go` to download and cache `discboeing-rootfs.tar.zst` from the shared OCI runtime image
 - added `server/internal/sandbox/wsl/image_downloader_test.go` for cache and extraction coverage
 - updated `server/internal/sandbox/wsl/manager.go` so `EnsureInstalled()` imports a missing distro automatically with `wsl.exe --import`
 - updated `server/internal/sandbox/wsl/manager.go` to decompress the cached rootfs archive into a temporary tar before import and to persist basic image/runtime metadata after import
@@ -714,7 +714,7 @@ can reuse the same watch/stop behavior without forcing WSL into the per-project 
 - updated `server/internal/sandbox/wsl/provider.go` so `WSLIdleTimeout` now participates in real managed-distro shutdown
 - kept the shared abstraction runtime-scoped rather than session-scoped, leaving `server/internal/sandbox/runtime.go` focused on session sandbox lifecycle
 
-Current limitation: WSL runtime idle shutdown still depends on counting Discobot containers through the active Docker bridge and still needs Windows integration coverage.
+Current limitation: WSL runtime idle shutdown still depends on counting Discboeing containers through the active Docker bridge and still needs Windows integration coverage.
 
 ### 2026-04-03 — Phase 2 startup readiness scaffolding landed
 

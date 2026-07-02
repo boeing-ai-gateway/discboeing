@@ -1,6 +1,6 @@
 import { getContext, setContext } from "svelte";
 
-const REASONING_CONTEXT_KEY = Symbol.for("discobot-ui-ai-reasoning-context");
+const REASONING_CONTEXT_KEY = Symbol.for("discboeing-ui-ai-reasoning-context");
 
 export type ReasoningContextValue = {
 	isStreaming: boolean;

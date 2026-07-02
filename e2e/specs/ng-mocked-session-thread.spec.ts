@@ -6,7 +6,7 @@ import type {
   Workspace,
 } from "../../ui/src/lib/api-types";
 import { expect, test } from "../fixtures/test";
-import type { FakeDiscobotApi } from "../mocks/fixtures";
+import type { FakeDiscboeingApi } from "../mocks/fixtures";
 import {
   mockedSessionFixtures,
   seededSessionId,
@@ -17,7 +17,7 @@ function clone<T>(value: T): T {
   return structuredClone(value);
 }
 
-function seedSessionFixtures(fakeApi: FakeDiscobotApi): void {
+function seedSessionFixtures(fakeApi: FakeDiscboeingApi): void {
   fakeApi.workspaces = new Map(
     mockedSessionFixtures.workspaces.map((workspace) => [
       workspace.id,
@@ -44,7 +44,7 @@ function seedSessionFixtures(fakeApi: FakeDiscobotApi): void {
 }
 
 async function waitForRequest(
-  fakeApi: FakeDiscobotApi,
+  fakeApi: FakeDiscboeingApi,
   predicate: (request: ProjectStreamSocketRequest) => boolean,
 ): Promise<ProjectStreamSocketRequest> {
   for (let attempt = 0; attempt < 50; attempt += 1) {

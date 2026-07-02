@@ -8,8 +8,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/helperbin"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 const (
@@ -137,7 +137,7 @@ func helperScriptSourcePath(targetName string) string {
 
 func generateApplyPatchScriptContentForOS(goos, agentBin string) string {
 	if goos != "windows" {
-		return "#!/usr/bin/env bash\nset -eu\n\nexec " + shellSingleQuote(agentBin) + " --discobot-run-as-apply-patch \"$@\"\n"
+		return "#!/usr/bin/env bash\nset -eu\n\nexec " + shellSingleQuote(agentBin) + " --discboeing-run-as-apply-patch \"$@\"\n"
 	}
 	return strings.Join([]string{
 		"param(",
@@ -145,7 +145,7 @@ func generateApplyPatchScriptContentForOS(goos, agentBin string) string {
 		"    [string[]]$Arguments",
 		")",
 		"",
-		"& " + powershellSingleQuote(agentBin) + " --discobot-run-as-apply-patch @Arguments",
+		"& " + powershellSingleQuote(agentBin) + " --discboeing-run-as-apply-patch @Arguments",
 		"if ($null -ne $LASTEXITCODE) {",
 		"    exit $LASTEXITCODE",
 		"}",

@@ -17,7 +17,7 @@ import (
 )
 
 const ringBufferSize = 512 * 1024
-const processSessionEnv = "DISCOBOT_PROCESS_SESSION_ID"
+const processSessionEnv = "DISCBOEING_PROCESS_SESSION_ID"
 
 type managedSession struct {
 	mu        sync.Mutex

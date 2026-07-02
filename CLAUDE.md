@@ -4,7 +4,7 @@ This file provides guidance to coding agents working in this repository.
 
 ## Project Overview
 
-Discobot is a coding agent manager. It runs, monitors, and manages its own built-in coding agent across isolated sandboxed sessions. Each session gets its own container with a copy-on-write filesystem, MITM proxy, and agent API. Discobot currently supports Anthropic and OpenAI models, with more model providers to come.
+Discboeing is a coding agent manager. It runs, monitors, and manages its own built-in coding agent across isolated sandboxed sessions. Each session gets its own container with a copy-on-write filesystem, MITM proxy, and agent API. Discboeing currently supports Anthropic and OpenAI models, with more model providers to come.
 
 ## Commands
 
@@ -176,7 +176,7 @@ The practical test: if removing `useXxxContext()` would mean adding three or mor
 
 - **Package manager**: pnpm only (never npm or yarn)
 - **TypeScript / Svelte UI**: Prettier + ESLint — tabs, double quotes, organized imports where applicable
-- **Go**: gofmt + goimports with local prefix `github.com/obot-platform/discobot`
+- **Go**: gofmt + goimports with local prefix `github.com/boeing-ai-gateway/discboeing`
 - **Go version**: 1.26 — use `new(value)` to create a pointer to a value (e.g. `new(true)` for `*bool`); avoid `boolPtr`/`intPtr` helper functions
 - **Go linters**: golangci-lint (errcheck, govet, staticcheck, revive, unused, etc.)
 - **PowerShell**: PSScriptAnalyzer for linting and Invoke-Formatter formatting on Windows

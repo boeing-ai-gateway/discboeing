@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/cli"
-	"github.com/obot-platform/discobot/hcs-go/internal/resources"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/resources"
 )
 
 func BuildConfiguration(options cli.Options) (string, error) {
@@ -89,7 +89,7 @@ func BuildKernelCommandLine(options cli.Options) string {
 	if strings.TrimSpace(options.KernelCommandLineOverride) != "" {
 		commandLine := options.KernelCommandLineOverride
 		if options.NetworkMode == cli.NetworkUserVsock {
-			commandLine = appendPart(commandLine, buildDiscobotKernelOption(options))
+			commandLine = appendPart(commandLine, buildDiscboeingKernelOption(options))
 		}
 		return appendPart(commandLine, options.AppendKernelCommandLine)
 	}
@@ -113,14 +113,14 @@ func BuildKernelCommandLine(options cli.Options) string {
 		"pty.legacy_count=0",
 	)
 	if options.NetworkMode == cli.NetworkUserVsock {
-		parts = append(parts, buildDiscobotKernelOption(options))
+		parts = append(parts, buildDiscboeingKernelOption(options))
 	}
 	return appendPart(strings.Join(parts, " "), options.AppendKernelCommandLine)
 }
 
-func buildDiscobotKernelOption(options cli.Options) string {
+func buildDiscboeingKernelOption(options cli.Options) string {
 	return strings.Join([]string{
-		"discobot=ip=" + options.UsernetIP,
+		"discboeing=ip=" + options.UsernetIP,
 		"netmask=" + options.UsernetNetmask,
 		"gateway=" + options.UsernetGateway,
 		"dns=" + options.UsernetDNS,

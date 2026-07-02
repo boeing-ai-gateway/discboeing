@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 func TestFormatHookFailureMessage_UsesMarkdownWithInlineOutput(t *testing.T) {
@@ -126,14 +126,14 @@ func TestBuildHookFailureMessageMetadata_RelativizesAbsoluteHookPath(t *testing.
 	meta := buildHookFailureMessageMetadata(HookResult{
 		Hook: Hook{
 			Name:    "Go Check",
-			Path:    filepath.Join(workspaceRoot, ".discobot", "hooks", "go-check.sh"),
+			Path:    filepath.Join(workspaceRoot, ".discboeing", "hooks", "go-check.sh"),
 			Pattern: "*.go",
 		},
 		ExitCode: 1,
 	}, []string{"main.go"}, "/tmp/go-check.log", workspaceRoot)
 
-	if meta.HookPath != ".discobot/hooks/go-check.sh" {
-		t.Fatalf("hook path = %q, want %q", meta.HookPath, ".discobot/hooks/go-check.sh")
+	if meta.HookPath != ".discboeing/hooks/go-check.sh" {
+		t.Fatalf("hook path = %q, want %q", meta.HookPath, ".discboeing/hooks/go-check.sh")
 	}
 }
 
@@ -299,7 +299,7 @@ func TestCreateWorkspaceChangeCommitSkipsUntrackedFiles(t *testing.T) {
 	if output, err := createWorkspaceChangeCommit(workspaceRoot, nil, []string{"tracked.txt", ".env"}, "session-123"); err != nil {
 		t.Fatalf("createWorkspaceChangeCommit failed: %v\n%s", err, output)
 	}
-	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discobot/workspace-change-commits/session-123")
+	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discboeing/workspace-change-commits/session-123")
 	commit := runGit(t, workspaceRoot, "rev-parse", ref)
 	patch := runGit(t, workspaceRoot, "diff", commit+"^", commit)
 	if strings.Contains(patch, "TOKEN=secret") || strings.Contains(patch, ".env") {
@@ -382,7 +382,7 @@ func TestRerunHook_RunsSessionHook(t *testing.T) {
 # name: Install Deps
 # type: session
 #---
-echo "$DISCOBOT_SESSION_ID:$SESSION_HOOK_RERUN_ENV" > session-hook-ran
+echo "$DISCBOEING_SESSION_ID:$SESSION_HOOK_RERUN_ENV" > session-hook-ran
 `
 	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
 		t.Fatalf("WriteFile() failed: %v", err)
@@ -658,7 +658,7 @@ Only approve idiomatic Go changes.
 	if !strings.Contains(runner.prompts[1], "New changes are available for review: Review.") {
 		t.Fatalf("expected follow-up prompt to describe new changes, got:\n%s", runner.prompts[1])
 	}
-	if strings.Contains(runner.prompts[1], "You are running the Discobot hook") {
+	if strings.Contains(runner.prompts[1], "You are running the Discboeing hook") {
 		t.Fatalf("follow-up prompt should not reintroduce hook execution, got:\n%s", runner.prompts[1])
 	}
 	contextDir := filepath.Dir(aiHookContextFilePath(runner.createdThreadID, "review-md", time.Now().UTC()))
@@ -824,7 +824,7 @@ func TestEvaluateFileHooks_BuiltinWorkspaceChangeCommitCreatesRefAndStatus(t *te
 		t.Fatal("expected hidden workspace change commit hook not to request reprompt")
 	}
 
-	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discobot/workspace-change-commits/session-123")
+	ref := runGit(t, workspaceRoot, "for-each-ref", "--format=%(refname)", "refs/discboeing/workspace-change-commits/session-123")
 	commit := runGit(t, workspaceRoot, "rev-parse", ref)
 	files := runGit(t, workspaceRoot, "diff-tree", "--no-commit-id", "--name-only", "-r", commit)
 	if !strings.Contains(files, "README.md") {
@@ -1095,7 +1095,7 @@ func TestRunSessionHooks_CapturesBackgroundHookEnv(t *testing.T) {
 # name: Background
 # type: session
 #---
-echo "$CAPTURED_BACKGROUND_ENV:$DISCOBOT_SESSION_ID" > background-env
+echo "$CAPTURED_BACKGROUND_ENV:$DISCBOEING_SESSION_ID" > background-env
 `
 	if err := os.WriteFile(hookPath, []byte(hookSource), 0o755); err != nil {
 		t.Fatalf("WriteFile() failed: %v", err)

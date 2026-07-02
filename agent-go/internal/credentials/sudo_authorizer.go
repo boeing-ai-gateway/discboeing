@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
 )
 
 const SudoTokenEnvVar = sudoauth.TokenEnvVar

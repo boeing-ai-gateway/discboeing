@@ -70,7 +70,7 @@
 
 	function commandLabel() {
 		return (
-			dialog.command?.discobot?.label?.trim() ||
+			dialog.command?.discboeing?.label?.trim() ||
 			dialog.command?.name ||
 			"Command"
 		);
@@ -104,12 +104,12 @@
 			void actions.refreshCredentials();
 		};
 		window.addEventListener(
-			"discobot:credentials-changed",
+			"discboeing:credentials-changed",
 			handleCredentialsChanged,
 		);
 		return () => {
 			window.removeEventListener(
-				"discobot:credentials-changed",
+				"discboeing:credentials-changed",
 				handleCredentialsChanged,
 			);
 		};

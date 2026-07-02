@@ -20,7 +20,7 @@ import (
 
 const (
 	guidance       = "Please use AskUserQuestion or RequestUserCredential to ask for permission to run `sudo`."
-	configPath     = "/etc/discobot/sudo-gate.json"
+	configPath     = "/etc/discboeing/sudo-gate.json"
 	defaultTimeout = 10 * time.Second
 )
 
@@ -153,12 +153,12 @@ func validateGateConfig(cfg gateConfig) error {
 func authorize(cfg gateConfig) (authorizeResponse, error) {
 	cwd, _ := os.Getwd()
 	req := authorizeRequest{
-		Runtime:      os.Getenv("DISCOBOT_SUDO_RUNTIME"),
-		Token:        os.Getenv("DISCOBOT_SUDO_TOKEN"),
-		CredentialID: os.Getenv("DISCOBOT_SUDO_CREDENTIAL_ID"),
-		UseID:        os.Getenv("DISCOBOT_SUDO_USE_ID"),
-		ToolCallID:   os.Getenv("DISCOBOT_SUDO_TOOL_CALL_ID"),
-		Command:      os.Getenv("DISCOBOT_SUDO_COMMAND"),
+		Runtime:      os.Getenv("DISCBOEING_SUDO_RUNTIME"),
+		Token:        os.Getenv("DISCBOEING_SUDO_TOKEN"),
+		CredentialID: os.Getenv("DISCBOEING_SUDO_CREDENTIAL_ID"),
+		UseID:        os.Getenv("DISCBOEING_SUDO_USE_ID"),
+		ToolCallID:   os.Getenv("DISCBOEING_SUDO_TOOL_CALL_ID"),
+		Command:      os.Getenv("DISCBOEING_SUDO_COMMAND"),
 		Cwd:          cwd,
 		Args:         os.Args[1:],
 		PID:          os.Getpid(),
@@ -208,8 +208,8 @@ func safeEnv() map[string]string {
 	allowed := map[string]bool{
 		"USER": true, "LOGNAME": true, "HOME": true, "SHELL": true, "TERM": true,
 		"PATH": true, "PWD": true, "LANG": true, "LC_ALL": true,
-		"DISCOBOT_SUDO_RUNTIME": true, "DISCOBOT_SUDO_CREDENTIAL_ID": true,
-		"DISCOBOT_SUDO_USE_ID": true, "DISCOBOT_SUDO_TOOL_CALL_ID": true,
+		"DISCBOEING_SUDO_RUNTIME": true, "DISCBOEING_SUDO_CREDENTIAL_ID": true,
+		"DISCBOEING_SUDO_USE_ID": true, "DISCBOEING_SUDO_TOOL_CALL_ID": true,
 	}
 	out := map[string]string{}
 	for _, entry := range os.Environ() {

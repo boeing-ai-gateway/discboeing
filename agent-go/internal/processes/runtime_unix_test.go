@@ -36,11 +36,11 @@ func TestCommandForUserLeavesDefaultUserUnwrapped(t *testing.T) {
 
 func TestCommandForUserWrapsDifferentUserWithSudo(t *testing.T) {
 	cmd := []string{"/bin/echo", "ok"}
-	got, err := commandForUser(cmd, "discobot-test-user-that-should-not-exist")
+	got, err := commandForUser(cmd, "discboeing-test-user-that-should-not-exist")
 	if err != nil {
 		t.Fatalf("commandForUser() failed: %v", err)
 	}
-	want := []string{sudoPath, "-E", "-n", "-u", "discobot-test-user-that-should-not-exist", "--", "/bin/echo", "ok"}
+	want := []string{sudoPath, "-E", "-n", "-u", "discboeing-test-user-that-should-not-exist", "--", "/bin/echo", "ok"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("commandForUser() = %#v, want %#v", got, want)
 	}

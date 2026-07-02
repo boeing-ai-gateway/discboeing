@@ -22,14 +22,14 @@ func TestLoadGateConfigRejectsNonRootAccessibleFile(t *testing.T) {
 }
 
 func TestParseGateConfigIgnoresEnvironmentOverrides(t *testing.T) {
-	t.Setenv("DISCOBOT_REAL_SUDO", "/tmp/malicious-sudo")
-	t.Setenv("DISCOBOT_PORT", "1")
+	t.Setenv("DISCBOEING_REAL_SUDO", "/tmp/malicious-sudo")
+	t.Setenv("DISCBOEING_PORT", "1")
 
-	cfg, err := parseGateConfig(fmt.Appendf(nil, `{"realSudo":%q,"agentAPIURL":%q}`, "/usr/lib/discobot/sudo.real", "http://127.0.0.1:3002/sudo/authorize"))
+	cfg, err := parseGateConfig(fmt.Appendf(nil, `{"realSudo":%q,"agentAPIURL":%q}`, "/usr/lib/discboeing/sudo.real", "http://127.0.0.1:3002/sudo/authorize"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.RealSudo != "/usr/lib/discobot/sudo.real" {
+	if cfg.RealSudo != "/usr/lib/discboeing/sudo.real" {
 		t.Fatalf("real sudo path should come from config, got %q", cfg.RealSudo)
 	}
 	if cfg.AgentAPIURL != "http://127.0.0.1:3002/sudo/authorize" {
@@ -46,7 +46,7 @@ func TestValidateGateConfig(t *testing.T) {
 		{
 			name: "valid loopback URL",
 			cfg: gateConfig{
-				RealSudo:    "/usr/lib/discobot/sudo.real",
+				RealSudo:    "/usr/lib/discboeing/sudo.real",
 				AgentAPIURL: "http://127.0.0.1:3002/sudo/authorize",
 			},
 			want: true,
@@ -68,14 +68,14 @@ func TestValidateGateConfig(t *testing.T) {
 		{
 			name: "rejects non-loopback URL",
 			cfg: gateConfig{
-				RealSudo:    "/usr/lib/discobot/sudo.real",
+				RealSudo:    "/usr/lib/discboeing/sudo.real",
 				AgentAPIURL: "http://192.0.2.10:3002/sudo/authorize",
 			},
 		},
 		{
 			name: "rejects wrong path",
 			cfg: gateConfig{
-				RealSudo:    "/usr/lib/discobot/sudo.real",
+				RealSudo:    "/usr/lib/discboeing/sudo.real",
 				AgentAPIURL: "http://127.0.0.1:3002/health",
 			},
 		},
@@ -95,9 +95,9 @@ func TestValidateGateConfig(t *testing.T) {
 }
 
 func TestAuthorizeDoesNotSendBearerAuth(t *testing.T) {
-	t.Setenv("DISCOBOT_SECRET", "legacy-secret")
-	t.Setenv("DISCOBOT_SUDO_RUNTIME", "agent")
-	t.Setenv("DISCOBOT_SUDO_TOKEN", "sudo-token")
+	t.Setenv("DISCBOEING_SECRET", "legacy-secret")
+	t.Setenv("DISCBOEING_SUDO_RUNTIME", "agent")
+	t.Setenv("DISCBOEING_SUDO_TOKEN", "sudo-token")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "" {
@@ -107,7 +107,7 @@ func TestAuthorizeDoesNotSendBearerAuth(t *testing.T) {
 	}))
 	defer server.Close()
 
-	resp, err := authorize(gateConfig{AgentAPIURL: server.URL, RealSudo: "/usr/lib/discobot/sudo.real"})
+	resp, err := authorize(gateConfig{AgentAPIURL: server.URL, RealSudo: "/usr/lib/discboeing/sudo.real"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestAuthorizeDoesNotSendBearerAuth(t *testing.T) {
 func writeGateConfig(t *testing.T, mode os.FileMode) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "sudo-gate.json")
-	content := fmt.Sprintf(`{"realSudo":%q,"agentAPIURL":%q}`, "/usr/lib/discobot/sudo.real", "http://127.0.0.1:3002/sudo/authorize")
+	content := fmt.Sprintf(`{"realSudo":%q,"agentAPIURL":%q}`, "/usr/lib/discboeing/sudo.real", "http://127.0.0.1:3002/sudo/authorize")
 	if err := os.WriteFile(path, []byte(content), mode); err != nil {
 		t.Fatal(err)
 	}

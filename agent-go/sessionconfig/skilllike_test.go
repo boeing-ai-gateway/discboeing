@@ -25,7 +25,7 @@ func TestLookupSkillLike_PrioritizesSkillOverCommandAndScript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	scriptDir := filepath.Join(root, ".discobot", "scripts")
+	scriptDir := filepath.Join(root, ".discboeing", "scripts")
 	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestLookupSkillLike_PrioritizesSkillOverCommandAndScript(t *testing.T) {
 
 func TestLookupSkillLike_HidesHiddenScriptWhenRequested(t *testing.T) {
 	root := t.TempDir()
-	scriptDir := filepath.Join(root, ".discobot", "scripts")
+	scriptDir := filepath.Join(root, ".discboeing", "scripts")
 	if err := os.MkdirAll(scriptDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

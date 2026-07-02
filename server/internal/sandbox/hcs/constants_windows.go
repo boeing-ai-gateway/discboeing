@@ -2,7 +2,7 @@
 
 package hcs
 
-import "github.com/obot-platform/discobot/server/internal/sandbox/vm"
+import "github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 
 const (
 	dockerSockPort    = 2375

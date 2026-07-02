@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
 )
 
 // AuthorizeSudo handles POST /sudo/authorize. It is called by the sandbox sudo

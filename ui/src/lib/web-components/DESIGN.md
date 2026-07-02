@@ -1,12 +1,12 @@
 # Web Components Design
 
-This directory contains reusable Discobot Web Components implemented with Svelte custom elements. The components are intended to be usable by the Discobot app and by other hosts without depending on Discobot's Svelte app contexts.
+This directory contains reusable Discboeing Web Components implemented with Svelte custom elements. The components are intended to be usable by the Discboeing app and by other hosts without depending on Discboeing's Svelte app contexts.
 
 ## Goals
 
 - Package reusable UI/rendering primitives as standards-based custom elements.
 - Keep component internals Svelte-friendly while exposing a DOM-first API.
-- Avoid dependencies on Discobot app/session/thread contexts.
+- Avoid dependencies on Discboeing app/session/thread contexts.
 - Let hosts control application policy such as link safety, downloads, approvals, and persistence.
 - Keep existing Svelte app components working while Web Components are introduced incrementally.
 
@@ -44,9 +44,9 @@ Web Components must not import from app-shell contexts or app-only component lay
 
 - Do not call `useAppContext`, `useSessionContext`, or `useThreadContext`.
 - Do not import from `ui/src/lib/components/app/*`.
-- Avoid importing Discobot desktop/runtime APIs such as `$lib/shell` from Web Components.
+- Avoid importing Discboeing desktop/runtime APIs such as `$lib/shell` from Web Components.
 
-Hosts should adapt Web Component events to app-specific behavior. For example, the Discobot Svelte app wraps `<disco-markdown>` in an AI-owned Svelte wrapper to provide link-safety and image-download policy, but the Web Component itself only emits DOM events.
+Hosts should adapt Web Component events to app-specific behavior. For example, the Discboeing Svelte app wraps `<disco-markdown>` in an AI-owned Svelte wrapper to provide link-safety and image-download policy, but the Web Component itself only emits DOM events.
 
 Imports from reusable libraries are allowed when they are part of the component's own implementation, such as markdown parsing/rendering dependencies or Svelte itself.
 
@@ -167,20 +167,20 @@ Web Components should be styled internally and expose host customization through
 - `part` attributes for stable styling hooks
 - stable `data-*` attributes for behavior/testing hooks
 
-Do not depend on Discobot app Tailwind classes being available outside the component. App wrappers may add app-specific spacing or layout around the Web Component, but reusable Web Components should remain self-contained.
+Do not depend on Discboeing app Tailwind classes being available outside the component. App wrappers may add app-specific spacing or layout around the Web Component, but reusable Web Components should remain self-contained.
 
 ### Token layering
 
 Component families should use the same token layering pattern:
 
 1. **App/design-system tokens** such as `--background`, `--foreground`, `--border`, `--primary`, and `--font-sans`.
-2. **Shared Discobot tokens** such as `--disco-background`, `--disco-foreground`, `--disco-border`, `--disco-primary`, and `--disco-font-sans`.
+2. **Shared Discboeing tokens** such as `--disco-background`, `--disco-foreground`, `--disco-border`, `--disco-primary`, and `--disco-font-sans`.
 3. **Component-family tokens** such as `--disco-markdown-background` or `--disco-conversation-background`.
 4. **Element-specific tokens** for local layout and density, such as `--disco-message-user-max-width`.
 
 The shared `--disco-*` tokens are the bridge between component families. For example, `<disco-message-content format="markdown">` nests `<disco-markdown>`, so the conversation renderer should pass theme values through shared `--disco-*` tokens rather than styling markdown internals directly.
 
-Component-family tokens should map from shared tokens, and shared tokens should map from common app/design-system tokens. This keeps plain HTML hosts ergonomic while allowing Discobot's app theme to flow through naturally:
+Component-family tokens should map from shared tokens, and shared tokens should map from common app/design-system tokens. This keeps plain HTML hosts ergonomic while allowing Discboeing's app theme to flow through naturally:
 
 ```css
 disco-conversation {
@@ -417,7 +417,7 @@ element and add smaller cards for each semantic child element.
   - `disco-link-click`
   - `disco-image-download`
   - `disco-render-error`
-- Link and image behavior is host-controlled. The Discobot app wrapper handles link safety and desktop/browser download behavior.
+- Link and image behavior is host-controlled. The Discboeing app wrapper handles link safety and desktop/browser download behavior.
 - The component supports full-property updates through `markdown` and imperative updates through `setMarkdown()` / `appendMarkdown()`.
 - Slotted text may be used for initial markdown content, but hosts should prefer the `markdown` property for frequently updated or large content.
 
@@ -443,6 +443,6 @@ element and add smaller cards for each semantic child element.
 
 ## Svelte app adapters
 
-Svelte app adapters may wrap Web Components when the app needs to add Discobot-specific policy. These wrappers belong in the owning component area according to the normal component layout rules.
+Svelte app adapters may wrap Web Components when the app needs to add Discboeing-specific policy. These wrappers belong in the owning component area according to the normal component layout rules.
 
 For example, the app's AI markdown wrapper lives with the AI streamdown components because it depends on AI-owned link-safety UI. The reusable Web Component remains in `web-components/markdown` and does not import that app/AI policy.

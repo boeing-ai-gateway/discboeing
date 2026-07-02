@@ -14,8 +14,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/vscode-lite/internal/lsp"
-	"github.com/obot-platform/discobot/vscode-lite/internal/vfs"
+	"github.com/boeing-ai-gateway/discboeing/vscode-lite/internal/lsp"
+	"github.com/boeing-ai-gateway/discboeing/vscode-lite/internal/vfs"
 )
 
 type Server struct {

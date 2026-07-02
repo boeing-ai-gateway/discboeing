@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/helperbin"
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/helperbin"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func skipOnWindows(t *testing.T) {
@@ -53,7 +53,7 @@ func stageApplyPatchShimForTests(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"apply_patch", "applypatch"} {
-		script := "#!/usr/bin/env bash\nset -eu\nexec " + agentBin + " --discobot-run-as-apply-patch \"$@\"\n"
+		script := "#!/usr/bin/env bash\nset -eu\nexec " + agentBin + " --discboeing-run-as-apply-patch \"$@\"\n"
 		if err := os.WriteFile(filepath.Join(binDir, name), []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -508,10 +508,10 @@ func TestBash_BackgroundLogFileWritten(t *testing.T) {
 
 func TestBash_DefaultPassesProcessEnv(t *testing.T) {
 	skipOnWindows(t)
-	t.Setenv("DISCOBOT_BASH_ENV_TEST_DEFAULT", "present")
+	t.Setenv("DISCBOEING_BASH_ENV_TEST_DEFAULT", "present")
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
-	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_DEFAULT}\""})
+	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCBOEING_BASH_ENV_TEST_DEFAULT}\""})
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
@@ -525,10 +525,10 @@ func TestBash_RequestScopedEnvVisible(t *testing.T) {
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	e.SetEnvSnapshot(func() map[string]string {
-		return map[string]string{"DISCOBOT_BASH_ENV_TEST_REQUEST": "from-request"}
+		return map[string]string{"DISCBOEING_BASH_ENV_TEST_REQUEST": "from-request"}
 	})
 
-	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_REQUEST}\""})
+	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCBOEING_BASH_ENV_TEST_REQUEST}\""})
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
@@ -556,14 +556,14 @@ func TestBash_PATHAlwaysIncludesHelperBin(t *testing.T) {
 
 func TestBash_RequestScopedEnvOverridesProcessEnv(t *testing.T) {
 	skipOnWindows(t)
-	t.Setenv("DISCOBOT_BASH_ENV_TEST_OVERRIDE", "from-process")
+	t.Setenv("DISCBOEING_BASH_ENV_TEST_OVERRIDE", "from-process")
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	e.SetEnvSnapshot(func() map[string]string {
-		return map[string]string{"DISCOBOT_BASH_ENV_TEST_OVERRIDE": "from-request"}
+		return map[string]string{"DISCBOEING_BASH_ENV_TEST_OVERRIDE": "from-request"}
 	})
 
-	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_OVERRIDE}\""})
+	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCBOEING_BASH_ENV_TEST_OVERRIDE}\""})
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
@@ -577,24 +577,24 @@ func TestBash_CredentialUsesOverrideSnapshotEnvByID(t *testing.T) {
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	e.SetEnvSnapshot(func() map[string]string {
-		return map[string]string{"DISCOBOT_BASH_ENV_TEST_CREDENTIAL": "old-value"}
+		return map[string]string{"DISCBOEING_BASH_ENV_TEST_CREDENTIAL": "old-value"}
 	})
 	e.SetCredentialUseEnv(func(uses []CredentialUseBinding) (map[string]string, error) {
 		if len(uses) != 1 {
 			t.Fatalf("expected 1 credential use, got %#v", uses)
 		}
-		if uses[0].CredentialID != "cred_s_new" || uses[0].EnvVar != "DISCOBOT_BASH_ENV_TEST_CREDENTIAL" {
+		if uses[0].CredentialID != "cred_s_new" || uses[0].EnvVar != "DISCBOEING_BASH_ENV_TEST_CREDENTIAL" {
 			t.Fatalf("unexpected credential use: %#v", uses[0])
 		}
-		return map[string]string{"DISCOBOT_BASH_ENV_TEST_CREDENTIAL": "new-value"}, nil
+		return map[string]string{"DISCBOEING_BASH_ENV_TEST_CREDENTIAL": "new-value"}, nil
 	})
 
 	out, ok := runBash(t, e, map[string]any{
-		"command": "echo \"${DISCOBOT_BASH_ENV_TEST_CREDENTIAL}\"",
+		"command": "echo \"${DISCBOEING_BASH_ENV_TEST_CREDENTIAL}\"",
 		"credentialUses": []map[string]string{{
 			"credentialId": "cred_s_new",
 			"useId":        "use_s_123",
-			"envVar":       "DISCOBOT_BASH_ENV_TEST_CREDENTIAL",
+			"envVar":       "DISCBOEING_BASH_ENV_TEST_CREDENTIAL",
 		}},
 	})
 	if !ok {
@@ -610,15 +610,15 @@ func TestBash_SudoCredentialUseInjectsGateMetadata(t *testing.T) {
 
 	e := New(t.TempDir(), t.TempDir(), t.Name())
 	e.SetCredentialUseEnv(func(_ []CredentialUseBinding) (map[string]string, error) {
-		return map[string]string{"DISCOBOT_SUDO_TOKEN": "sudo-token"}, nil
+		return map[string]string{"DISCBOEING_SUDO_TOKEN": "sudo-token"}, nil
 	})
 
 	out, ok := runBash(t, e, map[string]any{
-		"command": "printf '%s|%s|%s|%s' \"$DISCOBOT_SUDO_RUNTIME\" \"$DISCOBOT_SUDO_CREDENTIAL_ID\" \"$DISCOBOT_SUDO_USE_ID\" \"$DISCOBOT_SUDO_TOKEN\"",
+		"command": "printf '%s|%s|%s|%s' \"$DISCBOEING_SUDO_RUNTIME\" \"$DISCBOEING_SUDO_CREDENTIAL_ID\" \"$DISCBOEING_SUDO_USE_ID\" \"$DISCBOEING_SUDO_TOKEN\"",
 		"credentialUses": []map[string]string{{
 			"credentialId": "cred_s_sudo",
 			"useId":        "use_s_sudo",
-			"envVar":       "DISCOBOT_SUDO_TOKEN",
+			"envVar":       "DISCBOEING_SUDO_TOKEN",
 		}},
 	})
 	if !ok {
@@ -638,7 +638,7 @@ func TestBash_CredentialUsesRequireEnvResolver(t *testing.T) {
 		"credentialUses": []map[string]string{{
 			"credentialId": "cred_s_new",
 			"useId":        "use_s_123",
-			"envVar":       "DISCOBOT_BASH_ENV_TEST_CREDENTIAL",
+			"envVar":       "DISCBOEING_BASH_ENV_TEST_CREDENTIAL",
 		}},
 	})
 	if ok {
@@ -653,12 +653,12 @@ func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
 	skipOnWindows(t)
 
 	cwd := t.TempDir()
-	envDir := filepath.Join(cwd, ".discobot")
+	envDir := filepath.Join(cwd, ".discboeing")
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
 	envPath := filepath.Join(envDir, "env")
-	if err := os.WriteFile(envPath, []byte("DISCOBOT_BASH_ENV_TEST_DYNAMIC=first\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("DISCBOEING_BASH_ENV_TEST_DYNAMIC=first\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(first): %v", err)
 	}
 
@@ -667,7 +667,7 @@ func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
 		return workspaceenv.FileSnapshot(cwd)
 	})
 
-	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_DYNAMIC}\""})
+	out, ok := runBash(t, e, map[string]any{"command": "echo \"${DISCBOEING_BASH_ENV_TEST_DYNAMIC}\""})
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
@@ -675,11 +675,11 @@ func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
 		t.Fatalf("expected first workspace env value, got: %q", out)
 	}
 
-	if err := os.WriteFile(envPath, []byte("DISCOBOT_BASH_ENV_TEST_DYNAMIC=second\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("DISCBOEING_BASH_ENV_TEST_DYNAMIC=second\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(second): %v", err)
 	}
 
-	out, ok = runBash(t, e, map[string]any{"command": "echo \"${DISCOBOT_BASH_ENV_TEST_DYNAMIC}\""})
+	out, ok = runBash(t, e, map[string]any{"command": "echo \"${DISCBOEING_BASH_ENV_TEST_DYNAMIC}\""})
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
@@ -687,11 +687,11 @@ func TestBash_WorkspaceEnvReloadsBetweenCalls(t *testing.T) {
 		t.Fatalf("expected updated workspace env value, got: %q", out)
 	}
 
-	if err := os.WriteFile(envPath, []byte("DISCOBOT_BASH_ENV_TEST_OTHER=present\n"), 0o644); err != nil {
+	if err := os.WriteFile(envPath, []byte("DISCBOEING_BASH_ENV_TEST_OTHER=present\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(third): %v", err)
 	}
 
-	out, ok = runBash(t, e, map[string]any{"command": "printf '%s|%s' \"${DISCOBOT_BASH_ENV_TEST_DYNAMIC:-}\" \"${DISCOBOT_BASH_ENV_TEST_OTHER:-}\""})
+	out, ok = runBash(t, e, map[string]any{"command": "printf '%s|%s' \"${DISCBOEING_BASH_ENV_TEST_DYNAMIC:-}\" \"${DISCBOEING_BASH_ENV_TEST_OTHER:-}\""})
 	if !ok {
 		t.Fatalf("unexpected error output: %s", out)
 	}
@@ -774,7 +774,7 @@ func TestBash_WindowsSecondCommandStillRunsAfterPwd(t *testing.T) {
 func TestSameResolvedPathUsesFileIdentity(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.txt")
-	if err := os.WriteFile(target, []byte("discobot\n"), 0o644); err != nil {
+	if err := os.WriteFile(target, []byte("discboeing\n"), 0o644); err != nil {
 		t.Fatalf("WriteFile(target): %v", err)
 	}
 
@@ -794,12 +794,12 @@ func TestSameResolvedPathUsesFileIdentity(t *testing.T) {
 func TestWrapShellCommandForOS_WindowsStreamsOutputBeforeExit(t *testing.T) {
 	wrapped := wrapShellCommandForOS("windows", "pwd")
 	for _, want := range []string{
-		`$script:__discobot_exit = 0`,
+		`$script:__discboeing_exit = 0`,
 		`& {`,
 		`pwd`,
 		`} | Out-String -Stream`,
-		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCOBOT_BASH_CWD_PATH -NoNewline`,
-		`exit $script:__discobot_exit`,
+		`(Get-Location).Path | Set-Content -LiteralPath $env:DISCBOEING_BASH_CWD_PATH -NoNewline`,
+		`exit $script:__discboeing_exit`,
 	} {
 		if !strings.Contains(wrapped, want) {
 			t.Fatalf("expected wrapped windows shell command to contain %q, got: %q", want, wrapped)
@@ -817,14 +817,14 @@ func TestNormalizeBashWorkingDirForOS(t *testing.T) {
 		{
 			name: "non-windows unchanged",
 			goos: "linux",
-			cwd:  "/tmp/discobot",
-			want: "/tmp/discobot",
+			cwd:  "/tmp/discboeing",
+			want: "/tmp/discboeing",
 		},
 		{
 			name: "msys drive path converted",
 			goos: "windows",
-			cwd:  "/e/src/discobot",
-			want: `E:\src\discobot`,
+			cwd:  "/e/src/discboeing",
+			want: `E:\src\discboeing`,
 		},
 		{
 			name: "wsl drive path converted",
@@ -930,7 +930,7 @@ func TestResolveBashCommandForOS_WindowsRejectsBatchShimsWithoutPowerShellFallba
 
 // TestExtractCwdFromOutput unit-tests the sentinel-based cwd extraction helper.
 func TestExtractCwdFromOutput(t *testing.T) {
-	const sentinel = "__DISCOBOT_PWD_SENTINEL__"
+	const sentinel = "__DISCBOEING_PWD_SENTINEL__"
 
 	tests := []struct {
 		name    string

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
+	fmparser "github.com/boeing-ai-gateway/discboeing/agent-go/frontmatter"
 )
 
 // ScriptConfig represents a discovered executable slash-command script.
@@ -18,10 +18,10 @@ type ScriptConfig struct {
 	Path         string
 	Visible      bool
 	ArgumentHint string
-	Discobot     DiscobotCommandMetadata
+	Discboeing     DiscboeingCommandMetadata
 }
 
-// discoverScripts loads executable scripts from project, user, and Discobot
+// discoverScripts loads executable scripts from project, user, and Discboeing
 // system script directories.
 func discoverScripts(projectRoot string) ([]ScriptConfig, []string, error) {
 	home, _ := os.UserHomeDir()
@@ -52,15 +52,15 @@ func discoverScriptsWithHome(projectRoot, home string) ([]ScriptConfig, []string
 		return nil
 	}
 
-	if err := addFrom(loadScriptsDir(filepath.Join(projectRoot, ".discobot", "scripts"))); err != nil {
+	if err := addFrom(loadScriptsDir(filepath.Join(projectRoot, ".discboeing", "scripts"))); err != nil {
 		return nil, nil, err
 	}
 	if home != "" {
-		if err := addFrom(loadScriptsDir(filepath.Join(home, ".discobot", "scripts"))); err != nil {
+		if err := addFrom(loadScriptsDir(filepath.Join(home, ".discboeing", "scripts"))); err != nil {
 			return nil, nil, err
 		}
 	}
-	for _, dir := range discobotSystemPaths("scripts") {
+	for _, dir := range discboeingSystemPaths("scripts") {
 		if err := addFrom(loadScriptsDir(dir)); err != nil {
 			return nil, nil, err
 		}
@@ -78,11 +78,11 @@ func LookupScript(projectRoot, name string, visibleOnly bool) (ScriptConfig, boo
 
 func lookupScriptWithHome(projectRoot, name, home string, visibleOnly bool) (ScriptConfig, bool, error) {
 	var dirs []string
-	dirs = append(dirs, filepath.Join(projectRoot, ".discobot", "scripts"))
+	dirs = append(dirs, filepath.Join(projectRoot, ".discboeing", "scripts"))
 	if home != "" {
-		dirs = append(dirs, filepath.Join(home, ".discobot", "scripts"))
+		dirs = append(dirs, filepath.Join(home, ".discboeing", "scripts"))
 	}
-	dirs = append(dirs, discobotSystemPaths("scripts")...)
+	dirs = append(dirs, discboeingSystemPaths("scripts")...)
 
 	for _, dir := range dirs {
 		cfg, ok, err := lookupScriptInDir(dir, name)
@@ -202,7 +202,7 @@ func loadScriptFile(path, defaultName string) (ScriptConfig, bool, error) {
 		Name:     name,
 		Path:     path,
 		Visible:  true,
-		Discobot: doc.Metadata.discobotMetadata(),
+		Discboeing: doc.Metadata.discboeingMetadata(),
 	}
 	if doc.Metadata.Description != "" {
 		cfg.Description = doc.Metadata.Description

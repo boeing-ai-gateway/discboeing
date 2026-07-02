@@ -27,17 +27,17 @@ function getGitValue(command) {
 }
 
 // Get version from environment (CI) or default to the package version for local builds.
-// In CI, DISCOBOT_VERSION may be set from the git tag (for example, "0.1.0-12").
-const version = process.env.DISCOBOT_VERSION || packageJSON.version;
+// In CI, DISCBOEING_VERSION may be set from the git tag (for example, "0.1.0-12").
+const version = process.env.DISCBOEING_VERSION || packageJSON.version;
 
 const gitCommit = process.env.GITHUB_SHA || getGitValue("git rev-parse HEAD");
 const gitShortCommit = gitCommit ? gitCommit.slice(0, 12) : "";
 const gitTag =
   process.env.GITHUB_REF_TYPE === "tag"
     ? process.env.GITHUB_REF_NAME || ""
-    : process.env.DISCOBOT_GIT_TAG ||
+    : process.env.DISCBOEING_GIT_TAG ||
       getGitValue("git describe --tags --exact-match");
-const sentryRelease = `discobot@${version}${gitShortCommit ? `+${gitShortCommit}` : ""}`;
+const sentryRelease = `discboeing@${version}${gitShortCommit ? `+${gitShortCommit}` : ""}`;
 
 const uiBuildEnv = {
   ...process.env,
@@ -51,8 +51,8 @@ const uiBuildEnv = {
 const hasSentryDSN = Boolean(process.env.PUBLIC_SENTRY_DSN);
 
 // GitHub OAuth client ID for git operations (device flow, repo scope).
-// Set via DISCOBOT_GITHUB_OAUTH_CLIENT_ID in CI; empty string in dev builds.
-const githubOAuthClientID = process.env.DISCOBOT_GITHUB_OAUTH_CLIENT_ID || "";
+// Set via DISCBOEING_GITHUB_OAUTH_CLIENT_ID in CI; empty string in dev builds.
+const githubOAuthClientID = process.env.DISCBOEING_GITHUB_OAUTH_CLIENT_ID || "";
 
 // Create binaries directory
 mkdirSync(binariesDir, { recursive: true });
@@ -81,9 +81,9 @@ function syncEmbeddedUI() {
 
 // Get target triple from environment or detect from current platform
 function getTargetTriple() {
-  // Use DISCOBOT_TARGET_TRIPLE if set (from CI workflow).
-  if (process.env.DISCOBOT_TARGET_TRIPLE) {
-    return process.env.DISCOBOT_TARGET_TRIPLE;
+  // Use DISCBOEING_TARGET_TRIPLE if set (from CI workflow).
+  if (process.env.DISCBOEING_TARGET_TRIPLE) {
+    return process.env.DISCBOEING_TARGET_TRIPLE;
   }
 
   const platform = os.platform();
@@ -105,11 +105,11 @@ function getTargetTriple() {
 
 const targetTriple = getTargetTriple();
 const ext = targetTriple.includes("windows") ? ".exe" : "";
-const serverOutputName = `discobot-server-${targetTriple}${ext}`;
+const serverOutputName = `discboeing-server-${targetTriple}${ext}`;
 const serverOutputPath = join(binariesDir, serverOutputName);
 const staleWSLHelperOutputPath = join(
   binariesDir,
-  `discobot-wsl-helper-${targetTriple}${ext}`,
+  `discboeing-wsl-helper-${targetTriple}${ext}`,
 );
 rmSync(staleWSLHelperOutputPath, { force: true });
 
@@ -136,15 +136,15 @@ function getGoEnv(triple) {
 
 const goEnv = getGoEnv(targetTriple);
 console.log(
-  `Building discobot-server ${version} for ${targetTriple} (GOOS=${goEnv.GOOS}, GOARCH=${goEnv.GOARCH})...`,
+  `Building discboeing-server ${version} for ${targetTriple} (GOOS=${goEnv.GOOS}, GOARCH=${goEnv.GOARCH})...`,
 );
 
 syncEmbeddedUI();
 
 // Build with version and compiled-in client IDs injected via ldflags
 const ldflags = [
-  `-X github.com/obot-platform/discobot/server/internal/version.Version=${version}`,
-  `-X github.com/obot-platform/discobot/server/internal/config.GitHubOAuthClientID=${githubOAuthClientID}`,
+  `-X github.com/boeing-platform/discboeing/server/internal/version.Version=${version}`,
+  `-X github.com/boeing-platform/discboeing/server/internal/config.GitHubOAuthClientID=${githubOAuthClientID}`,
 ].join(" ");
 execSync(
   `go build -ldflags "${ldflags}" -o "${serverOutputPath}" ./cmd/server`,

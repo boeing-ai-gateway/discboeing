@@ -183,7 +183,7 @@ function createHarness(
 	};
 }
 
-test("history replay accepts Discobot assistant parts", async () => {
+test("history replay accepts Discboeing assistant parts", async () => {
 	const harness = createHarness();
 
 	await harness.state.handleStreamEvent({
@@ -227,16 +227,16 @@ test("live stream preserves WebSearch source results when output arrives later",
 			type: "tool-input-available",
 			toolCallId: "ws-1",
 			toolName: "WebSearch",
-			input: { query: "Discobot GitHub repository" },
+			input: { query: "Discboeing GitHub repository" },
 		}),
 	});
 	await harness.state.handleStreamEvent({
 		event: "chunk",
 		data: JSON.stringify({
 			type: "source-url",
-			sourceId: "https://github.com/obot-platform/discobot",
-			url: "https://github.com/obot-platform/discobot",
-			title: "Discobot",
+			sourceId: "https://github.com/boeing-ai-gateway/discboeing",
+			url: "https://github.com/boeing-ai-gateway/discboeing",
+			title: "Discboeing",
 		}),
 	});
 	await harness.state.handleStreamEvent({
@@ -260,8 +260,8 @@ test("live stream preserves WebSearch source results when output arrives later",
 			status: "completed",
 			results: [
 				{
-					title: "Discobot",
-					url: "https://github.com/obot-platform/discobot",
+					title: "Discboeing",
+					url: "https://github.com/boeing-ai-gateway/discboeing",
 				},
 			],
 		},
@@ -281,7 +281,7 @@ test("live stream attaches text URLs to WebSearch output", async () => {
 			type: "tool-input-available",
 			toolCallId: "ws-1",
 			toolName: "WebSearch",
-			input: { query: "Discobot GitHub repository" },
+			input: { query: "Discboeing GitHub repository" },
 		}),
 	});
 	await harness.state.handleStreamEvent({
@@ -304,7 +304,7 @@ test("live stream attaches text URLs to WebSearch output", async () => {
 		data: JSON.stringify({
 			type: "text-delta",
 			id: "text-1",
-			delta: "https://github.com/obot-platform/discobot",
+			delta: "https://github.com/boeing-ai-gateway/discboeing",
 		}),
 	});
 	await harness.state.handleStreamEvent({
@@ -321,8 +321,8 @@ test("live stream attaches text URLs to WebSearch output", async () => {
 			status: "completed",
 			results: [
 				{
-					title: "https://github.com/obot-platform/discobot",
-					url: "https://github.com/obot-platform/discobot",
+					title: "https://github.com/boeing-ai-gateway/discboeing",
+					url: "https://github.com/boeing-ai-gateway/discboeing",
 				},
 			],
 		},

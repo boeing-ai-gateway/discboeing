@@ -5,8 +5,8 @@ package hcn
 import (
 	"fmt"
 
-	"github.com/obot-platform/discobot/hcs-go/internal/cli"
-	"github.com/obot-platform/discobot/hcs-go/internal/hcs"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/cli"
+	"github.com/boeing-ai-gateway/discboeing/hcs-go/internal/hcs"
 )
 
 type NATConnection struct {

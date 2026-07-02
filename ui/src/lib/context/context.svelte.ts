@@ -13,7 +13,7 @@ import {
 } from "$lib/context/initial-state";
 import { detectIsMacPlatform } from "$lib/shortcuts/global-shortcuts";
 
-const CONTEXT_KEY = Symbol.for("discobot-ui-context");
+const CONTEXT_KEY = Symbol.for("discboeing-ui-context");
 const MOBILE_BREAKPOINT = 1024;
 
 let currentContext: Context | null = null;

@@ -10,13 +10,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/exedev"
-	mocksandbox "github.com/obot-platform/discobot/server/internal/sandbox/mock"
-	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/exedev"
+	mocksandbox "github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/mock"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 func newSandboxProviderTestHandler(t *testing.T) (*Handler, *service.CredentialService) {
@@ -114,7 +114,7 @@ func TestListSandboxProviderTypes_IncludesCapabilities(t *testing.T) {
 }
 
 func TestSandboxProviderConfigFields_ExeDev(t *testing.T) {
-	provider, err := exedev.NewProviderWithClient(exedev.Config{SandboxImage: "discobot-agent-api:latest"}, exeDevTestCommandClient{})
+	provider, err := exedev.NewProviderWithClient(exedev.Config{SandboxImage: "discboeing-agent-api:latest"}, exeDevTestCommandClient{})
 	if err != nil {
 		t.Fatalf("failed to create exe.dev provider: %v", err)
 	}
@@ -465,7 +465,7 @@ func TestCreateSandboxProvider_WithCredentialReference(t *testing.T) {
 
 func TestCreateSandboxProvider_ValidatesCredentialMetadata(t *testing.T) {
 	h, credSvc := newSandboxProviderTestHandler(t)
-	provider, err := exedev.NewProviderWithClient(exedev.Config{SandboxImage: "discobot-agent-api:latest"}, exeDevTestCommandClient{})
+	provider, err := exedev.NewProviderWithClient(exedev.Config{SandboxImage: "discboeing-agent-api:latest"}, exeDevTestCommandClient{})
 	if err != nil {
 		t.Fatalf("failed to create exe.dev provider: %v", err)
 	}

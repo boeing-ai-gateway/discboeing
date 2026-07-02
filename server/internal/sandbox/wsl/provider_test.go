@@ -9,8 +9,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 func TestProviderSupportsProjectInspection(_ *testing.T) {
@@ -64,12 +64,12 @@ func TestProjectVMDialersExist(t *testing.T) {
 func TestProjectVMWorkspaceMountSourceTranslatesWindowsPath(t *testing.T) {
 	projectVM := &projectVM{projectID: "project-1"}
 
-	got, err := projectVM.WorkspaceMountSource(`E:\src\discobot`)
+	got, err := projectVM.WorkspaceMountSource(`E:\src\discboeing`)
 	if err != nil {
 		t.Fatalf("WorkspaceMountSource() error = %v", err)
 	}
-	if got != "/mnt/e/src/discobot" {
-		t.Fatalf("WorkspaceMountSource() = %q, want %q", got, "/mnt/e/src/discobot")
+	if got != "/mnt/e/src/discboeing" {
+		t.Fatalf("WorkspaceMountSource() = %q, want %q", got, "/mnt/e/src/discboeing")
 	}
 }
 
@@ -86,8 +86,8 @@ func TestProjectVMDockerDialerUsesLongLivedBridge(t *testing.T) {
 	starts := 0
 	startWSLDockerBridge = func(_ context.Context, distro string) (dockerBridge, error) {
 		starts++
-		if distro != "Discobot" {
-			return nil, fmt.Errorf("distro = %q, want Discobot", distro)
+		if distro != "Discboeing" {
+			return nil, fmt.Errorf("distro = %q, want Discboeing", distro)
 		}
 		return bridge, nil
 	}
@@ -197,7 +197,7 @@ func testConfig(t *testing.T) *config.Config {
 	t.Helper()
 	stateDir := t.TempDir()
 	return &config.Config{
-		WSLDistroName:  "Discobot",
+		WSLDistroName:  "Discboeing",
 		WSLInstallDir:  t.TempDir(),
 		WSLStateDir:    stateDir,
 		WSLVarDiskPath: stateDir + "\\var.vhdx",

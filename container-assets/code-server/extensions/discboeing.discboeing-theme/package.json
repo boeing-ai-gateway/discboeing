@@ -1,0 +1,28 @@
+{
+	"name": "discboeing-theme",
+	"displayName": "Discboeing Theme",
+	"publisher": "discboeing",
+	"version": "0.0.3",
+	"description": "Discboeing themes with file-based UI sync and editor control.",
+	"engines": {
+		"vscode": "^1.101.0"
+	},
+	"categories": ["Themes"],
+	"extensionKind": ["ui"],
+	"browser": "./dist/web-extension.js",
+	"activationEvents": ["onStartupFinished"],
+	"contributes": {
+		"themes": [
+			{
+				"label": "Discboeing Light",
+				"uiTheme": "vs",
+				"path": "./themes/discboeing-light-color-theme.json"
+			},
+			{
+				"label": "Discboeing Dark",
+				"uiTheme": "vs-dark",
+				"path": "./themes/discboeing-dark-color-theme.json"
+			}
+		]
+	}
+}

@@ -8,7 +8,7 @@ import type { CommandRunner } from "../vz-watcher/watcher.js";
 import { HcsWatcher, hcsWatchDirectories } from "./index.js";
 
 const expectedArtifacts = [
-  "discobot-rootfs.vhd",
+  "discboeing-rootfs.vhd",
   "wsl-kernel",
   "kernel-version",
   "wsl-kernel-ref",
@@ -22,7 +22,7 @@ test("watches HCS launcher and guest asset inputs", () => {
 });
 
 test("doBuild extracts HCS artifacts and updates env paths", async () => {
-  const rootDir = await mkdtemp(join(tmpdir(), "discobot-hcs-watcher-"));
+  const rootDir = await mkdtemp(join(tmpdir(), "discboeing-hcs-watcher-"));
   const envFilePath = join(rootDir, "server", ".env");
   const outputDir = join(rootDir, "build", "hcs");
 
@@ -70,7 +70,7 @@ test("doBuild extracts HCS artifacts and updates env paths", async () => {
   assert.equal(envLines.HCS_KERNEL_PATH, join(outputDir, "wsl-kernel"));
   assert.equal(
     envLines.HCS_ROOT_DISK_PATH,
-    join(outputDir, "discobot-rootfs.vhd"),
+    join(outputDir, "discboeing-rootfs.vhd"),
   );
 
   for (const artifact of expectedArtifacts) {
@@ -87,7 +87,7 @@ test("doBuild extracts HCS artifacts and updates env paths", async () => {
     "hcs-image",
     "-t",
   ]);
-  assert.match(buildCalls[0].args[4] ?? "", /^discobot-hcs-watcher-extract:/);
+  assert.match(buildCalls[0].args[4] ?? "", /^discboeing-hcs-watcher-extract:/);
   assert.equal(buildCalls[0].args[5], ".");
 
   const cpCalls = calls.filter((call) => call.args[0] === "cp");

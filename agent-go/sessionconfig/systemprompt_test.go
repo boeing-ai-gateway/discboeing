@@ -58,7 +58,7 @@ func TestFormatUserInstructions_MultipleEntries(t *testing.T) {
 			Content:     "User preferences.",
 		},
 		{
-			Path:        ".discobot/rules/style.md",
+			Path:        ".discboeing/rules/style.md",
 			Description: "project rule",
 			Content:     "Use tabs.",
 		},
@@ -72,7 +72,7 @@ func TestFormatUserInstructions_MultipleEntries(t *testing.T) {
 	if !strings.Contains(result, "Contents of ~/.claude/CLAUDE.md (user-level instructions):") {
 		t.Error("missing user-level header")
 	}
-	if !strings.Contains(result, "Contents of .discobot/rules/style.md (project rule):") {
+	if !strings.Contains(result, "Contents of .discboeing/rules/style.md (project rule):") {
 		t.Error("missing rule header")
 	}
 	if !strings.Contains(result, "Project rules.") {
@@ -97,12 +97,12 @@ func TestDefaultSystemPrompt_Content(t *testing.T) {
 	prompt := defaultSystemPrompt()
 
 	for _, want := range []string{
-		"You are Discobot’s coding agent.",
+		"You are Discboeing’s coding agent.",
 		"## Runtime rules",
 		"## Working rules",
 		"## Tool use",
 		"## Communication style",
-		"/discobot/docs.txt",
+		"/discboeing/docs.txt",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("missing %q", want)
@@ -121,7 +121,7 @@ func TestDefaultSystemConfig_AllowedTools(t *testing.T) {
 	if cfg.AllowedTools[0] != "Bash" {
 		t.Errorf("first allowed tool = %q, want Bash", cfg.AllowedTools[0])
 	}
-	if !strings.Contains(cfg.PromptBody, "You are Discobot’s coding agent.") {
+	if !strings.Contains(cfg.PromptBody, "You are Discboeing’s coding agent.") {
 		t.Error("missing prompt body")
 	}
 }

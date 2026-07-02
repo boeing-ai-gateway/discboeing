@@ -1,8 +1,8 @@
-# Discobot Workspace Customization
+# Discboeing Workspace Customization
 
-Users can customize their workspace by adding files to `.discobot/` at the workspace root.
+Users can customize their workspace by adding files to `.discboeing/` at the workspace root.
 
-## .discobot/env
+## .discboeing/env
 
 Optional workspace env file loaded into tools, console sessions, hooks, and services.
 Changes are picked up for new tool executions, hook runs, service launches, and console sessions without restarting the session.
@@ -13,19 +13,19 @@ Format:
 - Blank lines and lines starting with `#` are ignored
 - Quoted values are allowed and treated literally
 
-Invalid lines are ignored with a warning that includes the file path and line number, but Discobot does not echo the rejected line contents.
+Invalid lines are ignored with a warning that includes the file path and line number, but Discboeing does not echo the rejected line contents.
 
-## .discobot/scripts/
+## .discboeing/scripts/
 
 User-facing executable slash commands. Scripts live directly under
-`.discobot/scripts/`: for example, `.discobot/scripts/summarize-diff.sh`
+`.discboeing/scripts/`: for example, `.discboeing/scripts/summarize-diff.sh`
 becomes `/summarize-diff`. Subdirectories are not searched.
 
 Requirements:
 - executable bit
 - shebang line
 - valid front matter
-- file lives directly under `.discobot/scripts/`
+- file lives directly under `.discboeing/scripts/`
 
 Common front matter fields:
 - `name`: slash-command name (defaults to normalized filename)
@@ -38,23 +38,23 @@ Behavior:
 - the agent invokes them through the `Skill` tool
 - visible scripts are presented to the model the same way as skills
 - hidden scripts are omitted from reminders and cannot be invoked by the model
-- working directory is the project root (`/home/discobot/workspace`)
-- Discobot passes everything after `/name` as a single raw string in `$1`
+- working directory is the project root (`/home/discboeing/workspace`)
+- Discboeing passes everything after `/name` as a single raw string in `$1`
 - success forwards trimmed `stdout`
 - failure forwards execution metadata plus trimmed `stdout` and `stderr`
 - empty successful output does not trigger a no-op model response
 
 Discovery order for script-backed slash commands:
-- workspace `.discobot/scripts/`
-- user `~/.discobot/scripts/`
+- workspace `.discboeing/scripts/`
+- user `~/.discboeing/scripts/`
 - user `~/.agents/scripts/`
-- system `/opt/discobot/scripts/`
-- system `/usr/local/share/discobot/scripts/`
-- system `/usr/share/discobot/scripts/`
+- system `/opt/discboeing/scripts/`
+- system `/usr/local/share/discboeing/scripts/`
+- system `/usr/share/discboeing/scripts/`
 
 Example:
 
-Path: `.discobot/scripts/summarize-diff.sh`
+Path: `.discboeing/scripts/summarize-diff.sh`
 
 ```bash
 #!/bin/bash
@@ -66,15 +66,15 @@ Path: `.discobot/scripts/summarize-diff.sh`
 git diff --stat -- "$1"
 ```
 
-## .discobot/hooks/
+## .discboeing/hooks/
 
-`.discobot/hooks/` supports two engines:
+`.discboeing/hooks/` supports two engines:
 - `engine: script` (default): executable script with shebang and front matter.
 - `engine: ai`: prompt file with front matter only. No executable bit or shebang
   is required. The body after front matter is the AI hook instruction prompt.
 
 Requirements:
-- all hooks: `type` field in front matter, file lives directly under `.discobot/hooks/`
+- all hooks: `type` field in front matter, file lives directly under `.discboeing/hooks/`
 - optional `phase: review` gates file hooks until the session enters review
 - script hooks: executable bit and shebang line
 - AI hooks: `engine: ai`; `pre-commit` is not supported
@@ -101,7 +101,7 @@ Also supports `//---` (slash-prefixed) and plain `---` delimiters.
 SESSION (type: session)
   Runs once at container startup before the agent starts.
   Fields: name, type, description, run_as (root|user, default: user)
-  Env: DISCOBOT_SESSION_ID, DISCOBOT_WORKSPACE, DISCOBOT_HOOK_TYPE=session
+  Env: DISCBOEING_SESSION_ID, DISCBOEING_WORKSPACE, DISCBOEING_HOOK_TYPE=session
   5-minute timeout. Failures are logged but don't block startup.
 
 FILE (type: file)
@@ -109,10 +109,10 @@ FILE (type: file)
   Fields: name, type, description, phase (review only), pattern (required, glob),
   ignore/exclude (optional glob), notify_llm (default: true), engine (script|ai),
   subagent (AI only)
-  Env for script hooks: DISCOBOT_CHANGED_FILES (space-separated paths), DISCOBOT_SESSION_ID, DISCOBOT_HOOK_TYPE=file
+  Env for script hooks: DISCBOEING_CHANGED_FILES (space-separated paths), DISCBOEING_SESSION_ID, DISCBOEING_HOOK_TYPE=file
   Files matching a hook's ignore/exclude glob are skipped for that hook.
-  Files matching .discobot/hooks/ignore are skipped for all file hooks.
-  .discobot/hooks/ignore is plain text: one glob per line; blank lines and
+  Files matching .discboeing/hooks/ignore are skipped for all file hooks.
+  .discboeing/hooks/ignore is plain text: one glob per line; blank lines and
   # comments are ignored. It uses the same glob syntax as pattern and does not
   support gitignore-specific features such as ! negation.
   If notify_llm is true and hook fails, the LLM is re-prompted (max 3 retries).
@@ -126,10 +126,10 @@ AI HOOKS (engine: ai)
   after front matter tells the AI what to review. Each hook runs as a
   task-style review in a stable thread dedicated to that hook, and each run
   sends a new prompt with matching changed files and diff context. Active runs
-  use the same task/completion tracking as Task and TaskOutput. Discobot also
+  use the same task/completion tracking as Task and TaskOutput. Discboeing also
   writes full context to:
-    ~/.discobot/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md
-  The AI can read that file when inline context is truncated. Discobot adds a
+    ~/.discboeing/threads/{hookThreadId}/ai-hooks/{hookId}/context-{timestamp}.md
+  The AI can read that file when inline context is truncated. Discboeing adds a
   standard response instruction to each AI hook prompt: output SUCCESS when the
   hook passes, or FEEDBACK: <actionable feedback> when changes need attention.
   Hook authors should write review-specific instructions and do not need to
@@ -138,7 +138,7 @@ AI HOOKS (engine: ai)
 
 REVIEW PHASE (`phase: review`)
   File hooks may set `phase: review`; the parser currently accepts only `review` as
-  a non-empty phase. Any hook with `phase: review` makes Discobot expose the
+  a non-empty phase. Any hook with `phase: review` makes Discboeing expose the
   ReadyForReview tool. File hooks with `phase: review` still match changed files
   after each LLM turn, but remain pending and do not execute until the session
   phase becomes `review`. Calling ReadyForReview records the session phase as
@@ -170,7 +170,7 @@ apt-get update && apt-get install -y postgresql-client
 # pattern: "*.go"
 # ignore: "*_templ.go"
 #---
-gofmt -l $DISCOBOT_CHANGED_FILES
+gofmt -l $DISCBOEING_CHANGED_FILES
 ```
 
 ```bash
@@ -181,7 +181,7 @@ gofmt -l $DISCOBOT_CHANGED_FILES
 # pattern: "*.{ts,tsx}"
 # notify_llm: false
 #---
-npx eslint --fix $DISCOBOT_CHANGED_FILES
+npx eslint --fix $DISCBOEING_CHANGED_FILES
 ```
 
 ```markdown
@@ -205,15 +205,15 @@ Review changed Go files for correctness, missing tests, and maintainability.
 pnpm run ci
 ```
 
-## .discobot/services/
+## .discboeing/services/
 
 Background processes with optional HTTP proxying.
 
 ### Executable services
 
-Executable scripts that Discobot starts/stops as child processes.
+Executable scripts that Discboeing starts/stops as child processes.
 Requirements: executable bit, shebang line, script body.
-Output is stored at `~/.discobot/services/{service-id}/output.log` as JSONL (max 1MB, auto-truncated).
+Output is stored at `~/.discboeing/services/{service-id}/output.log` as JSONL (max 1MB, auto-truncated).
 
 Fields: name, description, order (lower numbers appear first in the UI), http (port number), https (port number), path (URL path for preview)
 

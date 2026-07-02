@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
 )
 
 func TestBuiltinTools_AllDefined(t *testing.T) {
@@ -323,20 +323,20 @@ func TestAdaptToolsForRuntime_WindowsAppliesEmbeddedOverride(t *testing.T) {
 	}
 }
 
-func TestAdaptToolsForRuntime_AppendsBashSudoGuidanceWithDiscobotSudo(t *testing.T) {
-	oldStatDiscobotRealSudo := statDiscobotRealSudo
-	t.Cleanup(func() { statDiscobotRealSudo = oldStatDiscobotRealSudo })
+func TestAdaptToolsForRuntime_AppendsBashSudoGuidanceWithDiscboeingSudo(t *testing.T) {
+	oldStatDiscboeingRealSudo := statDiscboeingRealSudo
+	t.Cleanup(func() { statDiscboeingRealSudo = oldStatDiscboeingRealSudo })
 
-	statDiscobotRealSudo = func() bool { return false }
+	statDiscboeingRealSudo = func() bool { return false }
 	tools := AdaptToolsForRuntime("linux", []providers.ToolDefinition{findTool(t, "Bash")})
 	if strings.Contains(tools[0].Description, sudoGuidance) {
-		t.Fatalf("did not expect sudo guidance without %s", discobotRealSudoPath)
+		t.Fatalf("did not expect sudo guidance without %s", discboeingRealSudoPath)
 	}
 
-	statDiscobotRealSudo = func() bool { return true }
+	statDiscboeingRealSudo = func() bool { return true }
 	tools = AdaptToolsForRuntime("linux", []providers.ToolDefinition{findTool(t, "Bash")})
 	if !strings.Contains(tools[0].Description, sudoGuidance) {
-		t.Fatalf("expected sudo guidance with %s", discobotRealSudoPath)
+		t.Fatalf("expected sudo guidance with %s", discboeingRealSudoPath)
 	}
 }
 

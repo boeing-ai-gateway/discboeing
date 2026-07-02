@@ -4,5 +4,5 @@ package wsl
 
 import _ "embed"
 
-//go:embed assets/discobot-wsl-startup.ps1
+//go:embed assets/discboeing-wsl-startup.ps1
 var embeddedWSLStartupScript []byte

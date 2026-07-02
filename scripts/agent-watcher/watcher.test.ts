@@ -195,7 +195,7 @@ describe("resolveCommandInvocation", () => {
 				"C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe",
 				["build", "."],
 				"win32",
-				{ DISCOBOT_DOCKER_WSL_DISTRO: "Ubuntu-24.04" },
+				{ DISCBOEING_DOCKER_WSL_DISTRO: "Ubuntu-24.04" },
 			),
 			{
 				command: "wsl.exe",
@@ -207,7 +207,7 @@ describe("resolveCommandInvocation", () => {
 	it("does not wrap non-docker commands", () => {
 		assert.deepEqual(
 			resolveCommandInvocation("pnpm", ["dev"], "win32", {
-				DISCOBOT_DOCKER_WSL_DISTRO: "Ubuntu-24.04",
+				DISCBOEING_DOCKER_WSL_DISTRO: "Ubuntu-24.04",
 			}),
 			{
 				command: "pnpm",
@@ -220,23 +220,23 @@ describe("resolveCommandInvocation", () => {
 describe("imageRepositoryFromRef", () => {
 	it("strips tags while preserving registry ports", () => {
 		assert.equal(
-			imageRepositoryFromRef("ghcr.io/obot-platform/discobot:abc123"),
-			"ghcr.io/obot-platform/discobot",
+			imageRepositoryFromRef("ghcr.io/boeing-ai-gateway/discboeing:abc123"),
+			"ghcr.io/boeing-ai-gateway/discboeing",
 		);
 		assert.equal(
-			imageRepositoryFromRef("localhost:5000/discobot:abc123"),
-			"localhost:5000/discobot",
+			imageRepositoryFromRef("localhost:5000/discboeing:abc123"),
+			"localhost:5000/discboeing",
 		);
 		assert.equal(
-			imageRepositoryFromRef("localhost:5000/discobot"),
-			"localhost:5000/discobot",
+			imageRepositoryFromRef("localhost:5000/discboeing"),
+			"localhost:5000/discboeing",
 		);
 	});
 
 	it("strips digests", () => {
 		assert.equal(
-			imageRepositoryFromRef("ghcr.io/obot-platform/discobot@sha256:abc"),
-			"ghcr.io/obot-platform/discobot",
+			imageRepositoryFromRef("ghcr.io/boeing-ai-gateway/discboeing@sha256:abc"),
+			"ghcr.io/boeing-ai-gateway/discboeing",
 		);
 	});
 });
@@ -319,14 +319,14 @@ describe("updateEnvFile", () => {
 		const result = await updateEnvFile(
 			envPath,
 			"new-local",
-			"ghcr.io/example/discobot:abc123",
+			"ghcr.io/example/discboeing:abc123",
 		);
 		assert.equal(result, true);
 
 		const content = await readFile(envPath, "utf-8");
 		assert.ok(content.includes("SANDBOX_IMAGE=new-local"));
 		assert.ok(
-			content.includes("SANDBOX_IMAGE_REMOTE=ghcr.io/example/discobot:abc123"),
+			content.includes("SANDBOX_IMAGE_REMOTE=ghcr.io/example/discboeing:abc123"),
 		);
 		assert.ok(!content.includes("old-remote"));
 	});
@@ -434,14 +434,14 @@ describe("AgentWatcher", () => {
 			assert.equal(calls[2].command, "docker");
 			assert.equal(calls[2].args[0], "tag");
 			assert.equal(calls[2].args[1], "my-image:dev");
-			// args[2] is the local tag: discobot-local/my-image:<shortId>
+			// args[2] is the local tag: discboeing-local/my-image:<shortId>
 			assert.ok(
-				calls[2].args[2].startsWith("discobot-local/my-image:"),
+				calls[2].args[2].startsWith("discboeing-local/my-image:"),
 				"Should create local tag with image ID",
 			);
 			// Result should be the local tag reference
 			assert.ok(
-				result?.localImageRef.startsWith("discobot-local/my-image:"),
+				result?.localImageRef.startsWith("discboeing-local/my-image:"),
 				"Should return local tag reference",
 			);
 		});
@@ -467,7 +467,7 @@ describe("AgentWatcher", () => {
 				envFilePath: envPath,
 				imageName: "my-image",
 				imageTag: "dev",
-				remoteImageRepository: "ghcr.io/example/discobot",
+				remoteImageRepository: "ghcr.io/example/discboeing",
 				dockerCommand: "docker",
 				debounceMs: 100,
 				runCommand: mockRunner,
@@ -479,15 +479,15 @@ describe("AgentWatcher", () => {
 			assert.equal(calls.length, 5);
 			assert.deepEqual(calls[3].args, [
 				"tag",
-				"discobot-local/my-image:abcdef12",
-				"ghcr.io/example/discobot:abcdef12",
+				"discboeing-local/my-image:abcdef12",
+				"ghcr.io/example/discboeing:abcdef12",
 			]);
 			assert.deepEqual(calls[4].args, [
 				"push",
-				"ghcr.io/example/discobot:abcdef12",
+				"ghcr.io/example/discboeing:abcdef12",
 			]);
-			assert.equal(result?.localImageRef, "discobot-local/my-image:abcdef12");
-			assert.equal(result?.remoteImageRef, "ghcr.io/example/discobot:abcdef12");
+			assert.equal(result?.localImageRef, "discboeing-local/my-image:abcdef12");
+			assert.equal(result?.remoteImageRef, "ghcr.io/example/discboeing:abcdef12");
 		});
 
 		it("doBuild updates SANDBOX_IMAGE_REMOTE after a remote push", async () => {
@@ -508,7 +508,7 @@ describe("AgentWatcher", () => {
 				envFilePath: envPath,
 				imageName: "test-image",
 				imageTag: "v1",
-				remoteImageRepository: "ghcr.io/example/discobot",
+				remoteImageRepository: "ghcr.io/example/discboeing",
 				dockerCommand: "docker",
 				debounceMs: 100,
 				runCommand: mockRunner,
@@ -519,11 +519,11 @@ describe("AgentWatcher", () => {
 
 			const envContent = await readFile(envPath, "utf-8");
 			assert.ok(
-				envContent.includes("SANDBOX_IMAGE=discobot-local/test-image:abc12345"),
+				envContent.includes("SANDBOX_IMAGE=discboeing-local/test-image:abc12345"),
 			);
 			assert.ok(
 				envContent.includes(
-					"SANDBOX_IMAGE_REMOTE=ghcr.io/example/discobot:abc12345",
+					"SANDBOX_IMAGE_REMOTE=ghcr.io/example/discboeing:abc12345",
 				),
 			);
 		});
@@ -677,7 +677,7 @@ describe("AgentWatcher", () => {
 			// Should return timestamped local tag
 			assert.ok(
 				(completedImageRef as string | null)?.startsWith(
-					"discobot-local/test-image:",
+					"discboeing-local/test-image:",
 				),
 				"Should return timestamped tag reference",
 			);
@@ -685,7 +685,7 @@ describe("AgentWatcher", () => {
 			// Check env file was updated with the timestamped tag
 			const envContent = await readFile(envPath, "utf-8");
 			assert.ok(
-				envContent.includes("SANDBOX_IMAGE=discobot-local/test-image:"),
+				envContent.includes("SANDBOX_IMAGE=discboeing-local/test-image:"),
 			);
 		});
 
@@ -1004,7 +1004,7 @@ LABEL org.opencontainers.image.title="agent-watcher-test"
 		assert.equal(buildSuccess, true, "Build should succeed");
 		assert.ok(
 			(imageRef as string | null)?.startsWith(
-				"discobot-local/agent-watcher-test:",
+				"discboeing-local/agent-watcher-test:",
 			),
 			`Should return timestamped local tag, got: ${imageRef}`,
 		);
@@ -1012,7 +1012,7 @@ LABEL org.opencontainers.image.title="agent-watcher-test"
 		// Verify env file was updated with the timestamped tag
 		const envContent = await readFile(envPath, "utf-8");
 		assert.ok(
-			envContent.includes("SANDBOX_IMAGE=discobot-local/agent-watcher-test:"),
+			envContent.includes("SANDBOX_IMAGE=discboeing-local/agent-watcher-test:"),
 			"Env file should contain timestamped local tag",
 		);
 

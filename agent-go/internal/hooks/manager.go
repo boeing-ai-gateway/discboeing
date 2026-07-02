@@ -19,14 +19,14 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/promptqueue"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
-	"github.com/obot-platform/discobot/agent-go/tools"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/promptqueue"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/tools"
 )
 
 const (
@@ -411,7 +411,7 @@ func (m *Manager) loadHooks() error {
 	return nil
 }
 
-// RunSessionHooks runs startup hooks discovered from .discobot/hooks and
+// RunSessionHooks runs startup hooks discovered from .discboeing/hooks and
 // returns a wait function for any background hooks. Blocking hooks gate
 // configure-time startup; non-blocking hooks continue in the background after
 // the runtime becomes ready.
@@ -912,7 +912,7 @@ func aiHookContextFilePath(threadID, hookID string, at time.Time) string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(
 		home,
-		".discobot",
+		".discboeing",
 		"threads",
 		threadID,
 		"ai-hooks",
@@ -1258,7 +1258,7 @@ func hookFailurePromptRequest(result FileHookEvalResult) agent.PromptRequest {
 				return nil
 			}
 			data, err := json.Marshal(map[string]any{
-				"discobot": result.HookFailure,
+				"discboeing": result.HookFailure,
 			})
 			if err != nil {
 				return nil

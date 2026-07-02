@@ -4,7 +4,7 @@ import "context"
 
 const (
 	TokenCategory = "sudo"
-	TokenEnvVar   = "DISCOBOT_SUDO_TOKEN"
+	TokenEnvVar   = "DISCBOEING_SUDO_TOKEN"
 	Guidance      = "Please use AskUserQuestion or RequestUserCredential to ask for permission to run `sudo`."
 )
 

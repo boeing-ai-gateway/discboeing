@@ -1,15 +1,15 @@
 # Proxy Integration
 
 The sandbox setup script prepares proxy configuration and environment before
-`discobot-proxy.service`, Docker, and `discobot-agent-api.service` start.
+`discboeing-proxy.service`, Docker, and `discboeing-agent-api.service` start.
 
 ## Startup Flow
 
-1. `discobot-sandbox-init.service` runs
-   `/opt/discobot/bin/discobot-sandbox-init setup`.
+1. `discboeing-sandbox-init.service` runs
+   `/opt/discboeing/bin/discboeing-sandbox-init setup`.
 2. The script writes the built-in proxy config to `/.data/proxy/config.yaml`.
 3. The script runs `proxy init-certs` to create and trust the sandbox CA.
-4. The script writes `/run/discobot/proxy-env` and `/run/discobot/agent-env`.
+4. The script writes `/run/discboeing/proxy-env` and `/run/discboeing/agent-env`.
 5. The setup service notifies readiness and exits.
 6. Systemd starts the proxy, Docker, and agent API services according to unit
    ordering.

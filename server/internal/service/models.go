@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/providers"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/providers"
 )
 
 // Model represents a model available for selection (for API responses)

@@ -24,7 +24,7 @@ type OutputEvent struct {
 // outputDir returns the output directory for a service.
 func outputDir(serviceID string) string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".discobot", "services", serviceID)
+	return filepath.Join(home, ".discboeing", "services", serviceID)
 }
 
 // outputPath returns the path to a service's output file.

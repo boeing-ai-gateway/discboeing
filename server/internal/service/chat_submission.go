@@ -10,11 +10,11 @@ import (
 	"fmt"
 	"log"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox/sandboxapi"
-	"github.com/obot-platform/discobot/server/internal/store"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/sandboxapi"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 func (c *ChatService) SubmitPrompt(ctx context.Context, projectID, sessionID, threadID string, messages []serverapi.Message, requestModel, reasoning, serviceTier, runAfter string) (*model.PromptSubmission, *sandboxapi.ChatStartedResponse, error) {

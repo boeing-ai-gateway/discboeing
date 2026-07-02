@@ -33,7 +33,7 @@ type ToolApproval struct {
 	Reason   string `json:"reason,omitempty"`
 }
 
-// UIMessage is the JSON wire format Discobot exposes to the UI.
+// UIMessage is the JSON wire format Discboeing exposes to the UI.
 // Parts are marshaled via the UIPart interface.
 type UIMessage struct {
 	ID                  string          `json:"id"`
@@ -96,7 +96,7 @@ func (m *UIMessage) UnmarshalJSON(data []byte) error {
 }
 
 // ProjectUIMessages converts a slice of Messages (which may include "tool" role
-// messages) into Discobot's UI message format. Consecutive assistant/tool
+// messages) into Discboeing's UI message format. Consecutive assistant/tool
 // runs are merged into single assistant UI messages with DynamicToolParts.
 func ProjectUIMessages(messages []Message) ([]UIMessage, error) {
 	return projectUIMessages(messages, false)

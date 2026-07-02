@@ -13,8 +13,8 @@ import (
 	imageTypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/client"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 func TestIsLocalImage(t *testing.T) {
@@ -24,8 +24,8 @@ func TestIsLocalImage(t *testing.T) {
 		expected bool
 	}{
 		{
-			name:     "local image with discobot-local prefix",
-			image:    "discobot-local/agent-api:latest",
+			name:     "local image with discboeing-local prefix",
+			image:    "discboeing-local/agent-api:latest",
 			expected: true,
 		},
 		{
@@ -35,27 +35,27 @@ func TestIsLocalImage(t *testing.T) {
 		},
 		{
 			name:     "registry digest reference",
-			image:    "ghcr.io/obot-platform/discobot@sha256:abc123def456",
+			image:    "ghcr.io/boeing-ai-gateway/discboeing@sha256:abc123def456",
 			expected: false,
 		},
 		{
 			name:     "tag reference",
-			image:    "ghcr.io/obot-platform/discobot:v1.0.0",
+			image:    "ghcr.io/boeing-ai-gateway/discboeing:v1.0.0",
 			expected: false,
 		},
 		{
 			name:     "latest tag",
-			image:    "ghcr.io/obot-platform/discobot:latest",
+			image:    "ghcr.io/boeing-ai-gateway/discboeing:latest",
 			expected: false,
 		},
 		{
 			name:     "image without tag",
-			image:    "ghcr.io/obot-platform/discobot",
+			image:    "ghcr.io/boeing-ai-gateway/discboeing",
 			expected: false,
 		},
 		{
 			name:     "local image without registry",
-			image:    "discobot:local",
+			image:    "discboeing:local",
 			expected: false,
 		},
 	}
@@ -107,13 +107,13 @@ func TestWrapCommandWithSessionEnvWithoutOverrides(t *testing.T) {
 }
 
 func TestInspectionContainerConfig(t *testing.T) {
-	containerConfig, hostConfig := inspectionContainerConfig("ghcr.io/obot-platform/discobot:test")
+	containerConfig, hostConfig := inspectionContainerConfig("ghcr.io/boeing-ai-gateway/discboeing:test")
 
-	if containerConfig.Image != "ghcr.io/obot-platform/discobot:test" {
+	if containerConfig.Image != "ghcr.io/boeing-ai-gateway/discboeing:test" {
 		t.Fatalf("image = %q", containerConfig.Image)
 	}
-	if got := containerConfig.Labels["discobot.host.inspect"]; got != "true" {
-		t.Fatalf("discobot.host.inspect label = %q, want true", got)
+	if got := containerConfig.Labels["discboeing.host.inspect"]; got != "true" {
+		t.Fatalf("discboeing.host.inspect label = %q, want true", got)
 	}
 	if got := strings.Join(containerConfig.Cmd, " "); !strings.Contains(got, "trap 'exit 0' TERM INT QUIT") {
 		t.Fatalf("inspection command missing signal trap: %q", got)
@@ -157,16 +157,16 @@ func TestInspectionContainerNeedsRecreate(t *testing.T) {
 			},
 		},
 		Config: &containerTypes.Config{
-			Image: "ghcr.io/obot-platform/discobot:test",
+			Image: "ghcr.io/boeing-ai-gateway/discboeing:test",
 		},
 	}
 
-	if inspectionContainerNeedsRecreate(existing, "ghcr.io/obot-platform/discobot:test") {
+	if inspectionContainerNeedsRecreate(existing, "ghcr.io/boeing-ai-gateway/discboeing:test") {
 		t.Fatal("matching inspection container should not need recreate")
 	}
 
 	existing.HostConfig.PidMode = ""
-	if !inspectionContainerNeedsRecreate(existing, "ghcr.io/obot-platform/discobot:test") {
+	if !inspectionContainerNeedsRecreate(existing, "ghcr.io/boeing-ai-gateway/discboeing:test") {
 		t.Fatal("missing host pid mode should require recreate")
 	}
 }
@@ -218,11 +218,11 @@ func TestProviderWorkspaceMountSourceResolverOption(t *testing.T) {
 		return "translated:" + source, nil
 	})(provider)
 
-	got, err := provider.resolveWorkspaceMountSource(`E:\src\discobot`)
+	got, err := provider.resolveWorkspaceMountSource(`E:\src\discboeing`)
 	if err != nil {
 		t.Fatalf("resolveWorkspaceMountSource error = %v", err)
 	}
-	if got != `translated:E:\src\discobot` {
+	if got != `translated:E:\src\discboeing` {
 		t.Fatalf("resolveWorkspaceMountSource = %q", got)
 	}
 }
@@ -279,7 +279,7 @@ func TestPullSandboxImage_SkipsDigestReferences(t *testing.T) {
 	}{
 		{
 			name:    "local image that doesn't exist should error",
-			image:   "discobot-local/nonexistent:latest",
+			image:   "discboeing-local/nonexistent:latest",
 			wantErr: true, // Cannot pull local images from registry
 		},
 	}
@@ -355,13 +355,13 @@ func TestCleanupOldSandboxImages_ListsLabeledImages(t *testing.T) {
 	}
 
 	// Test that we can list images with the label
-	t.Run("lists images with discobot label", func(t *testing.T) {
+	t.Run("lists images with discboeing label", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		images, err := cli.ImageList(ctx, imageTypes.ListOptions{
 			Filters: filters.NewArgs(
-				filters.Arg("label", "io.discobot.sandbox-image=true"),
+				filters.Arg("label", "io.discboeing.sandbox-image=true"),
 			),
 		})
 		if err != nil {
@@ -370,7 +370,7 @@ func TestCleanupOldSandboxImages_ListsLabeledImages(t *testing.T) {
 
 		// We expect 0 or more images with this label
 		// This test just verifies the query works
-		t.Logf("Found %d images with discobot label", len(images))
+		t.Logf("Found %d images with discboeing label", len(images))
 	})
 }
 
@@ -382,8 +382,8 @@ func TestPullSandboxImage_Logging(t *testing.T) {
 		isLocal bool
 	}{
 		{
-			name:    "local image with discobot-local prefix",
-			image:   "discobot-local/agent-api:latest",
+			name:    "local image with discboeing-local prefix",
+			image:   "discboeing-local/agent-api:latest",
 			isLocal: true,
 		},
 		{
@@ -415,11 +415,11 @@ func TestPullSandboxImage_Logging(t *testing.T) {
 
 // Test helper: verify label format
 func TestLabelFormat(t *testing.T) {
-	expectedLabel := "io.discobot.sandbox-image=true"
+	expectedLabel := "io.discboeing.sandbox-image=true"
 
 	// Verify the label is properly formatted
-	if !strings.Contains(expectedLabel, "io.discobot") {
-		t.Error("Label should use io.discobot namespace")
+	if !strings.Contains(expectedLabel, "io.discboeing") {
+		t.Error("Label should use io.discboeing namespace")
 	}
 
 	if !strings.Contains(expectedLabel, "sandbox-image") {
@@ -437,7 +437,7 @@ func TestTranslateDockerEvent_DieWithNonZeroExitCodeIsStopped(t *testing.T) {
 		Action: "die",
 		Actor: events.Actor{
 			Attributes: map[string]string{
-				"discobot.session.id": "session-123",
+				"discboeing.session.id": "session-123",
 				"exitCode":            "42",
 			},
 		},
@@ -480,10 +480,10 @@ func TestApplyContainerState_NonZeroExitCodeIsStopped(t *testing.T) {
 // Benchmark local image detection
 func BenchmarkIsLocalImage(b *testing.B) {
 	images := []string{
-		"discobot-local/agent-api:latest",
+		"discboeing-local/agent-api:latest",
 		"sha256:abc123def456",
-		"ghcr.io/obot-platform/discobot@sha256:abc123def456",
-		"ghcr.io/obot-platform/discobot:v1.0.0",
+		"ghcr.io/boeing-ai-gateway/discboeing@sha256:abc123def456",
+		"ghcr.io/boeing-ai-gateway/discboeing:v1.0.0",
 		"ubuntu:latest",
 	}
 

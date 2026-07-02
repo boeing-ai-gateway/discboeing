@@ -15,12 +15,12 @@ import (
 	"github.com/ulikunitz/xz"
 	"github.com/ulikunitz/xz/lzma"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/vm"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/vm"
 )
 
 const (
 	vzKernelArtifact   = "vmlinuz"
-	vzBaseDiskArtifact = "discobot-rootfs.squashfs"
+	vzBaseDiskArtifact = "discboeing-rootfs.squashfs"
 )
 
 func newImageDownloader(imageRef string, dataDir string) *vm.ImageDownloader {

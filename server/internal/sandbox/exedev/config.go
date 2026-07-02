@@ -4,15 +4,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 const containerPort = 3002
 const defaultEndpoint = "https://exe.dev/exec"
 const defaultVMHostSuffix = "exe.xyz"
-const defaultVMNamePrefix = "discobot"
+const defaultVMNamePrefix = "discboeing"
 const defaultStopCommand = "ssh ${name} sudo shutdown -h now"
-const defaultSandboxImage = "ghcr.io/obot-platform/discobot:main"
+const defaultSandboxImage = "ghcr.io/boeing-ai-gateway/discboeing:main"
 const stopCommandNamePlaceholder = "${name}"
 
 type Config struct {
@@ -50,10 +50,10 @@ func Definition() sandbox.ProviderDefinition {
 		Icon:        "https://exe.dev/static/exy.png",
 		Description: "exe.dev VM sandbox driver",
 		ConfigFields: []sandbox.ProviderConfigField{
-			{Key: "endpoint", Label: "Command endpoint", Type: "text", Placeholder: defaultEndpoint, Description: "HTTPS endpoint used by Discobot to issue exe.dev commands.", Advanced: true},
+			{Key: "endpoint", Label: "Command endpoint", Type: "text", Placeholder: defaultEndpoint, Description: "HTTPS endpoint used by Discboeing to issue exe.dev commands.", Advanced: true},
 			{Key: "credentialId", Label: "API credential", Type: "credential", Description: "Credential containing the exe.dev API token.", Required: true, CredentialProvider: "exedev", CredentialAuthType: "api_key"},
 			{Key: "vmHostSuffix", Label: "VM host suffix", Type: "text", Placeholder: defaultVMHostSuffix, Description: "DNS suffix used to reach created VMs.", Advanced: true},
-			{Key: "vmNamePrefix", Label: "VM name prefix", Type: "text", Placeholder: defaultVMNamePrefix, Description: "Prefix for VMs created by Discobot.", Advanced: true},
+			{Key: "vmNamePrefix", Label: "VM name prefix", Type: "text", Placeholder: defaultVMNamePrefix, Description: "Prefix for VMs created by Discboeing.", Advanced: true},
 			{Key: "stopCommand", Label: "Stop command", Type: "textarea", Placeholder: defaultStopCommand, Description: "Optional command template used when stopping a VM. ${name} is replaced with the quoted VM name.", Advanced: true},
 			{Key: "sandboxImage", Label: "Sandbox image", Type: "text", Placeholder: defaultSandboxImage, Description: "Optional sandbox image override for this provider instance. Leave blank to use the remote sandbox image setting.", Advanced: true},
 		},

@@ -530,7 +530,7 @@
 	{@const partGroups = getAssistantMessagePartGroups(message, {
 		isMessageComplete: status === "ready",
 	})}
-	{@const turnId = message.metadata?.discobot?.turnId ?? message.id}
+	{@const turnId = message.metadata?.discboeing?.turnId ?? message.id}
 	<disco-message
 		id={message.id}
 		from={message.role}

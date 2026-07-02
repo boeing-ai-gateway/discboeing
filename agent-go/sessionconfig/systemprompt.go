@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	fmparser "github.com/obot-platform/discobot/agent-go/frontmatter"
+	fmparser "github.com/boeing-ai-gateway/discboeing/agent-go/frontmatter"
 )
 
 type CredentialReminderUse struct {
@@ -110,7 +110,7 @@ func defaultSystemConfig() (systemConfig, error) {
 }
 
 func loadSystemConfig(projectRoot string) (systemConfig, error) {
-	overridePath := filepath.Join(projectRoot, ".discobot", "SYSTEM.md")
+	overridePath := filepath.Join(projectRoot, ".discboeing", "SYSTEM.md")
 	data, err := os.ReadFile(overridePath)
 	if err == nil {
 		return parseSystemConfig(string(data), overridePath)

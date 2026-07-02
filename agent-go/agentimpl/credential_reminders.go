@@ -3,9 +3,9 @@ package agentimpl
 import (
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func (a *DefaultAgent) buildCredentialChangeReminder(

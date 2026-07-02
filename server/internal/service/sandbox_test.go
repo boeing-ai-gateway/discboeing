@@ -19,12 +19,12 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/sandbox"
-	"github.com/obot-platform/discobot/server/internal/sandbox/mock"
-	"github.com/obot-platform/discobot/server/internal/store"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/mock"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/store"
 )
 
 // Use the config constant for test consistency
@@ -407,41 +407,41 @@ func TestSandboxUsesExpectedImage(t *testing.T) {
 		{
 			name: "matches by image id",
 			sb: &sandbox.Sandbox{
-				Image: "ghcr.io/obot-platform/discobot:alpha86",
+				Image: "ghcr.io/boeing-ai-gateway/discboeing:alpha86",
 				Metadata: map[string]string{
 					sandbox.MetadataImageID: "sha256:match",
 				},
 			},
-			expectedImage:   "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImage:   "ghcr.io/boeing-ai-gateway/discboeing:alpha90",
 			expectedImageID: "sha256:match",
 			want:            true,
 		},
 		{
 			name: "mismatches by image id",
 			sb: &sandbox.Sandbox{
-				Image: "ghcr.io/obot-platform/discobot:alpha86",
+				Image: "ghcr.io/boeing-ai-gateway/discboeing:alpha86",
 				Metadata: map[string]string{
 					sandbox.MetadataImageID: "sha256:old",
 				},
 			},
-			expectedImage:   "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImage:   "ghcr.io/boeing-ai-gateway/discboeing:alpha90",
 			expectedImageID: "sha256:new",
 			want:            false,
 		},
 		{
 			name: "falls back to image reference when metadata missing",
 			sb: &sandbox.Sandbox{
-				Image:    "ghcr.io/obot-platform/discobot:alpha90",
+				Image:    "ghcr.io/boeing-ai-gateway/discboeing:alpha90",
 				Metadata: map[string]string{},
 			},
-			expectedImage:   "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImage:   "ghcr.io/boeing-ai-gateway/discboeing:alpha90",
 			expectedImageID: "sha256:new",
 			want:            true,
 		},
 		{
 			name:          "nil sandbox never matches",
 			sb:            nil,
-			expectedImage: "ghcr.io/obot-platform/discobot:alpha90",
+			expectedImage: "ghcr.io/boeing-ai-gateway/discboeing:alpha90",
 			want:          false,
 		},
 	}
@@ -876,7 +876,7 @@ func TestSessionService_Initialize_ConfiguresRunningBootstrapSandbox(t *testing.
 }
 
 func TestReconcileSandboxes_UsesImageIDAndRunsCleanup(t *testing.T) {
-	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
+	provider := newImageIDAwareReconcileProvider("ghcr.io/boeing-ai-gateway/discboeing:latest", "sha256:new")
 	testStore := setupTestStore(t)
 	cfg := &config.Config{EncryptionKey: testEncryptionKey}
 	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
@@ -921,7 +921,7 @@ func TestReconcileSandboxes_UsesImageIDAndRunsCleanup(t *testing.T) {
 }
 
 func TestReconcileSandboxes_RemovesStoppedOutdatedSandboxWithoutRestart(t *testing.T) {
-	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
+	provider := newImageIDAwareReconcileProvider("ghcr.io/boeing-ai-gateway/discboeing:latest", "sha256:new")
 	testStore := setupTestStore(t)
 	cfg := &config.Config{EncryptionKey: testEncryptionKey}
 	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)
@@ -962,7 +962,7 @@ func TestReconcileSandboxes_RemovesStoppedOutdatedSandboxWithoutRestart(t *testi
 }
 
 func TestReconcileSandboxes_MarksUpgradeCreateFailureRetryable(t *testing.T) {
-	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
+	provider := newImageIDAwareReconcileProvider("ghcr.io/boeing-ai-gateway/discboeing:latest", "sha256:new")
 	provider.createErr = errors.New("no such image")
 	testStore := setupTestStore(t)
 	cfg := &config.Config{EncryptionKey: testEncryptionKey}
@@ -1004,7 +1004,7 @@ func TestReconcileSandboxes_MarksUpgradeCreateFailureRetryable(t *testing.T) {
 }
 
 func TestReconcileSandboxes_PreservesRetainedDeletedSessionSandboxes(t *testing.T) {
-	provider := newImageIDAwareReconcileProvider("ghcr.io/obot-platform/discobot:latest", "sha256:new")
+	provider := newImageIDAwareReconcileProvider("ghcr.io/boeing-ai-gateway/discboeing:latest", "sha256:new")
 	testStore := setupTestStore(t)
 	cfg := &config.Config{EncryptionKey: testEncryptionKey}
 	svc := NewSandboxService(testStore, provider, cfg, nil, nil, nil, nil)

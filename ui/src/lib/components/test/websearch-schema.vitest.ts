@@ -9,14 +9,14 @@ import {
 test("validateWebSearchInput accepts provider open_page actions", () => {
 	const result = validateWebSearchInput({
 		type: "open_page",
-		url: "https://github.com/obot-platform/discobot",
+		url: "https://github.com/boeing-ai-gateway/discboeing",
 	});
 
 	assert.equal(result.success, true);
 	assert.ok(result.data);
 	const data = result.data;
 	assert.equal(data.type, "open_page");
-	assert.equal(data.url, "https://github.com/obot-platform/discobot");
+	assert.equal(data.url, "https://github.com/boeing-ai-gateway/discboeing");
 });
 
 test("validateWebSearchOutput preserves provider web search action", () => {
@@ -25,7 +25,7 @@ test("validateWebSearchOutput preserves provider web search action", () => {
 		status: "completed",
 		action: {
 			type: "open_page",
-			url: "https://github.com/obot-platform/discobot",
+			url: "https://github.com/boeing-ai-gateway/discboeing",
 		},
 	});
 
@@ -39,5 +39,5 @@ test("validateWebSearchOutput preserves provider web search action", () => {
 	assert.equal(data.type, "web_search_call");
 	assert.equal(data.status, "completed");
 	assert.equal(data.action?.type, "open_page");
-	assert.equal(data.action?.url, "https://github.com/obot-platform/discobot");
+	assert.equal(data.action?.url, "https://github.com/boeing-ai-gateway/discboeing");
 });

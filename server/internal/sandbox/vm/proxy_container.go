@@ -7,7 +7,7 @@ import (
 
 	containerTypes "github.com/docker/docker/api/types/container"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox/docker"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox/docker"
 )
 
 // StartProxyContainer returns a post-VM setup hook that creates and starts the
@@ -26,7 +26,7 @@ func startProxyContainer(ctx context.Context, projectID string, dockerProv *dock
 	if len(suffix) > 8 {
 		suffix = suffix[:8]
 	}
-	name := fmt.Sprintf("discobot-proxy-%s", suffix)
+	name := fmt.Sprintf("discboeing-proxy-%s", suffix)
 
 	existing, err := cli.ContainerInspect(ctx, name)
 	if err == nil {
@@ -48,10 +48,10 @@ func startProxyContainer(ctx context.Context, projectID string, dockerProv *dock
 
 	containerConfig := &containerTypes.Config{
 		Image: sandboxImage,
-		Cmd:   []string{"/opt/discobot/bin/discobot-vsock-port-proxy"},
+		Cmd:   []string{"/opt/discboeing/bin/discboeing-vsock-port-proxy"},
 		Labels: map[string]string{
-			"discobot.proxy":      "true",
-			"discobot.project.id": projectID,
+			"discboeing.proxy":      "true",
+			"discboeing.project.id": projectID,
 		},
 	}
 

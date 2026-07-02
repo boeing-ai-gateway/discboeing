@@ -96,13 +96,13 @@ func (l *outputLog) Close() error {
 func dataDir() string {
 	if runtime.GOOS == "windows" {
 		if dir, err := os.UserConfigDir(); err == nil && dir != "" {
-			return filepath.Join(dir, "Discobot", "processes")
+			return filepath.Join(dir, "Discboeing", "processes")
 		}
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".discobot", "processes")
+		return filepath.Join(home, ".discboeing", "processes")
 	}
-	return filepath.Join(os.TempDir(), "discobot-processes")
+	return filepath.Join(os.TempDir(), "discboeing-processes")
 }
 
 func nowEvent(eventType, data string) OutputEvent {

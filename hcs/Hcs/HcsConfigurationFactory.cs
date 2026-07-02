@@ -112,7 +112,7 @@ internal static class HcsConfigurationFactory
             var commandLine = options.KernelCommandLineOverride!;
             if (options.NetworkMode == NetworkMode.UserVsock)
             {
-                commandLine = Append(commandLine, BuildDiscobotKernelOption(options));
+                commandLine = Append(commandLine, BuildDiscboeingKernelOption(options));
             }
 
             return Append(commandLine, options.AppendKernelCommandLine);
@@ -141,16 +141,16 @@ internal static class HcsConfigurationFactory
 
         if (options.NetworkMode == NetworkMode.UserVsock)
         {
-            parts.Add(BuildDiscobotKernelOption(options));
+            parts.Add(BuildDiscboeingKernelOption(options));
         }
 
         return Append(string.Join(' ', parts), options.AppendKernelCommandLine);
     }
 
-    private static string BuildDiscobotKernelOption(CliOptions options)
+    private static string BuildDiscboeingKernelOption(CliOptions options)
     {
         return string.Join(',',
-            $"discobot=ip={options.UsernetIp}",
+            $"discboeing=ip={options.UsernetIp}",
             $"netmask={options.UsernetNetmask}",
             $"gateway={options.UsernetGateway}",
             $"dns={options.UsernetDns}");

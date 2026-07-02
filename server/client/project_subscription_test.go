@@ -12,7 +12,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
 )
 
 type projectSubscriptionTestServer struct {

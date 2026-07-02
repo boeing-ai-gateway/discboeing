@@ -16,9 +16,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
-	"github.com/obot-platform/discobot/agent-go/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/middleware"
 )
 
 const agentNotConfiguredCode = "AGENT_NOT_CONFIGURED"
@@ -36,8 +36,8 @@ type configureRequest struct {
 	HooksEnabled           *bool                `json:"hooksEnabled"`
 	SessionID              string               `json:"sessionId"`
 	MCPOAuthRedirectBase   string               `json:"mcpOAuthRedirectBase"`
-	DiscobotServerURL      string               `json:"discobotServerUrl"`
-	DiscobotProjectID      string               `json:"discobotProjectId"`
+	DiscboeingServerURL      string               `json:"discboeingServerUrl"`
+	DiscboeingProjectID      string               `json:"discboeingProjectId"`
 	EnableGitControlSocket bool                 `json:"enableGitControlSocket"`
 	Credentials            []credentials.EnvVar `json:"credentials,omitempty"`
 	GitUserName            string               `json:"gitUserName,omitempty"`
@@ -201,11 +201,11 @@ func applyConfigureRequest(base *config.Config, req configureRequest) *config.Co
 	if req.MCPOAuthRedirectBase != "" {
 		cfg.MCPOAuthRedirectBase = req.MCPOAuthRedirectBase
 	}
-	if req.DiscobotServerURL != "" {
-		cfg.DiscobotServerURL = req.DiscobotServerURL
+	if req.DiscboeingServerURL != "" {
+		cfg.DiscboeingServerURL = req.DiscboeingServerURL
 	}
-	if req.DiscobotProjectID != "" {
-		cfg.DiscobotProjectID = req.DiscobotProjectID
+	if req.DiscboeingProjectID != "" {
+		cfg.DiscboeingProjectID = req.DiscboeingProjectID
 	}
 	cfg.EnableGitControlSocket = req.EnableGitControlSocket
 	return &cfg

@@ -22,7 +22,7 @@ import {
 } from "../vz-watcher/watcher.js";
 
 const hcsArtifacts = [
-  "discobot-rootfs.vhd",
+  "discboeing-rootfs.vhd",
   "wsl-kernel",
   "kernel-version",
   "wsl-kernel-ref",
@@ -104,7 +104,7 @@ export class HcsWatcher {
         runCommand: this.runCommand,
         projectRoot: this.projectRoot,
         target: "hcs-image",
-        temporaryTagPrefix: "discobot-hcs-watcher-extract",
+        temporaryTagPrefix: "discboeing-hcs-watcher-extract",
         artifacts: hcsArtifacts.map((name) => ({
           source: `/${name}`,
           destination: join(this.outputDir, name),
@@ -165,7 +165,7 @@ export class HcsWatcher {
     const success = await updateEnvFile(this.envFilePath, {
       HCS_LAUNCHER_PATH: artifacts["HcsLinuxVmLauncher.exe"],
       HCS_KERNEL_PATH: artifacts["wsl-kernel"],
-      HCS_ROOT_DISK_PATH: artifacts["discobot-rootfs.vhd"],
+      HCS_ROOT_DISK_PATH: artifacts["discboeing-rootfs.vhd"],
     });
 
     if (success) {
@@ -173,7 +173,7 @@ export class HcsWatcher {
         `Updated ${this.envFilePath}:\n` +
           `  HCS_LAUNCHER_PATH=${artifacts["HcsLinuxVmLauncher.exe"]}\n` +
           `  HCS_KERNEL_PATH=${artifacts["wsl-kernel"]}\n` +
-          `  HCS_ROOT_DISK_PATH=${artifacts["discobot-rootfs.vhd"]}`,
+          `  HCS_ROOT_DISK_PATH=${artifacts["discboeing-rootfs.vhd"]}`,
       );
     } else {
       this.logger.error(`Failed to write ${this.envFilePath}`);

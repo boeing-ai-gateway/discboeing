@@ -10,14 +10,14 @@ if ([string]::IsNullOrWhiteSpace($ThreadID) -or $ExtraArgs.Count -ne 0) {
     exit 1
 }
 
-$dataDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCOBOT_DATA_DIR)) {
-    $env:DISCOBOT_DATA_DIR
+$dataDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCBOEING_DATA_DIR)) {
+    $env:DISCBOEING_DATA_DIR
 }
 else {
-    Join-Path $HOME ".discobot"
+    Join-Path $HOME ".discboeing"
 }
-$threadsDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCOBOT_THREADS_DIR)) {
-    $env:DISCOBOT_THREADS_DIR
+$threadsDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCBOEING_THREADS_DIR)) {
+    $env:DISCBOEING_THREADS_DIR
 }
 else {
     Join-Path $dataDir "threads"

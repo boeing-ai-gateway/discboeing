@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestDiscobotSessionEnvScriptLoadsValidEntries(t *testing.T) {
+func TestDiscboeingSessionEnvScriptLoadsValidEntries(t *testing.T) {
 	tempDir := t.TempDir()
 	agentEnv := filepath.Join(tempDir, "agent.env")
 	workspaceEnv := filepath.Join(tempDir, "workspace.env")
@@ -41,7 +41,7 @@ func TestDiscobotSessionEnvScriptLoadsValidEntries(t *testing.T) {
 	}
 }
 
-func TestDiscobotSessionEnvScriptIgnoresInvalidAndMaliciousLines(t *testing.T) {
+func TestDiscboeingSessionEnvScriptIgnoresInvalidAndMaliciousLines(t *testing.T) {
 	tempDir := t.TempDir()
 	agentEnv := filepath.Join(tempDir, "agent.env")
 	workspaceEnv := filepath.Join(tempDir, "workspace.env")
@@ -95,13 +95,13 @@ func runSessionEnvScript(t *testing.T, agentEnvPath, workspaceEnvPath string, ar
 	cmdArgs := append([]string{sessionEnvShellPath(t, sessionEnvScriptPath(t))}, args...)
 	cmd := exec.Command(sessionEnvShell(), cmdArgs...)
 	cmd.Env = append(os.Environ(),
-		"DISCOBOT_AGENT_ENV_FILE="+sessionEnvShellPath(t, agentEnvPath),
-		"DISCOBOT_WORKSPACE_ENV_FILE="+sessionEnvShellPath(t, workspaceEnvPath),
+		"DISCBOEING_AGENT_ENV_FILE="+sessionEnvShellPath(t, agentEnvPath),
+		"DISCBOEING_WORKSPACE_ENV_FILE="+sessionEnvShellPath(t, workspaceEnvPath),
 	)
 	if runtime.GOOS == "windows" {
 		cmd.Env = append(cmd.Env, "WSLENV="+appendWSLEnv(os.Getenv("WSLENV"),
-			"DISCOBOT_AGENT_ENV_FILE/u",
-			"DISCOBOT_WORKSPACE_ENV_FILE/u",
+			"DISCBOEING_AGENT_ENV_FILE/u",
+			"DISCBOEING_WORKSPACE_ENV_FILE/u",
 		))
 	}
 	var stdout bytes.Buffer
@@ -126,7 +126,7 @@ func sessionEnvScriptPath(t *testing.T) string {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../container-assets/discobot-session-env.sh"))
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../../container-assets/discboeing-session-env.sh"))
 }
 
 func sessionEnvShellPath(t *testing.T, filePath string) string {

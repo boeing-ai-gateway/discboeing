@@ -100,31 +100,31 @@ func TestGlob_DoubleStarMatchesRecursively(t *testing.T) {
 }
 
 // TestGlob_HiddenDirViaPattern verifies that a pattern explicitly rooted at a
-// hidden directory (e.g. ".discobot/**/*") finds files inside that directory.
+// hidden directory (e.g. ".discboeing/**/*") finds files inside that directory.
 // Regression: the walk was skipping all hidden directories unconditionally,
-// so ".discobot" was never descended into even when named explicitly in the pattern.
+// so ".discboeing" was never descended into even when named explicitly in the pattern.
 func TestGlob_HiddenDirViaPattern(t *testing.T) {
 	cwd := t.TempDir()
-	mkfile(t, cwd, ".discobot/hooks/01-setup.sh", "#!/bin/sh")
-	mkfile(t, cwd, ".discobot/services/ui.sh", "#!/bin/sh")
+	mkfile(t, cwd, ".discboeing/hooks/01-setup.sh", "#!/bin/sh")
+	mkfile(t, cwd, ".discboeing/services/ui.sh", "#!/bin/sh")
 	mkfile(t, cwd, "src/main.go", "package main")
 
 	e := New(cwd, t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Glob", map[string]any{
-		"pattern": ".discobot/**/*",
+		"pattern": ".discboeing/**/*",
 	})
 	if !ok {
 		t.Fatalf("unexpected error: %s", out)
 	}
 
 	if !strings.Contains(out, "hooks/01-setup.sh") {
-		t.Fatalf("expected .discobot/hooks/01-setup.sh in results, got: %q", out)
+		t.Fatalf("expected .discboeing/hooks/01-setup.sh in results, got: %q", out)
 	}
 	if !strings.Contains(out, "services/ui.sh") {
-		t.Fatalf("expected .discobot/services/ui.sh in results, got: %q", out)
+		t.Fatalf("expected .discboeing/services/ui.sh in results, got: %q", out)
 	}
 	if strings.Contains(out, "src/main.go") {
-		t.Fatalf("expected non-.discobot file to be excluded, got: %q", out)
+		t.Fatalf("expected non-.discboeing file to be excluded, got: %q", out)
 	}
 }
 
@@ -134,12 +134,12 @@ func TestGlob_HiddenDirViaPattern(t *testing.T) {
 // condition fired on the root entry and aborted the entire walk immediately.
 func TestGlob_HiddenDirViaPath(t *testing.T) {
 	cwd := t.TempDir()
-	mkfile(t, cwd, ".discobot/hooks/01-setup.sh", "#!/bin/sh")
-	mkfile(t, cwd, ".discobot/services/ui.sh", "#!/bin/sh")
+	mkfile(t, cwd, ".discboeing/hooks/01-setup.sh", "#!/bin/sh")
+	mkfile(t, cwd, ".discboeing/services/ui.sh", "#!/bin/sh")
 
 	e := New(cwd, t.TempDir(), t.Name())
 	out, ok := runTool(t, e, "Glob", map[string]any{
-		"path":    ".discobot",
+		"path":    ".discboeing",
 		"pattern": "**/*",
 	})
 	if !ok {

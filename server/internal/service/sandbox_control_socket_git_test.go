@@ -21,8 +21,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/obot-platform/discobot/controlsocket"
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/controlsocket"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 func TestGitHTTPBackendEnvRestrictsPushRef(t *testing.T) {
@@ -45,7 +45,7 @@ func TestGitHTTPBackendEnvRestrictsPushRef(t *testing.T) {
 		"REQUEST_METHOD":        "POST",
 		"PATH_INFO":             "/repo/git-receive-pack",
 		"QUERY_STRING":          "service=git-receive-pack",
-		"REMOTE_USER":           "discobot-agent",
+		"REMOTE_USER":           "discboeing-agent",
 		"CONTENT_TYPE":          "application/x-git-receive-pack-request",
 		"CONTENT_LENGTH":        "123",
 		"HTTP_CONTENT_ENCODING": "gzip",
@@ -56,7 +56,7 @@ func TestGitHTTPBackendEnvRestrictsPushRef(t *testing.T) {
 		"GIT_CONFIG_KEY_1":      "receive.hideRefs",
 		"GIT_CONFIG_VALUE_1":    "refs/",
 		"GIT_CONFIG_KEY_2":      "receive.hideRefs",
-		"GIT_CONFIG_VALUE_2":    "!refs/heads/discobot/session-123",
+		"GIT_CONFIG_VALUE_2":    "!refs/heads/discboeing/session-123",
 		"GIT_CONFIG_KEY_3":      "receive.denyDeletes",
 		"GIT_CONFIG_VALUE_3":    "true",
 		"GIT_CONFIG_KEY_4":      "receive.denyNonFastForwards",
@@ -78,7 +78,7 @@ func TestGitConfigEnvExposesOnlySessionRef(t *testing.T) {
 		t.Fatalf("git config --get-all receive.hideRefs: %v", err)
 	}
 	got := strings.Fields(string(out))
-	want := []string{"refs/", "!refs/heads/discobot/session-123"}
+	want := []string{"refs/", "!refs/heads/discboeing/session-123"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("receive.hideRefs = %q, want %q", got, want)
 	}
@@ -315,8 +315,8 @@ func initGitRepo(t *testing.T, dir string) string {
 		t.Fatal(err)
 	}
 	runControlSocketGit(t, dir, "init")
-	runControlSocketGit(t, dir, "config", "user.email", "discobot@example.com")
-	runControlSocketGit(t, dir, "config", "user.name", "Discobot Test")
+	runControlSocketGit(t, dir, "config", "user.email", "discboeing@example.com")
+	runControlSocketGit(t, dir, "config", "user.name", "Discboeing Test")
 	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hello\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

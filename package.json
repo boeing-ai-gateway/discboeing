@@ -1,5 +1,5 @@
 {
-  "name": "discobot",
+  "name": "discboeing",
   "version": "0.0.0-dev",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "dev:server": "node scripts/dev-server.mjs",
     "dev:runtime": "node scripts/dev-runtime.mjs",
     "dev:agent": "tsx --watch scripts/agent-watcher/index.ts",
-    "dev:db": "bash .discobot/services/db.sh",
+    "dev:db": "bash .discboeing/services/db.sh",
     "dev:vz": "tsx --watch scripts/vz-watcher/index.ts",
     "dev:wsl": "tsx --watch scripts/wsl-watcher/index.ts",
     "dev:hcs": "tsx --watch scripts/hcs-watcher/index.ts",
@@ -111,7 +111,7 @@
   },
   "main": ".electron-dist/main.js",
   "build": {
-    "appId": "com.obot.discobot",
+    "appId": "com.boeing.discboeing",
     "asar": true,
     "files": [
       ".electron-dist/**/*",
@@ -123,7 +123,7 @@
         "from": "electron/binaries",
         "to": "binaries",
         "filter": [
-          "discobot-server-*"
+          "discboeing-server-*"
         ]
       }
     ],
@@ -184,7 +184,7 @@
     "linux": {
       "category": "Development",
       "icon": "electron/assets/icons/icon.png",
-      "maintainer": "Obot Platform <support@obot.ai>",
+      "maintainer": "Boeing Platform <support@boeing.ai>",
       "target": [
         "AppImage",
         "deb",

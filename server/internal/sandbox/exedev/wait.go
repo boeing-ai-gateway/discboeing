@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 func (p *Provider) inspectVM(ctx context.Context, name string) (vmInfo, error) {
@@ -19,7 +19,7 @@ func (p *Provider) inspectVM(ctx context.Context, name string) (vmInfo, error) {
 }
 
 func (p *Provider) generateVMAPIKey(ctx context.Context, name, sessionID string) (string, error) {
-	label := "discobot-session-" + sessionID
+	label := "discboeing-session-" + sessionID
 	out, err := p.client.Exec(ctx, newCommand("ssh-key", "generate-api-key", "--vm="+name, "--label="+label).render())
 	if err != nil {
 		return "", err

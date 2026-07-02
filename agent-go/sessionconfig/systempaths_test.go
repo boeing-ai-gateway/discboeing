@@ -6,9 +6,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = nil
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = nil
 	code := m.Run()
-	discobotSystemRoots = originalRoots
+	discboeingSystemRoots = originalRoots
 	os.Exit(code)
 }

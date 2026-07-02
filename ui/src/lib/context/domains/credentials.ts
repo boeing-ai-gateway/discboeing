@@ -228,5 +228,5 @@ function notifyCredentialsChanged(): void {
 	if (typeof window === "undefined") {
 		return;
 	}
-	window.dispatchEvent(new CustomEvent("discobot:credentials-changed"));
+	window.dispatchEvent(new CustomEvent("discboeing:credentials-changed"));
 }

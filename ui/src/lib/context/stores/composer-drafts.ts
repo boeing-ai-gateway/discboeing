@@ -1,6 +1,6 @@
 import { readStorage, writeStorage } from "../../local-storage";
 
-const COMPOSER_DRAFT_STORAGE_PREFIX = "discobot:composer-draft:";
+const COMPOSER_DRAFT_STORAGE_PREFIX = "discboeing:composer-draft:";
 export const PENDING_COMPOSER_DRAFT_STORAGE_KEY = `${COMPOSER_DRAFT_STORAGE_PREFIX}pending`;
 
 export function resolveComposerDraftStorageKey({

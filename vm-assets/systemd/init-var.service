@@ -10,7 +10,7 @@ Before=shutdown.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-EnvironmentFile=-/etc/default/discobot-wsl
+EnvironmentFile=-/etc/default/discboeing-wsl
 ExecStart=/usr/local/bin/init-var.sh
 StandardOutput=journal+console
 StandardError=journal+console

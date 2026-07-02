@@ -7,6 +7,6 @@
     }
   ],
   "fallback": {
-    "text": "E2E mock LLM fallback response. Add a JSON fixture in agent-go/llm-responses or set DISCOBOT_E2E_MOCK_LLM_RESPONSES_DIR for test-specific mappings."
+    "text": "E2E mock LLM fallback response. Add a JSON fixture in agent-go/llm-responses or set DISCBOEING_E2E_MOCK_LLM_RESPONSES_DIR for test-specific mappings."
   }
 }

@@ -13,27 +13,27 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/agent"
-	"github.com/obot-platform/discobot/agent-go/agentimpl"
-	"github.com/obot-platform/discobot/agent-go/assets"
-	"github.com/obot-platform/discobot/agent-go/browser"
-	"github.com/obot-platform/discobot/agent-go/internal/config"
-	controlfeatures "github.com/obot-platform/discobot/agent-go/internal/controlfeatures"
-	controlsocket "github.com/obot-platform/discobot/agent-go/internal/controlsocket"
-	"github.com/obot-platform/discobot/agent-go/internal/credentials"
-	"github.com/obot-platform/discobot/agent-go/internal/handler"
-	"github.com/obot-platform/discobot/agent-go/internal/hooks"
-	"github.com/obot-platform/discobot/agent-go/internal/middleware"
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
-	"github.com/obot-platform/discobot/agent-go/internal/services"
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
-	"github.com/obot-platform/discobot/agent-go/message"
-	"github.com/obot-platform/discobot/agent-go/promptqueue"
-	"github.com/obot-platform/discobot/agent-go/providers"
-	"github.com/obot-platform/discobot/agent-go/sessionconfig"
-	"github.com/obot-platform/discobot/agent-go/thread"
-	"github.com/obot-platform/discobot/agent-go/tools"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agent"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/agentimpl"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/assets"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/browser"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
+	controlfeatures "github.com/boeing-ai-gateway/discboeing/agent-go/internal/controlfeatures"
+	controlsocket "github.com/boeing-ai-gateway/discboeing/agent-go/internal/controlsocket"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/credentials"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/handler"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/hooks"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/services"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/promptqueue"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/providers"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/sessionconfig"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/tools"
 )
 
 type runtimeInitialCredentials struct {
@@ -81,8 +81,8 @@ func buildRuntimeHandler(cfg *config.Config, initialCreds runtimeInitialCredenti
 // newAgentRuntime wires the runtime in dependency order. The small init methods
 // below keep the order readable without hiding the setup details.
 func newAgentRuntime(cfg *config.Config, initialCreds runtimeInitialCredentials) (*agentRuntime, error) {
-	if err := assets.InstallSystemScripts("/opt/discobot/scripts", cfg.WorkspaceSource); err != nil {
-		log.Printf("discobot-agent-api: warning: failed to install embedded system scripts: %v", err)
+	if err := assets.InstallSystemScripts("/opt/discboeing/scripts", cfg.WorkspaceSource); err != nil {
+		log.Printf("discboeing-agent-api: warning: failed to install embedded system scripts: %v", err)
 	}
 
 	runtime := &agentRuntime{cfg: cfg}
@@ -192,8 +192,8 @@ func (r *agentRuntime) initAgent() {
 	mcpConfig := agentimpl.NewMCPConfig(
 		r.cfg.MCPOAuthRedirectBase,
 		r.cfg.SessionID,
-		r.cfg.DiscobotServerURL,
-		r.cfg.DiscobotProjectID,
+		r.cfg.DiscboeingServerURL,
+		r.cfg.DiscboeingProjectID,
 	)
 	r.defaultAgent = agentimpl.NewDefaultAgent(
 		r.threadStore,
@@ -299,9 +299,9 @@ func (r *agentRuntime) bootstrapSudoEnvForHookWithToken(hook hooks.Hook, token s
 	}
 	return map[string]string{
 		sudoauth.TokenEnvVar:             token,
-		"DISCOBOT_SUDO_RUNTIME":          "bootstrap",
-		"DISCOBOT_SUDO_COMMAND":          hook.Path,
-		"DISCOBOT_SUDO_BOOTSTRAP_REASON": "startup hook " + hook.Name,
+		"DISCBOEING_SUDO_RUNTIME":          "bootstrap",
+		"DISCBOEING_SUDO_COMMAND":          hook.Path,
+		"DISCBOEING_SUDO_BOOTSTRAP_REASON": "startup hook " + hook.Name,
 	}
 }
 

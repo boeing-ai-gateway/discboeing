@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 func runApplyPatch(t *testing.T, e *Executor, patch string) (string, bool) {

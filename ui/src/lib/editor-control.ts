@@ -1,9 +1,9 @@
 import { api } from "$lib/api-client";
 import type { ResolvedTheme } from "$lib/theme";
 
-export const VSCODE_THEME_FILE_PATH = "~/.discobot/editor/.vscode-theme.json";
+export const VSCODE_THEME_FILE_PATH = "~/.discboeing/editor/.vscode-theme.json";
 export const VSCODE_CONTROL_FILE_PATH =
-	"~/.discobot/editor/.vscode-control.json";
+	"~/.discboeing/editor/.vscode-control.json";
 
 type VSCodeOpenFileCommand = {
 	id: string;

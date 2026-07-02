@@ -14,7 +14,7 @@ func TestLoad_EndToEnd(t *testing.T) {
 	writeFile(t, filepath.Join(root, "CLAUDE.md"), "Project instructions.")
 
 	// Create rules.
-	rulesDir := filepath.Join(root, ".discobot", "rules")
+	rulesDir := filepath.Join(root, ".discboeing", "rules")
 	mkdirAll(t, rulesDir)
 	writeFile(t, filepath.Join(rulesDir, "style.md"), "Use gofmt.")
 
@@ -41,7 +41,7 @@ func TestLoad_EndToEnd(t *testing.T) {
 	}
 
 	// Check system prompt is the default base prompt.
-	if !strings.Contains(cfg.SystemPrompt, "You are Discobot’s coding agent.") {
+	if !strings.Contains(cfg.SystemPrompt, "You are Discboeing’s coding agent.") {
 		t.Error("expected default system prompt")
 	}
 
@@ -113,7 +113,7 @@ func TestLoad_EmptyDirectory(t *testing.T) {
 	}
 
 	// System prompt should contain the default base prompt.
-	if !strings.Contains(cfg.SystemPrompt, "You are Discobot’s coding agent.") {
+	if !strings.Contains(cfg.SystemPrompt, "You are Discboeing’s coding agent.") {
 		t.Error("expected default system prompt")
 	}
 
@@ -141,8 +141,8 @@ func TestLoad_EmptyDirectory(t *testing.T) {
 func TestLoad_ProjectSystemOverride(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, ".git"))
-	mkdirAll(t, filepath.Join(root, ".discobot"))
-	writeFile(t, filepath.Join(root, ".discobot", "SYSTEM.md"), `---
+	mkdirAll(t, filepath.Join(root, ".discboeing"))
+	writeFile(t, filepath.Join(root, ".discboeing", "SYSTEM.md"), `---
 allowedTools:
   - Read
   - Glob

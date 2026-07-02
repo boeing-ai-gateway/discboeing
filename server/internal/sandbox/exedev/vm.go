@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 var nonDNSName = regexp.MustCompile(`[^a-z0-9-]+`)
@@ -45,13 +45,13 @@ func buildNewCommand(name, image, sessionID string, env map[string]string, opts 
 	for _, key := range keys {
 		cmd = cmd.append("--env", key+"="+env[key])
 	}
-	cmd = cmd.append("--tag=discobot,discobot-session-" + sessionID)
+	cmd = cmd.append("--tag=discboeing,discboeing-session-" + sessionID)
 	return cmd.render()
 }
 func vmName(prefix, sessionID string) string {
 	prefix = strings.Trim(nonDNSName.ReplaceAllString(strings.ToLower(prefix), "-"), "-")
 	if prefix == "" {
-		prefix = "discobot"
+		prefix = "discboeing"
 	}
 	name := strings.Trim(nonDNSName.ReplaceAllString(strings.ToLower(sessionID), "-"), "-")
 	if name == "" {
@@ -202,7 +202,7 @@ func tagsFromMap(m map[string]any) []string {
 
 func sessionIDFromTags(tags []string) string {
 	for _, tag := range tags {
-		if sessionID, ok := strings.CutPrefix(tag, "discobot-session-"); ok && sessionID != "" {
+		if sessionID, ok := strings.CutPrefix(tag, "discboeing-session-"); ok && sessionID != "" {
 			return sessionID
 		}
 	}

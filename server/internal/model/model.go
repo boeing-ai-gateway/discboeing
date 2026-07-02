@@ -321,7 +321,7 @@ func (s *SessionCommitLog) BeforeCreate(_ *gorm.DB) error {
 }
 
 // Message represents a chat message in a session.
-// Stored in Discobot UIMessage format.
+// Stored in Discboeing UIMessage format.
 type Message struct {
 	ID        string          `gorm:"primaryKey;type:text" json:"id"`
 	SessionID string          `gorm:"column:session_id;not null;type:text;index" json:"sessionId"`
@@ -520,7 +520,7 @@ func (e *TLSCacheEntry) BeforeCreate(_ *gorm.DB) error {
 }
 
 // OIDCClientRegistration stores a dynamically registered OIDC client for a
-// specific issuer and Discobot public base URL.
+// specific issuer and Discboeing public base URL.
 type OIDCClientRegistration struct {
 	ID                        string    `gorm:"primaryKey;type:text" json:"id"`
 	IssuerURL                 string    `gorm:"column:issuer_url;not null;type:text;uniqueIndex:idx_oidc_registration" json:"issuer_url"`
@@ -546,7 +546,7 @@ func (r *OIDCClientRegistration) BeforeCreate(_ *gorm.DB) error {
 	return nil
 }
 
-// Installation stores instance-wide Discobot installation metadata.
+// Installation stores instance-wide Discboeing installation metadata.
 type Installation struct {
 	ID             string    `gorm:"primaryKey;type:text" json:"id"`
 	InstallationID string    `gorm:"column:installation_id;not null;type:text;uniqueIndex" json:"installation_id"`

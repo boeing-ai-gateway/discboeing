@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"testing"
 
-	agentmessage "github.com/obot-platform/discobot/agent-go/message"
-	serverapi "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/jobs"
-	"github.com/obot-platform/discobot/server/internal/model"
+	agentmessage "github.com/boeing-ai-gateway/discboeing/agent-go/message"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/jobs"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 type recordingJobEnqueuer struct {

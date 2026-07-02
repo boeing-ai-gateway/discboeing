@@ -9,12 +9,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	api "github.com/obot-platform/discobot/server/api"
-	"github.com/obot-platform/discobot/server/internal/keyvalidator"
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/oauth"
-	"github.com/obot-platform/discobot/server/internal/providers"
-	"github.com/obot-platform/discobot/server/internal/service"
+	api "github.com/boeing-ai-gateway/discboeing/server/api"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/keyvalidator"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/oauth"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/providers"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 // GetCredentialTypes returns the credential choices used by the current UI.

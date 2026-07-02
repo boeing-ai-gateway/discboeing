@@ -3,10 +3,10 @@ set -eu
 
 mode="${1:-shell}"
 
-ln -sf /opt/discobot/bin/discobot-agent-api /opt/discobot/bin/disco
+ln -sf /opt/discboeing/bin/discboeing-agent-api /opt/discboeing/bin/disco
 
 mask_units="console-getty.service getty@.service serial-getty@.service"
-enable_units="tmp.mount discobot-sandbox-init.service discobot-proxy.service docker.socket discobot-nix-restore.service nix-daemon.socket discobot-agent-api.service discobot-vscode.socket"
+enable_units="tmp.mount discboeing-sandbox-init.service discboeing-proxy.service docker.socket discboeing-nix-restore.service nix-daemon.socket discboeing-agent-api.service discboeing-vscode.socket"
 
 case "${mode}" in
     shell)

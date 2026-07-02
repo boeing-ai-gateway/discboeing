@@ -156,11 +156,11 @@ Use the check fix skill.`)
 	}
 }
 
-func TestDiscoverSkills_DiscobotSkillsDir(t *testing.T) {
+func TestDiscoverSkills_DiscboeingSkillsDir(t *testing.T) {
 	root := t.TempDir()
-	skillsDir := filepath.Join(root, ".discobot", "skills", "deploy")
+	skillsDir := filepath.Join(root, ".discboeing", "skills", "deploy")
 	mkdirAll(t, skillsDir)
-	writeFile(t, filepath.Join(skillsDir, "SKILL.md"), "---\nname: deploy\ndescription: Deploy via discobot.\n---\nDeploy.")
+	writeFile(t, filepath.Join(skillsDir, "SKILL.md"), "---\nname: deploy\ndescription: Deploy via discboeing.\n---\nDeploy.")
 
 	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
@@ -172,22 +172,22 @@ func TestDiscoverSkills_DiscobotSkillsDir(t *testing.T) {
 	if skills[0].Name != "deploy" {
 		t.Errorf("name = %q, want deploy", skills[0].Name)
 	}
-	if skills[0].Description != "Deploy via discobot." {
+	if skills[0].Description != "Deploy via discboeing." {
 		t.Errorf("description = %q", skills[0].Description)
 	}
 }
 
-func TestDiscoverSkills_DiscobotTakesPriorityOverProviderFallback(t *testing.T) {
+func TestDiscoverSkills_DiscboeingTakesPriorityOverProviderFallback(t *testing.T) {
 	root := t.TempDir()
 
-	// Same skill in both .discobot and .claude — .discobot wins.
+	// Same skill in both .discboeing and .claude — .discboeing wins.
 	claudeDir := filepath.Join(root, ".claude", "skills", "deploy")
 	mkdirAll(t, claudeDir)
 	writeFile(t, filepath.Join(claudeDir, "SKILL.md"), "---\nname: deploy\ndescription: Claude version.\n---\nClaude deploy.")
 
-	discobotDir := filepath.Join(root, ".discobot", "skills", "deploy")
-	mkdirAll(t, discobotDir)
-	writeFile(t, filepath.Join(discobotDir, "SKILL.md"), "---\nname: deploy\ndescription: Discobot version.\n---\nDiscobot deploy.")
+	discboeingDir := filepath.Join(root, ".discboeing", "skills", "deploy")
+	mkdirAll(t, discboeingDir)
+	writeFile(t, filepath.Join(discboeingDir, "SKILL.md"), "---\nname: deploy\ndescription: Discboeing version.\n---\nDiscboeing deploy.")
 
 	skills, _, err := discoverSkillsWithHome(root, "")
 	if err != nil {
@@ -196,8 +196,8 @@ func TestDiscoverSkills_DiscobotTakesPriorityOverProviderFallback(t *testing.T) 
 	if len(skills) != 1 {
 		t.Fatalf("expected 1 skill (deduped), got %d", len(skills))
 	}
-	if skills[0].Description != "Discobot version." {
-		t.Errorf("description = %q, want .discobot to take priority", skills[0].Description)
+	if skills[0].Description != "Discboeing version." {
+		t.Errorf("description = %q, want .discboeing to take priority", skills[0].Description)
 	}
 }
 
@@ -271,16 +271,16 @@ func TestDiscoverSkills_MissingDirs(t *testing.T) {
 	}
 }
 
-func TestParseSkill_DiscobotMetadata(t *testing.T) {
-	skill, err := parseSkill("discobot-commit", `---
+func TestParseSkill_DiscboeingMetadata(t *testing.T) {
+	skill, err := parseSkill("discboeing-commit", `---
 description: Commit changes.
-discobot-ui: true
-discobot-label: Commit
-discobot-active-label: Committing
-discobot-icon: git-commit
-discobot-group: Git
-discobot-order: 10
-discobot-credential-request:
+discboeing-ui: true
+discboeing-label: Commit
+discboeing-active-label: Committing
+discboeing-icon: git-commit
+discboeing-group: Git
+discboeing-order: 10
+discboeing-credential-request:
   - env-var: GH_TOKEN
     name: GitHub credential
     justification: Authenticate push commands.
@@ -292,28 +292,28 @@ Body`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !skill.Discobot.UI {
-		t.Fatal("expected Discobot UI metadata")
+	if !skill.Discboeing.UI {
+		t.Fatal("expected Discboeing UI metadata")
 	}
-	if skill.Discobot.Label != "Commit" {
-		t.Fatalf("label = %q", skill.Discobot.Label)
+	if skill.Discboeing.Label != "Commit" {
+		t.Fatalf("label = %q", skill.Discboeing.Label)
 	}
-	if skill.Discobot.ActiveLabel != "Committing" {
-		t.Fatalf("activeLabel = %q", skill.Discobot.ActiveLabel)
+	if skill.Discboeing.ActiveLabel != "Committing" {
+		t.Fatalf("activeLabel = %q", skill.Discboeing.ActiveLabel)
 	}
-	if skill.Discobot.Icon != "git-commit" {
-		t.Fatalf("icon = %q", skill.Discobot.Icon)
+	if skill.Discboeing.Icon != "git-commit" {
+		t.Fatalf("icon = %q", skill.Discboeing.Icon)
 	}
-	if skill.Discobot.Group != "Git" {
-		t.Fatalf("group = %q", skill.Discobot.Group)
+	if skill.Discboeing.Group != "Git" {
+		t.Fatalf("group = %q", skill.Discboeing.Group)
 	}
-	if skill.Discobot.Order != 10 {
-		t.Fatalf("order = %d", skill.Discobot.Order)
+	if skill.Discboeing.Order != 10 {
+		t.Fatalf("order = %d", skill.Discboeing.Order)
 	}
-	if len(skill.Discobot.CredentialRequest) != 1 {
-		t.Fatalf("expected 1 credential request, got %d", len(skill.Discobot.CredentialRequest))
+	if len(skill.Discboeing.CredentialRequest) != 1 {
+		t.Fatalf("expected 1 credential request, got %d", len(skill.Discboeing.CredentialRequest))
 	}
-	request := skill.Discobot.CredentialRequest[0]
+	request := skill.Discboeing.CredentialRequest[0]
 	if request.EnvVar != "GH_TOKEN" {
 		t.Fatalf("envVar = %q", request.EnvVar)
 	}
@@ -474,7 +474,7 @@ func TestLookupSkill_DoesNotFindNestedDirectories(t *testing.T) {
 
 func TestLookupSkill_UsesDeclaredNameIndex(t *testing.T) {
 	root := t.TempDir()
-	dir := filepath.Join(root, ".discobot", "skills", "browser-harness")
+	dir := filepath.Join(root, ".discboeing", "skills", "browser-harness")
 	mkdirAll(t, dir)
 	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: browser\ndescription: Browser control.\n---\nLoad the browser harness.")
 
@@ -636,7 +636,7 @@ func TestLookupCommand_FoundInNestedMarkdown(t *testing.T) {
 
 func TestLookupCommand_UsesDeclaredNameIndex(t *testing.T) {
 	root := t.TempDir()
-	dir := filepath.Join(root, ".discobot", "commands", "release-helper")
+	dir := filepath.Join(root, ".discboeing", "commands", "release-helper")
 	mkdirAll(t, dir)
 	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: release\ndescription: Release command.\n---\nRun release.")
 
@@ -685,9 +685,9 @@ func TestLookupSkill_NotFound(t *testing.T) {
 func TestDiscoverSkills_SystemSkillAndCommandDirs(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 
 	skillDir := filepath.Join(systemRoot, "skills", "release")
 	mkdirAll(t, skillDir)
@@ -712,9 +712,9 @@ func TestDiscoverSkills_SystemSkillAndCommandDirs(t *testing.T) {
 func TestLookupSkill_FoundInSystemSkillsDir(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 
 	dir := filepath.Join(systemRoot, "skills", "myskill")
 	mkdirAll(t, dir)
@@ -735,9 +735,9 @@ func TestLookupSkill_FoundInSystemSkillsDir(t *testing.T) {
 func TestLookupCommand_FoundInSystemCommandsDir(t *testing.T) {
 	root := t.TempDir()
 	systemRoot := t.TempDir()
-	originalRoots := discobotSystemRoots
-	discobotSystemRoots = []string{systemRoot}
-	t.Cleanup(func() { discobotSystemRoots = originalRoots })
+	originalRoots := discboeingSystemRoots
+	discboeingSystemRoots = []string{systemRoot}
+	t.Cleanup(func() { discboeingSystemRoots = originalRoots })
 
 	dir := filepath.Join(systemRoot, "commands", "release")
 	mkdirAll(t, dir)
@@ -840,7 +840,7 @@ func TestFormatSkillDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
 func TestFormatSkillLikeDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
 	got := FormatSkillLikeDiscoveryWarningsReminder(
 		[]string{"parse skill /tmp/release/SKILL.md: broken"},
-		[]string{"load script /tmp/.discobot/scripts/release.sh: missing front matter"},
+		[]string{"load script /tmp/.discboeing/scripts/release.sh: missing front matter"},
 	)
 
 	if !strings.Contains(got, "Some skills or slash commands could not be loaded") {
@@ -849,7 +849,7 @@ func TestFormatSkillLikeDiscoveryWarningsReminder_WithWarnings(t *testing.T) {
 	if !strings.Contains(got, "parse skill /tmp/release/SKILL.md: broken") {
 		t.Error("missing skill warning")
 	}
-	if !strings.Contains(got, "load script /tmp/.discobot/scripts/release.sh: missing front matter") {
+	if !strings.Contains(got, "load script /tmp/.discboeing/scripts/release.sh: missing front matter") {
 		t.Error("missing script warning")
 	}
 }

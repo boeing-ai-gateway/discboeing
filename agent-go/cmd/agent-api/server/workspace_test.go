@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
 )
 
 func TestSetupConfiguredWorkspaceClonesWorkspace(t *testing.T) {

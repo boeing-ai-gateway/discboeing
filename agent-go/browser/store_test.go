@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/thread"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/thread"
 )
 
 func TestStoreAppendAndloadBrowserEvents(t *testing.T) {

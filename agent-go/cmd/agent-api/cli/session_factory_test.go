@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/config"
 )
 
 func TestNewRemoteSession_RequiresSecret(t *testing.T) {
 	session := newRemoteSession(&config.Config{Port: 3002, AgentCwd: t.TempDir()})
 	if session != nil {
-		t.Fatal("expected nil session when DISCOBOT_SECRET is unset")
+		t.Fatal("expected nil session when DISCBOEING_SECRET is unset")
 	}
 }
 
@@ -48,7 +48,7 @@ func TestNewRemoteSession_UsesConfiguredPort(t *testing.T) {
 		AgentCwd:   t.TempDir(),
 	})
 	if session == nil {
-		t.Fatal("expected remote session when DISCOBOT_SECRET is set")
+		t.Fatal("expected remote session when DISCBOEING_SECRET is set")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

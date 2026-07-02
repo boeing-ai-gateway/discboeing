@@ -6,7 +6,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/obot-platform/discobot/proxy/internal/injector"
+	"github.com/boeing-ai-gateway/discboeing/proxy/internal/injector"
 )
 
 // Filter manages domain and IP allowlists.

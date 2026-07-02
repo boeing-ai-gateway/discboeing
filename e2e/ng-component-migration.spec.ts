@@ -20,7 +20,7 @@ async function gotoAppWithErrorCapture(page: Page) {
   });
 
   if (await loginLink.isVisible().catch(() => false)) {
-    test.skip(true, "Discobot is showing an authentication screen.");
+    test.skip(true, "Discboeing is showing an authentication screen.");
   }
 
   await expect(settingsButton).toBeVisible();

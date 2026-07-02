@@ -638,7 +638,7 @@
 					<Dialog.Header>
 						<Dialog.Title>Reject commit pull?</Dialog.Title>
 						<Dialog.Description>
-							Tell Discobot why this commit should not be pulled into the host
+							Tell Discboeing why this commit should not be pulled into the host
 							workspace.
 						</Dialog.Description>
 					</Dialog.Header>
@@ -648,7 +648,7 @@
 						</label>
 						<Input
 							id="commit-pull-reason"
-							name="discobot-commit-pull-reason"
+							name="discboeing-commit-pull-reason"
 							bind:value={rejectionReason}
 							autocomplete="off"
 							autocorrect="off"
@@ -681,7 +681,7 @@
 			</div>
 		{:else if wasApproved}
 			<div class="rounded-md border bg-muted/20 p-3 text-sm">
-				Commit pull approved. Discobot is applying the sandbox commit.
+				Commit pull approved. Discboeing is applying the sandbox commit.
 			</div>
 		{:else if summary}
 			<div class="rounded-md border bg-muted/20 p-3 text-sm">{summary}</div>

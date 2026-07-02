@@ -1,8 +1,8 @@
 import { readStorage, writeStorage } from "$lib/local-storage";
 import type { DiffStyle } from "$lib/pierre-diff";
 
-const APPROVAL_STORAGE_KEY = "discobot.ui.diff-review.approved";
-const DIFF_STYLE_STORAGE_KEY = "discobot.ui.diff-review.style";
+const APPROVAL_STORAGE_KEY = "discboeing.ui.diff-review.approved";
+const DIFF_STYLE_STORAGE_KEY = "discboeing.ui.diff-review.style";
 
 export type DiffReviewApprovals = Record<string, Record<string, string>>;
 

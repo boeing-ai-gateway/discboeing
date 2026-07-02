@@ -421,7 +421,7 @@
 		if (typeof window === "undefined") {
 			return;
 		}
-		window.dispatchEvent(new CustomEvent("discobot:credentials-changed"));
+		window.dispatchEvent(new CustomEvent("discboeing:credentials-changed"));
 	}
 
 	function clearOAuthProgress() {
@@ -1696,7 +1696,7 @@
 													<p>
 														Sign in with ChatGPT. OpenAI redirects to
 														<code class="mx-1 font-mono">localhost:1455</code>,
-														and Discobot will try to catch that redirect
+														and Discboeing will try to catch that redirect
 														automatically.
 													</p>
 													<p class="mt-2">
@@ -1833,7 +1833,7 @@
 								allows the agent and developer tools to use it directly. Console
 								/ SSH / IDE applies to SSH and terminal sessions. Services and
 								hooks apply to workspace automation under
-								<code>.discobot/</code>.
+								<code>.discboeing/</code>.
 							</p>
 							<div class="grid gap-2 sm:grid-cols-2">
 								<label class="flex items-center gap-2 text-sm">
@@ -1930,9 +1930,9 @@
 		providerName="GitHub"
 		openVerificationLabel="Open GitHub page"
 		waitingForProviderLabel="Waiting for GitHub…"
-		deviceIntroLine1="Ask Discobot for a GitHub device code."
+		deviceIntroLine1="Ask Discboeing for a GitHub device code."
 		deviceIntroLine2="Open the GitHub verification page and enter the code."
-		deviceReturnText="Come back here and wait while Discobot finishes the connection."
+		deviceReturnText="Come back here and wait while Discboeing finishes the connection."
 		{selectedOAuthKind}
 		hasScopeOptions={selectedOAuthScopeOptions.length > 0}
 		{oauthScopePickerMode}
@@ -1979,9 +1979,9 @@
 		providerName="OpenAI"
 		openVerificationLabel="Open verification page"
 		waitingForProviderLabel="Waiting for OpenAI…"
-		deviceIntroLine1="Ask Discobot for an OpenAI device code."
+		deviceIntroLine1="Ask Discboeing for an OpenAI device code."
 		deviceIntroLine2="Open the verification page and enter the code."
-		deviceReturnText="Come back here and wait while Discobot finishes the connection."
+		deviceReturnText="Come back here and wait while Discboeing finishes the connection."
 		{selectedOAuthKind}
 		hasScopeOptions={false}
 		{oauthScopePickerMode}

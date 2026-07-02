@@ -73,7 +73,7 @@ func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 	}
 
 	// 3. System-level instructions.
-	for _, p := range discobotSystemPaths("CLAUDE.md") {
+	for _, p := range discboeingSystemPaths("CLAUDE.md") {
 		content, err := readFileIfExists(p)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", p, err)
@@ -88,16 +88,16 @@ func discoverInstructions(cwd string) ([]InstructionEntry, error) {
 		})
 	}
 
-	// 4. Modular rules from project root (.discobot/rules/*.md).
-	rulesDir := filepath.Join(projectRoot, ".discobot", "rules")
-	ruleEntries, err := discoverRules(rulesDir, ".discobot/rules", "project rule")
+	// 4. Modular rules from project root (.discboeing/rules/*.md).
+	rulesDir := filepath.Join(projectRoot, ".discboeing", "rules")
+	ruleEntries, err := discoverRules(rulesDir, ".discboeing/rules", "project rule")
 	if err != nil {
 		return nil, err
 	}
 	entries = append(entries, ruleEntries...)
 
 	// 5. Modular rules from system roots.
-	for _, rulesDir := range discobotSystemPaths("rules") {
+	for _, rulesDir := range discboeingSystemPaths("rules") {
 		ruleEntries, err := discoverRules(rulesDir, rulesDir, "system rule")
 		if err != nil {
 			return nil, err

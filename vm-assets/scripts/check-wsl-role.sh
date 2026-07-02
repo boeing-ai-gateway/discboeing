@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-PLATFORM="${DISCOBOT_GUEST_PLATFORM:-vz}"
+PLATFORM="${DISCBOEING_GUEST_PLATFORM:-vz}"
 
 if [ "$#" -eq 2 ] && [ "$1" = "platform" ]; then
     EXPECTED_PLATFORM="$2"

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/config"
-	"github.com/obot-platform/discobot/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
 )
 
 func TestNewExeDevInstanceProviderUsesRemoteSandboxImageFallback(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
-	remoteImage := "ghcr.io/obot-platform/discobot-agent-api:test-remote"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
+	remoteImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-remote"
 	instanceConfig, err := json.Marshal(map[string]string{
 		"token": "exe1.test-token",
 	})
@@ -34,7 +34,7 @@ func TestNewExeDevInstanceProviderUsesRemoteSandboxImageFallback(t *testing.T) {
 }
 
 func TestNewExeDevInstanceProviderFallsBackToDefaultRemoteImage(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
 	instanceConfig, err := json.Marshal(map[string]string{
 		"token": "exe1.test-token",
 	})
@@ -57,9 +57,9 @@ func TestNewExeDevInstanceProviderFallsBackToDefaultRemoteImage(t *testing.T) {
 }
 
 func TestNewExeDevInstanceProviderUsesInstanceSandboxImageOverride(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
-	remoteImage := "ghcr.io/obot-platform/discobot-agent-api:test-remote"
-	instanceImage := "ghcr.io/obot-platform/discobot-agent-api:test-instance"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
+	remoteImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-remote"
+	instanceImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-instance"
 	instanceConfig, err := json.Marshal(map[string]string{
 		"token":        "exe1.test-token",
 		"sandboxImage": instanceImage,
@@ -83,8 +83,8 @@ func TestNewExeDevInstanceProviderUsesInstanceSandboxImageOverride(t *testing.T)
 }
 
 func TestSandboxImageForProviderUsesLocalImageForLocalProviders(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
-	remoteImage := "ghcr.io/obot-platform/discobot-agent-api:test-remote"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
+	remoteImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-remote"
 	cfg := &config.Config{
 		SandboxImage:       localImage,
 		SandboxImageRemote: remoteImage,
@@ -98,8 +98,8 @@ func TestSandboxImageForProviderUsesLocalImageForLocalProviders(t *testing.T) {
 }
 
 func TestSandboxImageForProviderUsesRemoteImageForRemoteProviders(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
-	remoteImage := "ghcr.io/obot-platform/discobot-agent-api:test-remote"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
+	remoteImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-remote"
 	cfg := &config.Config{
 		SandboxImage:       localImage,
 		SandboxImageRemote: remoteImage,
@@ -113,8 +113,8 @@ func TestSandboxImageForProviderUsesRemoteImageForRemoteProviders(t *testing.T) 
 }
 
 func TestSandboxImageForProviderUsesRemoteImageForRemoteDockerHost(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
-	remoteImage := "ghcr.io/obot-platform/discobot-agent-api:test-remote"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
+	remoteImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-remote"
 	cfg := &config.Config{
 		SandboxImage:       localImage,
 		SandboxImageRemote: remoteImage,
@@ -127,7 +127,7 @@ func TestSandboxImageForProviderUsesRemoteImageForRemoteDockerHost(t *testing.T)
 }
 
 func TestSandboxImageForProviderRemoteFallsBackToDefaultImage(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
 	cfg := &config.Config{SandboxImage: localImage}
 
 	if got, want := sandboxImageForProvider(cfg, "exedev"), config.DefaultSandboxImage(); got != want {
@@ -136,8 +136,8 @@ func TestSandboxImageForProviderRemoteFallsBackToDefaultImage(t *testing.T) {
 }
 
 func TestConfigForSandboxProviderCopiesConfigAndSetsProviderImage(t *testing.T) {
-	localImage := "discobot-local/discobot-agent-api:test-local"
-	remoteImage := "ghcr.io/obot-platform/discobot-agent-api:test-remote"
+	localImage := "discboeing-local/discboeing-agent-api:test-local"
+	remoteImage := "ghcr.io/boeing-ai-gateway/discboeing-agent-api:test-remote"
 	cfg := &config.Config{
 		SandboxImage:       localImage,
 		SandboxImageRemote: remoteImage,

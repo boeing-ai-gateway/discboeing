@@ -1,0 +1,16 @@
+[Unit]
+Description=Discboeing HTTP proxy (MITM + Docker registry caching)
+After=discboeing-sandbox-init.service
+Requires=discboeing-sandbox-init.service
+
+[Service]
+Type=simple
+ExecStart=/opt/discboeing/bin/proxy -config /.data/proxy/config.yaml
+Restart=on-failure
+RestartSec=5
+
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

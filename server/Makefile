@@ -19,7 +19,7 @@ test:
 # Clean build artifacts
 clean:
 	rm -rf bin/
-	rm -f discobot.db
+	rm -f discboeing.db
 
 # Generate sqlc code
 sqlc:

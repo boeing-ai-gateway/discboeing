@@ -10,7 +10,7 @@ import (
 
 func TestFileSnapshotReloadsUpdatedValues(t *testing.T) {
 	workspaceRoot := t.TempDir()
-	envDir := filepath.Join(workspaceRoot, ".discobot")
+	envDir := filepath.Join(workspaceRoot, ".discboeing")
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -44,7 +44,7 @@ func TestFileSnapshotReloadsUpdatedValues(t *testing.T) {
 
 func TestFileSnapshotIgnoresInvalidLinesAndPreservesLiterals(t *testing.T) {
 	workspaceRoot := t.TempDir()
-	envDir := filepath.Join(workspaceRoot, ".discobot")
+	envDir := filepath.Join(workspaceRoot, ".discboeing")
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

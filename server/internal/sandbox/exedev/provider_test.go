@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/server/internal/sandbox"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/sandbox"
 )
 
 type fakeCommandClient struct {
@@ -30,7 +30,7 @@ func (c *fakeCommandClient) Exec(_ context.Context, command string) ([]byte, err
 	if strings.HasPrefix(command, "ssh-key generate-api-key") {
 		return []byte(`{"api_key":"vm-api-key"}`), nil
 	}
-	return []byte(`{"name":"discobot-session-1","status":"running"}`), nil
+	return []byte(`{"name":"discboeing-session-1","status":"running"}`), nil
 }
 
 type timeoutThenSuccessClient struct {
@@ -49,7 +49,7 @@ func (c *timeoutThenSuccessClient) Exec(ctx context.Context, command string) ([]
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
-	return []byte(`{"name":"discobot-session-1","status":"creating","image":"ubuntu:22.04"}`), nil
+	return []byte(`{"name":"discboeing-session-1","status":"creating","image":"ubuntu:22.04"}`), nil
 }
 
 func TestCreateRetriesVisibilityPollAfterRequestTimeout(t *testing.T) {
@@ -80,7 +80,7 @@ func TestCreateRetriesVisibilityPollAfterRequestTimeout(t *testing.T) {
 func TestCreateChecksForVisibleVMAfterCommandTimeout(t *testing.T) {
 	client := &sequenceCommandClient{responses: []commandResponse{
 		{err: commandError{statusCode: http.StatusGatewayTimeout, body: `{"error":"command timed out"}`}},
-		{output: `{"name":"discobot-session-1","status":"creating","image":"ubuntu:22.04"}`},
+		{output: `{"name":"discboeing-session-1","status":"creating","image":"ubuntu:22.04"}`},
 		{output: `{"api_key":"vm-api-key"}`},
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
@@ -102,7 +102,7 @@ func TestCreateChecksForVisibleVMAfterCommandTimeout(t *testing.T) {
 	if len(client.commands) != 3 {
 		t.Fatalf("commands = %v", client.commands)
 	}
-	if got, want := client.commands[1], "ls --json --l discobot-session-1"; got != want {
+	if got, want := client.commands[1], "ls --json --l discboeing-session-1"; got != want {
 		t.Fatalf("second command = %q, want %q", got, want)
 	}
 }
@@ -153,13 +153,13 @@ func TestCreateReturnsErrorWhenCommandTimeoutDoesNotCreateVisibleVM(t *testing.T
 	if !strings.Contains(err.Error(), "command timed out") {
 		t.Fatalf("error = %q, want command timeout", err.Error())
 	}
-	if !strings.Contains(err.Error(), `VM "discobot-session-1" was not found`) {
+	if !strings.Contains(err.Error(), `VM "discboeing-session-1" was not found`) {
 		t.Fatalf("error = %q, want VM not found", err.Error())
 	}
 	if len(client.commands) != 2 {
 		t.Fatalf("commands = %v", client.commands)
 	}
-	if got, want := client.commands[1], "ls --json --l discobot-session-1"; got != want {
+	if got, want := client.commands[1], "ls --json --l discboeing-session-1"; got != want {
 		t.Fatalf("second command = %q, want %q", got, want)
 	}
 }
@@ -231,7 +231,7 @@ func TestSanitizeCommandForLogRedactsSecretEnvValues(t *testing.T) {
 		"new",
 		"--json",
 		"--env",
-		"DISCOBOT_SECRET=sensitive secret",
+		"DISCBOEING_SECRET=sensitive secret",
 		"--env",
 		"WORKSPACE_SOURCE=https://example.com/repo.git",
 		"--env=API_TOKEN=token-value",
@@ -246,7 +246,7 @@ func TestSanitizeCommandForLogRedactsSecretEnvValues(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"DISCOBOT_SECRET=<redacted>",
+		"DISCBOEING_SECRET=<redacted>",
 		"WORKSPACE_SOURCE=https://example.com/repo.git",
 		"API_TOKEN=<redacted>",
 		"NORMAL=value with spaces",
@@ -265,7 +265,7 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(body) != "ls --json --l discobot-session-1" {
+		if string(body) != "ls --json --l discboeing-session-1" {
 			t.Fatalf("command body = %q", string(body))
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer token" {
@@ -281,7 +281,7 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 			http.Error(w, "slow down", http.StatusTooManyRequests)
 			return
 		}
-		_, _ = w.Write([]byte(`{"name":"discobot-session-1","status":"running"}`))
+		_, _ = w.Write([]byte(`{"name":"discboeing-session-1","status":"running"}`))
 	}))
 	defer server.Close()
 
@@ -294,7 +294,7 @@ func TestHTTPCommandClientRetriesRateLimitResponse(t *testing.T) {
 	client.timings.rateLimitRetryDelay = 10 * time.Millisecond
 
 	start := time.Now()
-	out, err := client.Exec(context.Background(), "ls --json --l discobot-session-1")
+	out, err := client.Exec(context.Background(), "ls --json --l discboeing-session-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestHTTPCommandClientStopsRateLimitRetriesAtDefaultTimeout(t *testing.T) {
 	client.timings.rateLimitRetryDelay = time.Millisecond
 	client.timings.rateLimitRetryTimeout = 100 * time.Millisecond
 
-	_, err := client.Exec(context.Background(), "ls --json --l discobot-session-1")
+	_, err := client.Exec(context.Background(), "ls --json --l discboeing-session-1")
 	if err == nil {
 		t.Fatal("expected rate-limit retry timeout")
 	}
@@ -351,7 +351,7 @@ func TestWaitForVMVisibleStopsAtDefaultMaxWait(t *testing.T) {
 	provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
 	provider.timings.createVisibilityMaxWait = 5 * time.Millisecond
 
-	_, err = provider.waitForVMVisible(context.Background(), "discobot-session-1")
+	_, err = provider.waitForVMVisible(context.Background(), "discboeing-session-1")
 	if err == nil {
 		t.Fatal("expected visibility wait timeout")
 	}
@@ -364,7 +364,7 @@ func TestWaitForVMVisibleStopsAtDefaultMaxWait(t *testing.T) {
 }
 
 func TestListCoalescesConcurrentCalls(t *testing.T) {
-	client := newBlockingListClient(`{"vms":[{"vm_name":"discobot-session-1","status":"running","image":"ubuntu:22.04"}]}`)
+	client := newBlockingListClient(`{"vms":[{"vm_name":"discboeing-session-1","status":"running","image":"ubuntu:22.04"}]}`)
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
@@ -405,7 +405,7 @@ func TestListCoalescesConcurrentCalls(t *testing.T) {
 }
 
 func TestListUsesShortLivedCache(t *testing.T) {
-	client := &countingListClient{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running","image":"ubuntu:22.04"}]}`}
+	client := &countingListClient{output: `{"vms":[{"vm_name":"discboeing-session-1","status":"running","image":"ubuntu:22.04"}]}`}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
@@ -494,7 +494,7 @@ func (c *countingListClient) calls() int {
 }
 
 func TestListPrefersSessionIDTag(t *testing.T) {
-	client := &countingListClient{output: `{"vms":[{"vm_name":"discobot-truncated-or-old","status":"running","tags":["discobot","discobot-session-real-session-id"]}]}`}
+	client := &countingListClient{output: `{"vms":[{"vm_name":"discboeing-truncated-or-old","status":"running","tags":["discboeing","discboeing-session-real-session-id"]}]}`}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
@@ -514,7 +514,7 @@ func TestListPrefersSessionIDTag(t *testing.T) {
 
 func TestCreateBuildsNewCommand(t *testing.T) {
 	client := &fakeCommandClient{outputs: map[string]string{
-		"new": `{"name":"discobot-session-1","status":"running","image":"ubuntu:22.04","created_at":"2026-05-07T04:09:04Z"}`,
+		"new": `{"name":"discboeing-session-1","status":"running","image":"ubuntu:22.04","created_at":"2026-05-07T04:09:04Z"}`,
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
@@ -524,11 +524,11 @@ func TestCreateBuildsNewCommand(t *testing.T) {
 	opts := sandbox.CreateOptions{
 		SharedSecret: "secret",
 		Env: map[string]string{
-			"DISCOBOT_PROJECT_ID":  "project-1",
-			"DISCOBOT_SECRET":      "hashed-secret",
+			"DISCBOEING_PROJECT_ID":  "project-1",
+			"DISCBOEING_SECRET":      "hashed-secret",
 			"WORKSPACE_TARGET_REF": "main",
 		},
-		WorkspaceSource:    "https://github.com/obot-platform/discobot.git",
+		WorkspaceSource:    "https://github.com/boeing-ai-gateway/discboeing.git",
 		WorkspaceTargetRef: "main",
 		ProjectID:          "project-1",
 		Resources: sandbox.ResourceConfig{
@@ -545,7 +545,7 @@ func TestCreateBuildsNewCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sb.ID != "discobot-session-1" || sb.Status != sandbox.StatusRunning {
+	if sb.ID != "discboeing-session-1" || sb.Status != sandbox.StatusRunning {
 		t.Fatalf("sandbox = %#v", sb)
 	}
 	if len(client.commands) != 2 {
@@ -554,34 +554,34 @@ func TestCreateBuildsNewCommand(t *testing.T) {
 	command := client.commands[0]
 	for _, want := range []string{
 		"new",
-		"--name=discobot-session-1",
+		"--name=discboeing-session-1",
 		"--image=ubuntu:22.04",
 		"--cpu=2",
 		"--memory=4096MB",
 		"--disk=51200MB",
-		"--env DISCOBOT_PROJECT_ID=project-1",
+		"--env DISCBOEING_PROJECT_ID=project-1",
 		"--env WORKSPACE_TARGET_REF=main",
-		"--tag=discobot,discobot-session-session-1",
+		"--tag=discboeing,discboeing-session-session-1",
 	} {
 		if !strings.Contains(command, want) {
 			t.Fatalf("command %q does not contain %q", command, want)
 		}
 	}
-	if !strings.Contains(command, "--env DISCOBOT_SECRET=hashed-secret") {
+	if !strings.Contains(command, "--env DISCBOEING_SECRET=hashed-secret") {
 		t.Fatalf("command %q does not include provided secret env", command)
 	}
 	if got := parseState(newState).VMAPIKey; got != "vm-api-key" {
 		t.Fatalf("state VM API key = %q", got)
 	}
-	if got, want := client.commands[1], "ssh-key generate-api-key --vm=discobot-session-1 --label=discobot-session-session-1"; got != want {
+	if got, want := client.commands[1], "ssh-key generate-api-key --vm=discboeing-session-1 --label=discboeing-session-session-1"; got != want {
 		t.Fatalf("API key command = %q, want %q", got, want)
 	}
 }
 
 func TestCreateWaitsForReservedVMNameToBecomeVisible(t *testing.T) {
 	client := &sequenceCommandClient{responses: []commandResponse{
-		{err: fmt.Errorf(`exe.dev command failed with status 422: {"error":"VM name \"discobot-session-1\" is not available"}`)},
-		{output: `{"name":"discobot-session-1","status":"creating","image":"ubuntu:22.04"}`},
+		{err: fmt.Errorf(`exe.dev command failed with status 422: {"error":"VM name \"discboeing-session-1\" is not available"}`)},
+		{output: `{"name":"discboeing-session-1","status":"creating","image":"ubuntu:22.04"}`},
 		{output: `{"api_key":"vm-api-key"}`},
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
@@ -597,13 +597,13 @@ func TestCreateWaitsForReservedVMNameToBecomeVisible(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sb.ID != "discobot-session-1" {
+	if sb.ID != "discboeing-session-1" {
 		t.Fatalf("sandbox ID = %q", sb.ID)
 	}
 	if sb.Status != sandbox.StatusCreated {
 		t.Fatalf("sandbox status = %q, want %q", sb.Status, sandbox.StatusCreated)
 	}
-	if got := parseState(newState).VMName; got != "discobot-session-1" {
+	if got := parseState(newState).VMName; got != "discboeing-session-1" {
 		t.Fatalf("state VM name = %q", got)
 	}
 	if len(client.commands) != 3 {
@@ -612,10 +612,10 @@ func TestCreateWaitsForReservedVMNameToBecomeVisible(t *testing.T) {
 	if !strings.HasPrefix(client.commands[0], "new ") {
 		t.Fatalf("first command = %q", client.commands[0])
 	}
-	if got, want := client.commands[1], "ls --json --l discobot-session-1"; got != want {
+	if got, want := client.commands[1], "ls --json --l discboeing-session-1"; got != want {
 		t.Fatalf("second command = %q, want %q", got, want)
 	}
-	if got, want := client.commands[2], "ssh-key generate-api-key --vm=discobot-session-1 --label=discobot-session-session-1"; got != want {
+	if got, want := client.commands[2], "ssh-key generate-api-key --vm=discboeing-session-1 --label=discboeing-session-session-1"; got != want {
 		t.Fatalf("third command = %q, want %q", got, want)
 	}
 }
@@ -643,7 +643,7 @@ func TestRemoveUsesKnownVMNameWithoutInspecting(t *testing.T) {
 	if len(client.commands) != 1 {
 		t.Fatalf("commands = %v", client.commands)
 	}
-	if got, want := client.commands[0], "rm --json discobot-session-1"; got != want {
+	if got, want := client.commands[0], "rm --json discboeing-session-1"; got != want {
 		t.Fatalf("remove command = %q, want %q", got, want)
 	}
 }
@@ -695,23 +695,23 @@ func TestParseVMsExeDevListShape(t *testing.T) {
 		"vms": [
 			{
 				"created_at": "2026-05-09T22:14:33Z",
-				"https_url": "https://discobot-ztivz7cunc9mvc7a.exe.xyz",
-				"image": "obot-platform/discobot:main",
+				"https_url": "https://discboeing-ztivz7cunc9mvc7a.exe.xyz",
+				"image": "boeing-ai-gateway/discboeing:main",
 				"status": "running",
-				"vm_name": "discobot-ztivz7cunc9mvc7a"
+				"vm_name": "discboeing-ztivz7cunc9mvc7a"
 			}
 		]
 	}`))
 	if len(vms) != 1 {
 		t.Fatalf("len(vms) = %d", len(vms))
 	}
-	if vms[0].Name != "discobot-ztivz7cunc9mvc7a" {
+	if vms[0].Name != "discboeing-ztivz7cunc9mvc7a" {
 		t.Fatalf("VM name = %q", vms[0].Name)
 	}
 	if vms[0].Status != sandbox.StatusRunning {
 		t.Fatalf("VM status = %q", vms[0].Status)
 	}
-	if vms[0].Image != "obot-platform/discobot:main" {
+	if vms[0].Image != "boeing-ai-gateway/discboeing:main" {
 		t.Fatalf("VM image = %q", vms[0].Image)
 	}
 	if vms[0].CreatedAt.IsZero() {
@@ -721,15 +721,15 @@ func TestParseVMsExeDevListShape(t *testing.T) {
 
 func TestAcquireHTTPClientRewritesRequests(t *testing.T) {
 	client := &fakeCommandClient{outputs: map[string]string{
-		"ls --json --l discobot-session-1": `{"name":"discobot-session-1","status":"running"}`,
+		"ls --json --l discboeing-session-1": `{"name":"discboeing-session-1","status":"running"}`,
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
 	}
 	state, err := marshalState(providerState{
-		VMName:   "discobot-session-1",
-		VMURL:    "https://discobot-session-1.exe.xyz/",
+		VMName:   "discboeing-session-1",
+		VMURL:    "https://discboeing-session-1.exe.xyz/",
 		VMAPIKey: "vm-api-key",
 	})
 	if err != nil {
@@ -744,10 +744,10 @@ func TestAcquireHTTPClientRewritesRequests(t *testing.T) {
 
 	transport := lease.Client.Transport.(*vmHTTPTransport)
 	transport.base = roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		if req.URL.Scheme != "https" || req.URL.Host != "discobot-session-1.exe.xyz" {
+		if req.URL.Scheme != "https" || req.URL.Host != "discboeing-session-1.exe.xyz" {
 			t.Fatalf("url = %s", req.URL.String())
 		}
-		if req.Host != "discobot-session-1.exe.xyz" {
+		if req.Host != "discboeing-session-1.exe.xyz" {
 			t.Fatalf("host = %q", req.Host)
 		}
 		if got := req.Header.Get("X-Exedev-Authorization"); got != "Bearer vm-api-key" {
@@ -762,7 +762,7 @@ func TestAcquireHTTPClientRewritesRequests(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	if got, want := transport.WebSocketURL("ws://sandbox/exec/abc/attach"), "wss://discobot-session-1.exe.xyz/exec/abc/attach"; got != want {
+	if got, want := transport.WebSocketURL("ws://sandbox/exec/abc/attach"), "wss://discboeing-session-1.exe.xyz/exec/abc/attach"; got != want {
 		t.Fatalf("websocket URL = %q, want %q", got, want)
 	}
 	if got := transport.Headers().Get("X-Exedev-Authorization"); got != "Bearer vm-api-key" {
@@ -777,8 +777,8 @@ func TestAcquireHTTPClientUsesPersistedVMTargetWithoutInspecting(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err := marshalState(providerState{
-		VMName:       "discobot-session-1",
-		VMURL:        "https://discobot-session-1.exe.xyz/",
+		VMName:       "discboeing-session-1",
+		VMURL:        "https://discboeing-session-1.exe.xyz/",
 		VMAPIKey:     "vm-api-key",
 		SharedSecret: "secret",
 		CreatedAt:    time.Now(),
@@ -800,7 +800,7 @@ func TestAcquireHTTPClientUsesPersistedVMTargetWithoutInspecting(t *testing.T) {
 
 func TestStopRendersJavaScriptStyleNamePlaceholder(t *testing.T) {
 	client := &fakeCommandClient{outputs: map[string]string{
-		"ls --json --l discobot-session-1": `{"name":"discobot-session-1","status":"running"}`,
+		"ls --json --l discboeing-session-1": `{"name":"discboeing-session-1","status":"running"}`,
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
@@ -818,22 +818,22 @@ func TestStopRendersJavaScriptStyleNamePlaceholder(t *testing.T) {
 	if len(client.commands) == 0 {
 		t.Fatalf("commands = %v", client.commands)
 	}
-	if got, want := client.commands[len(client.commands)-1], "ssh discobot-session-1 sudo shutdown -h now"; got != want {
+	if got, want := client.commands[len(client.commands)-1], "ssh discboeing-session-1 sudo shutdown -h now"; got != want {
 		t.Fatalf("stop command = %q, want %q", got, want)
 	}
 }
 
 func TestStopPersistsStoppedStatusForGet(t *testing.T) {
 	client := &fakeCommandClient{outputs: map[string]string{
-		"ls --json --l discobot-session-1": `{"name":"discobot-session-1","status":"running"}`,
+		"ls --json --l discboeing-session-1": `{"name":"discboeing-session-1","status":"running"}`,
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
 		t.Fatal(err)
 	}
 	state, err := marshalState(providerState{
-		VMName:       "discobot-session-1",
-		VMURL:        "https://discobot-session-1.exe.xyz",
+		VMName:       "discboeing-session-1",
+		VMURL:        "https://discboeing-session-1.exe.xyz",
 		VMAPIKey:     "vm-api-key",
 		SharedSecret: "secret",
 		Status:       sandbox.StatusRunning,
@@ -865,9 +865,9 @@ func TestStopPersistsStoppedStatusForGet(t *testing.T) {
 
 func TestWatchDedupesUnchangedStatuses(t *testing.T) {
 	client := &sequenceCommandClient{responses: []commandResponse{
-		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running"}]}`},
-		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running"}]}`},
-		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"stopped"}]}`},
+		{output: `{"vms":[{"vm_name":"discboeing-session-1","status":"running"}]}`},
+		{output: `{"vms":[{"vm_name":"discboeing-session-1","status":"running"}]}`},
+		{output: `{"vms":[{"vm_name":"discboeing-session-1","status":"stopped"}]}`},
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
@@ -904,9 +904,9 @@ func TestWatchDedupesUnchangedStatuses(t *testing.T) {
 
 func TestStopWaitsForStoppedStatusWhenTimeoutProvided(t *testing.T) {
 	client := &sequenceCommandClient{responses: []commandResponse{
-		{output: `{"name":"discobot-session-1","status":"running"}`},
+		{output: `{"name":"discboeing-session-1","status":"running"}`},
 		{output: `{}`},
-		{output: `{"name":"discobot-session-1","status":"stopped"}`},
+		{output: `{"name":"discboeing-session-1","status":"stopped"}`},
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
@@ -981,36 +981,36 @@ func TestStartHandlesRunningCreatedAndStoppedVMs(t *testing.T) {
 	}{
 		{
 			name:       "already running",
-			responses:  []commandResponse{{output: `{"name":"discobot-session-1","status":"running"}`}},
+			responses:  []commandResponse{{output: `{"name":"discboeing-session-1","status":"running"}`}},
 			wantStatus: sandbox.StatusRunning,
 			wantCommands: []string{
-				"ls --json --l discobot-session-1",
+				"ls --json --l discboeing-session-1",
 			},
 		},
 		{
 			name: "created waits until running",
 			responses: []commandResponse{
-				{output: `{"name":"discobot-session-1","status":"creating"}`},
-				{output: `{"name":"discobot-session-1","status":"running"}`},
+				{output: `{"name":"discboeing-session-1","status":"creating"}`},
+				{output: `{"name":"discboeing-session-1","status":"running"}`},
 			},
 			wantStatus: sandbox.StatusRunning,
 			wantCommands: []string{
-				"ls --json --l discobot-session-1",
-				"ls --json --l discobot-session-1",
+				"ls --json --l discboeing-session-1",
+				"ls --json --l discboeing-session-1",
 			},
 		},
 		{
 			name: "stopped restarts",
 			responses: []commandResponse{
-				{output: `{"name":"discobot-session-1","status":"stopped"}`},
+				{output: `{"name":"discboeing-session-1","status":"stopped"}`},
 				{output: `{}`},
-				{output: `{"name":"discobot-session-1","status":"running"}`},
+				{output: `{"name":"discboeing-session-1","status":"running"}`},
 			},
 			wantStatus: sandbox.StatusRunning,
 			wantCommands: []string{
-				"ls --json --l discobot-session-1",
-				"restart --json discobot-session-1",
-				"ls --json --l discobot-session-1",
+				"ls --json --l discboeing-session-1",
+				"restart --json discboeing-session-1",
+				"ls --json --l discboeing-session-1",
 			},
 		},
 	} {
@@ -1022,7 +1022,7 @@ func TestStartHandlesRunningCreatedAndStoppedVMs(t *testing.T) {
 			}
 			provider.timings.createVisibilityPollInterval = time.Millisecond
 			provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
-			state, err := marshalState(providerState{VMName: "discobot-session-1"})
+			state, err := marshalState(providerState{VMName: "discboeing-session-1"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1049,8 +1049,8 @@ func TestStartErrorPaths(t *testing.T) {
 	}{
 		{name: "inspect error", responses: []commandResponse{{err: errors.New("inspect failed")}}, wantErr: "inspect failed"},
 		{name: "not found", responses: []commandResponse{{output: `{}`}}, wantErr: sandbox.ErrNotFound.Error()},
-		{name: "created fails", responses: []commandResponse{{output: `{"name":"discobot-session-1","status":"creating"}`}, {output: `{"name":"discobot-session-1","status":"failed"}`}}, wantErr: "failed to start"},
-		{name: "restart error", responses: []commandResponse{{output: `{"name":"discobot-session-1","status":"stopped"}`}, {err: errors.New("restart failed")}}, wantErr: "restart exe.dev VM"},
+		{name: "created fails", responses: []commandResponse{{output: `{"name":"discboeing-session-1","status":"creating"}`}, {output: `{"name":"discboeing-session-1","status":"failed"}`}}, wantErr: "failed to start"},
+		{name: "restart error", responses: []commandResponse{{output: `{"name":"discboeing-session-1","status":"stopped"}`}, {err: errors.New("restart failed")}}, wantErr: "restart exe.dev VM"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client := &sequenceCommandClient{responses: append([]commandResponse(nil), tc.responses...)}
@@ -1060,7 +1060,7 @@ func TestStartErrorPaths(t *testing.T) {
 			}
 			provider.timings.createVisibilityPollInterval = time.Millisecond
 			provider.timings.createVisibilityPollRequestTimeout = time.Millisecond
-			state, err := marshalState(providerState{VMName: "discobot-session-1"})
+			state, err := marshalState(providerState{VMName: "discboeing-session-1"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1125,7 +1125,7 @@ func TestRemoveTreatsNotFoundAsSuccessAndPreservesOtherErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err := marshalState(providerState{VMName: "discobot-session-1"})
+	state, err := marshalState(providerState{VMName: "discboeing-session-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1159,7 +1159,7 @@ func TestAcquireHTTPClientRejectsMissingKeyStoppedAndGetErrors(t *testing.T) {
 	if _, err := provider.AcquireHTTPClient(context.Background(), nil, "session-1"); err == nil || !strings.Contains(err.Error(), "API key is missing") {
 		t.Fatalf("missing key error = %v", err)
 	}
-	state, err := marshalState(providerState{VMName: "discobot-session-1", VMAPIKey: "key", Status: sandbox.StatusStopped, CreatedAt: time.Now()})
+	state, err := marshalState(providerState{VMName: "discboeing-session-1", VMAPIKey: "key", Status: sandbox.StatusStopped, CreatedAt: time.Now()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1172,7 +1172,7 @@ func TestAcquireHTTPClientRejectsMissingKeyStoppedAndGetErrors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state, err = marshalState(providerState{VMName: "discobot-session-1", VMAPIKey: "key"})
+	state, err = marshalState(providerState{VMName: "discboeing-session-1", VMAPIKey: "key"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1203,8 +1203,8 @@ func TestParseAPIKeyAndVMHelpersCoverFlexibleShapes(t *testing.T) {
 		}
 	}
 	vms := parseVMs([]byte(`[
-		{"id":123,"phase":"up","tag":"discobot discobot-session-a"},
-		{"vm":"b","phase":"crashed","tags":["discobot","discobot-session-b",5]},
+		{"id":123,"phase":"up","tag":"discboeing discboeing-session-a"},
+		{"vm":"b","phase":"crashed","tags":["discboeing","discboeing-session-b",5]},
 		{"hostname":"c","phase":"pending","created":"2026-05-09 22:14:33"}
 	]`))
 	if len(vms) != 3 {
@@ -1219,7 +1219,7 @@ func TestParseAPIKeyAndVMHelpersCoverFlexibleShapes(t *testing.T) {
 	if vms[2].Status != sandbox.StatusCreated || vms[2].CreatedAt.IsZero() {
 		t.Fatalf("vms[2] = %#v", vms[2])
 	}
-	if vmName("!!!", "###") != "discobot-session" {
+	if vmName("!!!", "###") != "discboeing-session" {
 		t.Fatalf("fallback vmName = %q", vmName("!!!", "###"))
 	}
 }
@@ -1227,7 +1227,7 @@ func TestParseAPIKeyAndVMHelpersCoverFlexibleShapes(t *testing.T) {
 func TestListErrorIsNotCachedAndWaitingCallerCanCancel(t *testing.T) {
 	client := &sequenceCommandClient{responses: []commandResponse{
 		{err: errors.New("list failed")},
-		{output: `{"vms":[{"vm_name":"discobot-session-1","status":"running"}]}`},
+		{output: `{"vms":[{"vm_name":"discboeing-session-1","status":"running"}]}`},
 	}}
 	provider, err := NewProviderWithClient(testConfig(), client)
 	if err != nil {
@@ -1291,7 +1291,7 @@ func testConfig() Config {
 		Token:        "token",
 		Endpoint:     "https://exe.dev/exec",
 		VMHostSuffix: "exe.xyz",
-		VMNamePrefix: "discobot",
+		VMNamePrefix: "discboeing",
 		StopCommand:  "ssh ${name} sudo shutdown -h now",
 	}
 }

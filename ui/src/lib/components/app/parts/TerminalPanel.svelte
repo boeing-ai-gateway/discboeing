@@ -53,7 +53,7 @@
 	const MIN_TERMINAL_COLS = 80;
 	const RESIZE_DEBOUNCE_MS = 150;
 	const COPY_RESET_MS = 2000;
-	const GIT_PULL_WORKSPACE_PATH = "/home/discobot/workspace";
+	const GIT_PULL_WORKSPACE_PATH = "/home/discboeing/workspace";
 	const TERMINAL_RENDERERS: TerminalRenderer[] = ["ghostty", "wterm", "xterm"];
 
 	let {
@@ -594,7 +594,7 @@
 			cursorBlink: true,
 			cursorStyle: "block",
 			fontFamily:
-				'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
+				'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Rboeingo Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
 			fontSize: 13,
 			scrollback: 5000,
 			theme: getTerminalTheme(),
@@ -640,7 +640,7 @@
 			cursorBlink: true,
 			cursorStyle: "block",
 			fontFamily:
-				'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
+				'"JetBrains Mono", "Fira Code", "SF Mono", Monaco, "Cascadia Code", "Rboeingo Mono", Consolas, "Liberation Mono", Menlo, Courier, monospace',
 			fontSize: 13,
 			scrollback: 5000,
 			theme: getTerminalTheme(),

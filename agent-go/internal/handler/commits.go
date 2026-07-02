@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/obot-platform/discobot/agent-go/internal/api"
-	"github.com/obot-platform/discobot/agent-go/internal/gitops"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/api"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/gitops"
 )
 
 // GetCommits handles GET /commits — returns format-patch output for changes
@@ -56,7 +56,7 @@ func (h *Handler) GetCommits(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ListWorkspaceChangeCommits handles GET /workspace-change-commits — returns Discobot workspace change
+// ListWorkspaceChangeCommits handles GET /workspace-change-commits — returns Discboeing workspace change
 // workspace change commits for this session with per-commit diffstat.
 func (h *Handler) ListWorkspaceChangeCommits(w http.ResponseWriter, _ *http.Request) {
 	result, err := gitops.ListWorkspaceChangeCommits(h.agentCwd, "")

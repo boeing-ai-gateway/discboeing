@@ -3,8 +3,8 @@ package handler
 import (
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/service"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/service"
 )
 
 func TestMapSessionResponseIncludesThreadStatus(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/obot-platform/discobot/controlsocket"
+	"github.com/boeing-ai-gateway/discboeing/controlsocket"
 )
 
 // ControlSocket is a leased server-initiated WebSocket connection to agent-go.

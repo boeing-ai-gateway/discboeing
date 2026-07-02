@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
-	"github.com/obot-platform/discobot/agent-go/internal/workspaceenv"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/workspaceenv"
 )
 
 // DefaultTimeout is the default hook execution timeout (15 minutes).
@@ -64,15 +64,15 @@ func ExecuteHook(hook Hook, opts ExecuteOptions) HookResult {
 
 	// Build environment
 	env := workspaceenv.MergeProcessSnapshot(opts.Env)
-	env["DISCOBOT_HOOK_TYPE"] = string(hook.Type)
+	env["DISCBOEING_HOOK_TYPE"] = string(hook.Type)
 	if opts.SessionID != "" {
-		env["DISCOBOT_SESSION_ID"] = opts.SessionID
+		env["DISCBOEING_SESSION_ID"] = opts.SessionID
 	}
 	if opts.Cwd != "" {
-		env["DISCOBOT_WORKSPACE"] = opts.Cwd
+		env["DISCBOEING_WORKSPACE"] = opts.Cwd
 	}
 	if len(opts.ChangedFiles) > 0 {
-		env["DISCOBOT_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
+		env["DISCBOEING_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
 	}
 	cmd.Env = workspaceenv.List(env)
 
@@ -224,15 +224,15 @@ func executeHookProcess(hook Hook, opts ExecuteOptions) HookResult {
 
 func hookEnv(hook Hook, opts ExecuteOptions) map[string]string {
 	env := workspaceenv.MergeProcessSnapshot(opts.Env)
-	env["DISCOBOT_HOOK_TYPE"] = string(hook.Type)
+	env["DISCBOEING_HOOK_TYPE"] = string(hook.Type)
 	if opts.SessionID != "" {
-		env["DISCOBOT_SESSION_ID"] = opts.SessionID
+		env["DISCBOEING_SESSION_ID"] = opts.SessionID
 	}
 	if opts.Cwd != "" {
-		env["DISCOBOT_WORKSPACE"] = opts.Cwd
+		env["DISCBOEING_WORKSPACE"] = opts.Cwd
 	}
 	if len(opts.ChangedFiles) > 0 {
-		env["DISCOBOT_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
+		env["DISCBOEING_CHANGED_FILES"] = strings.Join(opts.ChangedFiles, " ")
 	}
 	return env
 }

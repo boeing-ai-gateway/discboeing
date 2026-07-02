@@ -17,7 +17,7 @@ func TestFormatAIHookPrompt(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		`You are running the Discobot hook "Review".`,
+		`You are running the Discboeing hook "Review".`,
 		"Hook instructions:\nOnly approve idiomatic Go changes.",
 		"Respond with exactly one of:",
 		"- `SUCCESS` if the changes satisfy the hook and you have no feedback.",
@@ -44,7 +44,7 @@ func TestFormatAIHookContext(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		"# Discobot hook context: Review",
+		"# Discboeing hook context: Review",
 		"## Hook instructions\n\nOnly approve idiomatic Go changes.",
 		"## Pattern\n\n`*.go`",
 		"## Changed files\n\n- main.go",

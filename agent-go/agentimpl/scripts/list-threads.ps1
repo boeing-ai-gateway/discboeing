@@ -3,19 +3,19 @@ if ($args.Count -ne 0) {
     exit 1
 }
 
-$dataDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCOBOT_DATA_DIR)) {
-    $env:DISCOBOT_DATA_DIR
+$dataDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCBOEING_DATA_DIR)) {
+    $env:DISCBOEING_DATA_DIR
 }
 else {
-    Join-Path $HOME ".discobot"
+    Join-Path $HOME ".discboeing"
 }
-$threadsDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCOBOT_THREADS_DIR)) {
-    $env:DISCOBOT_THREADS_DIR
+$threadsDir = if (-not [string]::IsNullOrWhiteSpace($env:DISCBOEING_THREADS_DIR)) {
+    $env:DISCBOEING_THREADS_DIR
 }
 else {
     Join-Path $dataDir "threads"
 }
-$currentThreadID = $env:DISCOBOT_SESSION_ID
+$currentThreadID = $env:DISCBOEING_SESSION_ID
 
 function Read-JsonFile {
     param([string]$Path)

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	serverapi "github.com/obot-platform/discobot/server/api"
+	serverapi "github.com/boeing-ai-gateway/discboeing/server/api"
 )
 
 func TestProjectSubscriptionTracksSubscribedThreads(t *testing.T) {

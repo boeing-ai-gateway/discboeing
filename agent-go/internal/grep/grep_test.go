@@ -1921,10 +1921,10 @@ func TestSherlockHolmes(t *testing.T) {
 // TestGrepHiddenDirAsRoot verifies that the pure-Go walker searches inside a
 // hidden directory when it is set as the explicit search path.
 // Regression: the walker was skipping any directory whose name starts with ".",
-// including the root itself, so Grep(path=".discobot") returned no matches.
+// including the root itself, so Grep(path=".discboeing") returned no matches.
 func TestGrepHiddenDirAsRoot(t *testing.T) {
 	dir := t.TempDir()
-	hiddenDir := filepath.Join(dir, ".discobot", "hooks")
+	hiddenDir := filepath.Join(dir, ".discboeing", "hooks")
 	if err := os.MkdirAll(hiddenDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -1932,13 +1932,13 @@ func TestGrepHiddenDirAsRoot(t *testing.T) {
 
 	results, err := Grep(context.Background(), GrepOptions{
 		Pattern: "TODO",
-		Path:    filepath.Join(dir, ".discobot"),
+		Path:    filepath.Join(dir, ".discboeing"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if results.TotalCount == 0 {
-		t.Fatal("expected a match inside .discobot, got none")
+		t.Fatal("expected a match inside .discboeing, got none")
 	}
 }
 

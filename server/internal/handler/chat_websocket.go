@@ -6,9 +6,9 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/obot-platform/discobot/server/internal/middleware"
-	"github.com/obot-platform/discobot/server/internal/model"
-	"github.com/obot-platform/discobot/server/internal/realtime"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/middleware"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/model"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/realtime"
 )
 
 // ChatWebSocket multiplexes project-scoped realtime streams over a single WebSocket.

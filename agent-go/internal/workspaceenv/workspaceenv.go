@@ -12,7 +12,7 @@ import (
 	"unicode"
 )
 
-const RelativePath = ".discobot/env"
+const RelativePath = ".discboeing/env"
 
 // ProcessSnapshot returns the current process environment.
 func ProcessSnapshot() map[string]string {
@@ -51,7 +51,7 @@ func List(env map[string]string) []string {
 }
 
 // FileSnapshot returns the latest parsed values from workspace-local
-// .discobot/env. Invalid lines are ignored with a warning.
+// .discboeing/env. Invalid lines are ignored with a warning.
 func FileSnapshot(workspaceRoot string) map[string]string {
 	if workspaceRoot == "" {
 		return nil

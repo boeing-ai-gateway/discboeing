@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 // TurnPhase represents the phase of an active turn's lifecycle.

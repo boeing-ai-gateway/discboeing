@@ -15,8 +15,8 @@ import (
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
 
-	"github.com/obot-platform/discobot/agent-go/internal/processes"
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/processes"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
 )
 
 type execResizeRequest struct {
@@ -71,7 +71,7 @@ func (h *Handler) CreateExec(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) registerConsoleSudoTokenForExec(w http.ResponseWriter, req processes.CreateRequest) (func(), bool) {
-	if req.Kind != processes.KindUserExec || !req.TTY || req.Env["DISCOBOT_SUDO_RUNTIME"] != "console" {
+	if req.Kind != processes.KindUserExec || !req.TTY || req.Env["DISCBOEING_SUDO_RUNTIME"] != "console" {
 		return nil, true
 	}
 	token := req.Env[sudoauth.TokenEnvVar]

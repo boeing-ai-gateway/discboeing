@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/obot-platform/discobot/server/internal/git"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/git"
 )
 
 // createTestGitRepo creates a test git repository with some initial content

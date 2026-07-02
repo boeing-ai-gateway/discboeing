@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/obot-platform/discobot/agent-go/message"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/message"
 )
 
 func TestRunTurn_PersistsUserMessageMetadata(t *testing.T) {
@@ -25,7 +25,7 @@ func TestRunTurn_PersistsUserMessageMetadata(t *testing.T) {
 		},
 	}
 
-	meta := json.RawMessage(`{"discobot":{"kind":"hook-failure","hookName":"Go Check","exitCode":2}}`)
+	meta := json.RawMessage(`{"discboeing":{"kind":"hook-failure","hookName":"Go Check","exitCode":2}}`)
 	chunks := collectChunks(t, RunTurn(
 		context.Background(), prov, &mockExecutor{}, store,
 		threadID, "", TurnConfig{
@@ -61,14 +61,14 @@ func TestRunTurn_PersistsUserMessageMetadata(t *testing.T) {
 	if gotChunkMeta["originalText"] != nil {
 		t.Fatalf("user chunk metadata unexpectedly included originalText: %#v", gotChunkMeta)
 	}
-	gotDiscobot, ok := gotChunkMeta["discobot"].(map[string]any)
+	gotDiscboeing, ok := gotChunkMeta["discboeing"].(map[string]any)
 	if !ok {
-		t.Fatalf("user chunk metadata missing discobot payload: %#v", gotChunkMeta)
+		t.Fatalf("user chunk metadata missing discboeing payload: %#v", gotChunkMeta)
 	}
-	if gotDiscobot["kind"] != "hook-failure" || gotDiscobot["hookName"] != "Go Check" || gotDiscobot["exitCode"] != float64(2) {
-		t.Fatalf("user chunk metadata lost existing discobot fields: %#v", gotChunkMeta)
+	if gotDiscboeing["kind"] != "hook-failure" || gotDiscboeing["hookName"] != "Go Check" || gotDiscboeing["exitCode"] != float64(2) {
+		t.Fatalf("user chunk metadata lost existing discboeing fields: %#v", gotChunkMeta)
 	}
-	if turnID, ok := gotDiscobot["turnId"].(string); !ok || turnID == "" {
+	if turnID, ok := gotDiscboeing["turnId"].(string); !ok || turnID == "" {
 		t.Fatalf("user chunk metadata missing turnId: %#v", gotChunkMeta)
 	}
 
@@ -106,7 +106,7 @@ func TestRunTurn_PersistsPreludeMessagesBeforeUserMessage(t *testing.T) {
 		Synthetic: true,
 		Parts: []message.Part{message.TextPart{
 			Text: "prelude reminder",
-			ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+			ProviderMetadata: message.MarshalProviderMetadata(message.DiscboeingPartMetadata{
 				ReminderKind: "credentials",
 			}),
 		}},
@@ -182,7 +182,7 @@ func TestRunTurn_SyntheticUserMessageIsHiddenFromUI(t *testing.T) {
 			UserSynthetic: true,
 			UserParts: []message.Part{message.TextPart{
 				Text: "<system-reminder>\nContinue after startup recovery.\n</system-reminder>",
-				ProviderMetadata: message.MarshalProviderMetadata(message.DiscobotPartMetadata{
+				ProviderMetadata: message.MarshalProviderMetadata(message.DiscboeingPartMetadata{
 					ReminderKind: "startup-interruption",
 				}),
 			}},

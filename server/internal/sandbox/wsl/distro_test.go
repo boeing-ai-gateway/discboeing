@@ -5,7 +5,7 @@ import "testing"
 func TestParseDistroList(t *testing.T) {
 	output := `  NAME                   STATE           VERSION
 * Ubuntu                 Running         2
-  discobot               Stopped         2
+  discboeing               Stopped         2
   Docker Desktop Data    Stopped         2
   My Custom Distro       Running         1
 `
@@ -41,13 +41,13 @@ func TestParseDistroListSkipsNonEntries(t *testing.T) {
 }
 
 func TestFindDistro(t *testing.T) {
-	distros := []DistroInfo{{Name: "discobot", State: "Stopped", Version: 2}}
+	distros := []DistroInfo{{Name: "discboeing", State: "Stopped", Version: 2}}
 
 	got, ok := FindDistro(distros, "DiscoBot")
 	if !ok {
 		t.Fatal("FindDistro() ok = false, want true")
 	}
-	if got.Name != "discobot" {
-		t.Fatalf("FindDistro() name = %q, want discobot", got.Name)
+	if got.Name != "discboeing" {
+		t.Fatalf("FindDistro() name = %q, want discboeing", got.Name)
 	}
 }

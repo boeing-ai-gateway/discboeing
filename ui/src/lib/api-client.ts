@@ -1095,7 +1095,7 @@ class ApiClient {
 	/**
 	 * Start a service in a session's sandbox.
 	 * @param sessionId Session ID
-	 * @param serviceId Service ID (filename in .discobot/services/)
+	 * @param serviceId Service ID (filename in .discboeing/services/)
 	 */
 	async startService(
 		sessionId: string,
@@ -1110,7 +1110,7 @@ class ApiClient {
 	/**
 	 * Stop a service in a session's sandbox.
 	 * @param sessionId Session ID
-	 * @param serviceId Service ID (filename in .discobot/services/)
+	 * @param serviceId Service ID (filename in .discboeing/services/)
 	 */
 	async stopService(
 		sessionId: string,
@@ -1125,7 +1125,7 @@ class ApiClient {
 	/**
 	 * Bind a service target port to a host localhost port.
 	 * @param sessionId Session ID
-	 * @param serviceId Service ID (filename in .discobot/services/)
+	 * @param serviceId Service ID (filename in .discboeing/services/)
 	 * @param request Localhost bind options
 	 */
 	async bindServiceLocalhost(
@@ -1145,7 +1145,7 @@ class ApiClient {
 	/**
 	 * Unbind a service from its host localhost port.
 	 * @param sessionId Session ID
-	 * @param serviceId Service ID (filename in .discobot/services/)
+	 * @param serviceId Service ID (filename in .discboeing/services/)
 	 */
 	async unbindServiceLocalhost(
 		sessionId: string,
@@ -1161,7 +1161,7 @@ class ApiClient {
 	 * Get the URL for streaming service output via SSE.
 	 * Use with EventSource to receive real-time output.
 	 * @param sessionId Session ID
-	 * @param serviceId Service ID (filename in .discobot/services/)
+	 * @param serviceId Service ID (filename in .discboeing/services/)
 	 */
 	getServiceOutputUrl(sessionId: string, serviceId: string): string {
 		return appendAuthToken(

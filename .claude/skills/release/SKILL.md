@@ -12,7 +12,7 @@ Run a release as autonomously as possible. Treat `/release` as authorization to 
 
 ## Core Rules
 
-- Treat `obot-platform/discobot` as the canonical upstream repository.
+- Treat `boeing-ai-gateway/discboeing` as the canonical upstream repository.
 - Treat invoking `/release` as approval to perform the standard release actions for the chosen tag: fetching refs, pushing the current `HEAD` to the canonical `main` branch when needed, waiting for CI, creating and pushing the release tag, updating the GitHub release, and watching the release workflow to completion.
 - Do not stop to ask for routine confirmations, acknowledgements, or permission to continue during the normal release flow.
 - Do not create or push a release tag until the current `HEAD` commit is confirmed to be on that upstream repository's `main` branch.
@@ -42,7 +42,7 @@ Run a release as autonomously as possible. Treat `/release` as authorization to 
 ### 1. Identify the canonical remote
 
 1. Run `git remote -v`.
-2. Select the remote whose fetch URL points to `obot-platform/discobot`.
+2. Select the remote whose fetch URL points to `boeing-ai-gateway/discboeing`.
 3. Do not assume the remote is named `origin` or `upstream`; discover it from the URL.
 4. Fetch the latest refs before making any decisions:
    - `git fetch <remote> --tags`
@@ -99,10 +99,10 @@ Run a release as autonomously as possible. Treat `/release` as authorization to 
 
 1. Generate release notes relative to the correct previous tag.
 2. Use GitHub's generated notes API when possible so the notes are based on the actual comparison range:
-   - `gh api repos/obot-platform/discobot/releases/generate-notes -f tag_name=<tag> -f target_commitish=<sha> -f previous_tag_name=<previous-tag>`
+   - `gh api repos/boeing-ai-gateway/discboeing/releases/generate-notes -f tag_name=<tag> -f target_commitish=<sha> -f previous_tag_name=<previous-tag>`
 3. Also capture a concise changelog from git history for the same range.
 4. Update the GitHub release for the tag with the generated notes:
-   - `gh release edit <tag> --title "Discobot <tag>" --notes-file <file>`
+   - `gh release edit <tag> --title "Discboeing <tag>" --notes-file <file>`
 5. If the tag is an alpha, beta, or RC release, mark the GitHub release as a prerelease when updating it.
 
 ### 7. Watch the release workflow after tagging
@@ -156,11 +156,11 @@ git tag -a <tag> -m "Release <tag>"
 git push <remote> <tag>
 
 # Generate and publish release notes
-gh api repos/obot-platform/discobot/releases/generate-notes \
+gh api repos/boeing-ai-gateway/discboeing/releases/generate-notes \
   -f tag_name=<tag> \
   -f target_commitish=<sha> \
   -f previous_tag_name=<previous-tag>
-gh release edit <tag> --title "Discobot <tag>" --notes-file <file>
+gh release edit <tag> --title "Discboeing <tag>" --notes-file <file>
 
 # Watch release workflow after tag push
 gh run list --workflow release.yml --commit <sha>

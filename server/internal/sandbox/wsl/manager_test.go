@@ -21,15 +21,15 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/obot-platform/discobot/server/internal/config"
+	"github.com/boeing-ai-gateway/discboeing/server/internal/config"
 )
 
 func TestDecodeCommandOutputUTF16LE(t *testing.T) {
-	input := encodeUTF16ForTest("  NAME                   STATE           VERSION\r\n* Ubuntu-24.04           Running         2\r\n  discobot               Stopped         2\r\n", binary.LittleEndian)
+	input := encodeUTF16ForTest("  NAME                   STATE           VERSION\r\n* Ubuntu-24.04           Running         2\r\n  discboeing               Stopped         2\r\n", binary.LittleEndian)
 
 	got := decodeCommandOutput(input)
 
-	if !strings.Contains(got, "discobot") {
+	if !strings.Contains(got, "discboeing") {
 		t.Fatalf("decodeCommandOutput() missing distro name: %q", got)
 	}
 	if strings.ContainsRune(got, '\x00') {
@@ -81,7 +81,7 @@ func TestWaitForCommandSuccessUntilCanceledWaitsForCallerContext(t *testing.T) {
 
 func TestWaitForSystemdReadyInDistroAcceptsDegradedState(t *testing.T) {
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName: "discobot",
+		WSLDistroName: "discboeing",
 		WSLStateDir:   t.TempDir(),
 	})
 
@@ -94,20 +94,20 @@ func TestWaitForSystemdReadyInDistroAcceptsDegradedState(t *testing.T) {
 		if name != "wsl.exe" {
 			t.Fatalf("unexpected command name: %s", name)
 		}
-		if !slices.Equal(args, []string{"-d", "discobot", "--", "systemctl", "is-system-running"}) {
+		if !slices.Equal(args, []string{"-d", "discboeing", "--", "systemctl", "is-system-running"}) {
 			t.Fatalf("unexpected command args: %v", args)
 		}
 		return "degraded\n", errors.New("exit status 1")
 	}
 
-	if err := manager.waitForSystemdReadyInDistro(context.Background(), "discobot"); err != nil {
+	if err := manager.waitForSystemdReadyInDistro(context.Background(), "discboeing"); err != nil {
 		t.Fatalf("waitForSystemdReadyInDistro() error = %v", err)
 	}
 }
 
 func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName: "discobot",
+		WSLDistroName: "discboeing",
 		WSLStateDir:   t.TempDir(),
 	})
 
@@ -131,7 +131,7 @@ func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
 		return distroListForTest("Stopped"), nil
 	}
 
-	distro, err := manager.waitForNamedDistroRunnableState(context.Background(), "discobot")
+	distro, err := manager.waitForNamedDistroRunnableState(context.Background(), "discboeing")
 	if err != nil {
 		t.Fatalf("waitForNamedDistroRunnableState() error = %v", err)
 	}
@@ -144,10 +144,10 @@ func TestWaitForNamedDistroRunnableStateWaitsForInstalling(t *testing.T) {
 }
 
 func TestShouldRecoverBrokenDistroRecognizesUnexpectedStop(t *testing.T) {
-	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discobot\" stopped while waiting for docker.service readiness")) {
+	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discboeing\" stopped while waiting for docker.service readiness")) {
 		t.Fatal("shouldRecoverBrokenDistro() = false, want true for stopped distro error")
 	}
-	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discobot\" disappeared while waiting for /var readiness")) {
+	if !shouldRecoverBrokenDistro(errors.New("managed WSL distro \"discboeing\" disappeared while waiting for /var readiness")) {
 		t.Fatal("shouldRecoverBrokenDistro() = false, want true for disappeared distro error")
 	}
 }
@@ -156,12 +156,12 @@ func TestVarDiskLabelSanitizesDistroName(t *testing.T) {
 	t.Parallel()
 
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName: "Discobot Data",
+		WSLDistroName: "Discboeing Data",
 		WSLStateDir:   t.TempDir(),
 	})
 
-	if got := manager.varDiskLabel(); got != "discobot-data-va" {
-		t.Fatalf("varDiskLabel() = %q, want %q", got, "discobot-data-va")
+	if got := manager.varDiskLabel(); got != "discboeing-data-va" {
+		t.Fatalf("varDiskLabel() = %q, want %q", got, "discboeing-data-va")
 	}
 }
 
@@ -184,27 +184,27 @@ func TestIsStaleVarDiskUnmountError(t *testing.T) {
 	}
 }
 
-func TestBuildDiscobotWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
+func TestBuildDiscboeingWSLEnvFileQuotesVarDiskLabel(t *testing.T) {
 	t.Parallel()
 
 	manager := &DistroManager{cfg: &config.Config{
-		WSLDistroName: "Discobot Data",
+		WSLDistroName: "Discboeing Data",
 		WSLStateDir:   t.TempDir(),
 	}}
 
-	got := manager.buildDiscobotWSLEnvFile()
+	got := manager.buildDiscboeingWSLEnvFile()
 
-	if !strings.Contains(got, "DISCOBOT_GUEST_PLATFORM='wsl'") {
-		t.Fatalf("buildDiscobotWSLEnvFile() missing guest platform: %q", got)
+	if !strings.Contains(got, "DISCBOEING_GUEST_PLATFORM='wsl'") {
+		t.Fatalf("buildDiscboeingWSLEnvFile() missing guest platform: %q", got)
 	}
-	if !strings.Contains(got, "DISCOBOT_VAR_DISK_LABEL='discobot-data-va'") {
-		t.Fatalf("buildDiscobotWSLEnvFile() missing quoted disk label: %q", got)
+	if !strings.Contains(got, "DISCBOEING_VAR_DISK_LABEL='discboeing-data-va'") {
+		t.Fatalf("buildDiscboeingWSLEnvFile() missing quoted disk label: %q", got)
 	}
 }
 
 func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName: "discobot",
+		WSLDistroName: "discboeing",
 		WSLStateDir:   t.TempDir(),
 	})
 
@@ -218,7 +218,7 @@ func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
 		if name != "wsl.exe" {
 			t.Fatalf("unexpected command name: %s", name)
 		}
-		if slices.Equal(args, []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}) {
+		if slices.Equal(args, []string{"-d", "discboeing", "--", "mountpoint", "-q", "/var"}) {
 			mountpointCalls++
 			return "", nil
 		}
@@ -226,7 +226,7 @@ func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
 		return "", nil
 	}
 
-	err := manager.waitForVarReadyInDistro(context.Background(), "discobot")
+	err := manager.waitForVarReadyInDistro(context.Background(), "discboeing")
 	if err != nil {
 		t.Fatalf("waitForVarReadyInDistro() error = %v", err)
 	}
@@ -237,7 +237,7 @@ func TestWaitForVarReadyInDistroUsesMountpointOnly(t *testing.T) {
 
 func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *testing.T) {
 	root := t.TempDir()
-	installDir := filepath.Join(root, "discobot")
+	installDir := filepath.Join(root, "discboeing")
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
@@ -246,7 +246,7 @@ func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *
 	}
 
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName: "discobot",
+		WSLDistroName: "discboeing",
 		WSLInstallDir: installDir,
 		WSLStateDir:   filepath.Join(root, "state"),
 	})
@@ -259,7 +259,7 @@ func TestEnsureMainDistroReadyReportsBootstrapRequiredForBrokenRuntimeDistro(t *
 	}
 	sequence := []expectedCommand{
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "Catastrophic failure\r\nError code: Wsl/Service/E_UNEXPECTED\r\n", err: errors.New("exit status 1")},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-system-running"}, output: "Catastrophic failure\r\nError code: Wsl/Service/E_UNEXPECTED\r\n", err: errors.New("exit status 1")},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 
@@ -312,7 +312,7 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 	}
 
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName:  "discobot",
+		WSLDistroName:  "discboeing",
 		WSLStateDir:    root,
 		WSLVarDiskPath: varDiskPath,
 	})
@@ -325,12 +325,12 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 	}
 	sequence := []expectedCommand{
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Stopped")},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "true"}},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, err: errors.New("exit status 1")},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "true"}},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-system-running"}, err: errors.New("exit status 1")},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Stopped")},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running\n"},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-system-running"}, output: "running\n"},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "mountpoint", "-q", "/var"}},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 
@@ -371,7 +371,7 @@ func TestEnsureMainDistroReadyRetriesWhenDistroTemporarilyStopsDuringStartup(t *
 func TestEnsureHostStartupWithPowerShellRunsElevatedExecuteWhenCheckNeedsActions(t *testing.T) {
 	root := t.TempDir()
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName:  "discobot",
+		WSLDistroName:  "discboeing",
 		WSLStateDir:    root,
 		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
 	})
@@ -385,7 +385,7 @@ func TestEnsureHostStartupWithPowerShellRunsElevatedExecuteWhenCheckNeedsActions
 		runElevatedWSLStartupPowerShell = originalRunElevatedWSLStartupPowerShell
 	})
 
-	scriptPath := filepath.Join(root, "discobot-wsl-startup.ps1")
+	scriptPath := filepath.Join(root, "discboeing-wsl-startup.ps1")
 	findWSLStartupScriptPath = func() (string, error) {
 		return scriptPath, nil
 	}
@@ -485,7 +485,7 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
 
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName:  "discobot",
+		WSLDistroName:  "discboeing",
 		WSLStateDir:    root,
 		WSLInstallDir:  filepath.Join(root, "distro"),
 		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
@@ -502,7 +502,7 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 		runCommandOutput = originalRunCommandOutput
 	})
 
-	scriptPath := filepath.Join(root, "discobot-wsl-startup.ps1")
+	scriptPath := filepath.Join(root, "discboeing-wsl-startup.ps1")
 	findWSLStartupScriptPath = func() (string, error) {
 		return scriptPath, nil
 	}
@@ -554,9 +554,9 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 	}
 	sequence := []expectedCommand{
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running\n"},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-system-running"}, output: "running\n"},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "mountpoint", "-q", "/var"}},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-active", "docker.service"}, output: "active\n"},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 	callIndex := 0
@@ -592,7 +592,7 @@ func TestEnsureVMRunningWithProgressRunsElevatedHostStartupWhenRequired(t *testi
 func TestEnsureHostStartupWithPowerShellReturnsWellKnownWSLUnavailableError(t *testing.T) {
 	root := t.TempDir()
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName:  "discobot",
+		WSLDistroName:  "discboeing",
 		WSLStateDir:    root,
 		WSLVarDiskPath: filepath.Join(root, "var.vhdx"),
 	})
@@ -605,7 +605,7 @@ func TestEnsureHostStartupWithPowerShellReturnsWellKnownWSLUnavailableError(t *t
 	})
 
 	findWSLStartupScriptPath = func() (string, error) {
-		return filepath.Join(root, "discobot-wsl-startup.ps1"), nil
+		return filepath.Join(root, "discboeing-wsl-startup.ps1"), nil
 	}
 	runWSLStartupPowerShell = func(context.Context, string, ...string) (wslStartupScriptResult, error) {
 		return wslStartupScriptResult{
@@ -692,7 +692,7 @@ func TestEnsureMainDistroReadyDoesNotRequireVarDiskBeforeDistroChecks(t *testing
 	root := t.TempDir()
 	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName: "discobot",
+		WSLDistroName: "discboeing",
 		WSLStateDir:   root,
 	})
 
@@ -704,9 +704,9 @@ func TestEnsureMainDistroReadyDoesNotRequireVarDiskBeforeDistroChecks(t *testing
 	}
 	sequence := []expectedCommand{
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-system-running"}, output: "running"},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "mountpoint", "-q", "/var"}},
-		{name: "wsl.exe", args: []string{"-d", "discobot", "--", "systemctl", "is-active", "docker.service"}, output: "active"},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-system-running"}, output: "running"},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "mountpoint", "-q", "/var"}},
+		{name: "wsl.exe", args: []string{"-d", "discboeing", "--", "systemctl", "is-active", "docker.service"}, output: "active"},
 		{name: "wsl.exe", args: []string{"--list", "--verbose"}, output: distroListForTest("Running")},
 	}
 
@@ -748,12 +748,12 @@ func TestHideWindowsTerminalWSLProfilesInSettings(t *testing.T) {
 		"      {\n" +
 		"        \"guid\": \"{one}\",\n" +
 		"        \"hidden\": false,\n" +
-		"        \"name\": \"Discobot\",\n" +
+		"        \"name\": \"Discboeing\",\n" +
 		"        \"source\": \"Microsoft.WSL\"\n" +
 		"      },\n" +
 		"      {\n" +
 		"        \"guid\": \"{two}\",\n" +
-		"        \"name\": \"Discobot\",\n" +
+		"        \"name\": \"Discboeing\",\n" +
 		"        \"source\": \"Windows.Terminal.Wsl\"\n" +
 		"      },\n" +
 		"      {\n" +
@@ -766,7 +766,7 @@ func TestHideWindowsTerminalWSLProfilesInSettings(t *testing.T) {
 		"  }\n" +
 		"}\n")
 
-	updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(settings, "Discobot", `C:\Program Files\Discobot\icon.ico`)
+	updated, changed, err := hideWindowsTerminalWSLProfilesInSettings(settings, "Discboeing", `C:\Program Files\Discboeing\icon.ico`)
 	if err != nil {
 		t.Fatalf("hideWindowsTerminalWSLProfilesInSettings() error = %v", err)
 	}
@@ -775,20 +775,20 @@ func TestHideWindowsTerminalWSLProfilesInSettings(t *testing.T) {
 	}
 
 	updatedText := string(updated)
-	if strings.Count(updatedText, `"name": "Discobot"`) != 2 {
-		t.Fatalf("updated settings missing discobot profiles:\n%s", updatedText)
+	if strings.Count(updatedText, `"name": "Discboeing"`) != 2 {
+		t.Fatalf("updated settings missing discboeing profiles:\n%s", updatedText)
 	}
 	if strings.Count(updatedText, `"hidden": true`) != 2 {
 		t.Fatalf("updated settings hidden=true count = %d, want 2\n%s", strings.Count(updatedText, `"hidden": true`), updatedText)
 	}
-	if strings.Contains(updatedText, "\"hidden\": false,\n        \"name\": \"Discobot\"") {
-		t.Fatalf("updated settings still contain visible discobot profile:\n%s", updatedText)
+	if strings.Contains(updatedText, "\"hidden\": false,\n        \"name\": \"Discboeing\"") {
+		t.Fatalf("updated settings still contain visible discboeing profile:\n%s", updatedText)
 	}
-	if strings.Count(updatedText, `"icon": "C:\\Program Files\\Discobot\\icon.ico"`) != 2 {
-		t.Fatalf("updated settings icon count = %d, want 2\n%s", strings.Count(updatedText, `"icon": "C:\\Program Files\\Discobot\\icon.ico"`), updatedText)
+	if strings.Count(updatedText, `"icon": "C:\\Program Files\\Discboeing\\icon.ico"`) != 2 {
+		t.Fatalf("updated settings icon count = %d, want 2\n%s", strings.Count(updatedText, `"icon": "C:\\Program Files\\Discboeing\\icon.ico"`), updatedText)
 	}
 	if !strings.Contains(updatedText, "\"hidden\": false,\n        \"name\": \"Ubuntu-24.04\"") {
-		t.Fatalf("updated settings changed non-discobot WSL profile unexpectedly:\n%s", updatedText)
+		t.Fatalf("updated settings changed non-discboeing WSL profile unexpectedly:\n%s", updatedText)
 	}
 }
 
@@ -806,7 +806,7 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 		"      {\n" +
 		"        \"guid\": \"{one}\",\n" +
 		"        \"hidden\": false,\n" +
-		"        \"name\": \"Discobot\",\n" +
+		"        \"name\": \"Discboeing\",\n" +
 		"        \"source\": \"Microsoft.WSL\"\n" +
 		"      }\n" +
 		"    ]\n" +
@@ -817,9 +817,9 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 	}
 
 	manager := NewDistroManager(&config.Config{
-		WSLDistroName:   "Discobot",
+		WSLDistroName:   "Discboeing",
 		WSLStateDir:     t.TempDir(),
-		DesktopIconPath: filepath.Join(root, "Discobot", "icon.ico"),
+		DesktopIconPath: filepath.Join(root, "Discboeing", "icon.ico"),
 	})
 	if err := hideWindowsTerminalWSLProfiles(manager.cfg.WSLDistroName, manager.cfg.DesktopIconPath); err != nil {
 		t.Fatalf("hideWindowsTerminalWSLProfiles() error = %v", err)
@@ -837,19 +837,19 @@ func TestManagerHideWindowsTerminalWSLProfilesUpdatesExistingSettingsFile(t *tes
 	}
 }
 
-func TestCustomizeImportRootfsTarReplacesDiscobotWSLEnvFile(t *testing.T) {
+func TestCustomizeImportRootfsTarReplacesDiscboeingWSLEnvFile(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
 	sourceTarPath := filepath.Join(root, "rootfs.tar")
 	if err := writeTestTar(sourceTarPath, map[string]string{
-		"./etc/default/discobot-wsl": "DISCOBOT_GUEST_PLATFORM='vz'\n",
-		"./etc/hostname":             "discobot\n",
+		"./etc/default/discboeing-wsl": "DISCBOEING_GUEST_PLATFORM='vz'\n",
+		"./etc/hostname":             "discboeing\n",
 	}); err != nil {
 		t.Fatalf("writeTestTar() error = %v", err)
 	}
 
-	wantEnvFile := "DISCOBOT_GUEST_PLATFORM='wsl'\nDISCOBOT_VAR_DISK_LABEL='discobot-var'\n"
+	wantEnvFile := "DISCBOEING_GUEST_PLATFORM='wsl'\nDISCBOEING_VAR_DISK_LABEL='discboeing-var'\n"
 	customizedTarPath, cleanup, err := customizeImportRootfsTar(sourceTarPath, root, wantEnvFile)
 	if err != nil {
 		t.Fatalf("customizeImportRootfsTar() error = %v", err)
@@ -861,17 +861,17 @@ func TestCustomizeImportRootfsTarReplacesDiscobotWSLEnvFile(t *testing.T) {
 		t.Fatalf("readTestTar() error = %v", err)
 	}
 
-	if got := files["etc/default/discobot-wsl"]; got != wantEnvFile {
+	if got := files["etc/default/discboeing-wsl"]; got != wantEnvFile {
 		t.Fatalf("customized env file = %q, want %q", got, wantEnvFile)
 	}
-	if got := files["etc/hostname"]; got != "discobot\n" {
-		t.Fatalf("hostname file = %q, want %q", got, "discobot\n")
+	if got := files["etc/hostname"]; got != "discboeing\n" {
+		t.Fatalf("hostname file = %q, want %q", got, "discboeing\n")
 	}
 }
 
 func TestCleanupTempRootfsFileRetriesTransientRemoveFailure(t *testing.T) {
 	root := t.TempDir()
-	tempPath := filepath.Join(root, "discobot-rootfs-test.tar")
+	tempPath := filepath.Join(root, "discboeing-rootfs-test.tar")
 	if err := os.WriteFile(tempPath, []byte("temp"), 0644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -908,9 +908,9 @@ func TestCleanupStaleRootfsTempFilesRemovesOnlyOldMatchingFiles(t *testing.T) {
 	t.Parallel()
 
 	root := t.TempDir()
-	oldRootfsPath := filepath.Join(root, "discobot-rootfs-old.tar")
-	oldImportPath := filepath.Join(root, "discobot-rootfs-import-old.tar")
-	recentRootfsPath := filepath.Join(root, "discobot-rootfs-recent.tar")
+	oldRootfsPath := filepath.Join(root, "discboeing-rootfs-old.tar")
+	oldImportPath := filepath.Join(root, "discboeing-rootfs-import-old.tar")
+	recentRootfsPath := filepath.Join(root, "discboeing-rootfs-recent.tar")
 	otherPath := filepath.Join(root, "keep-me.tar")
 
 	for _, filePath := range []string{oldRootfsPath, oldImportPath, recentRootfsPath, otherPath} {
@@ -1006,5 +1006,5 @@ func readTestTar(tarPath string) (map[string]string, error) {
 }
 
 func distroListForTest(state string) string {
-	return fmt.Sprintf("  NAME                   STATE           VERSION\r\n* Ubuntu-24.04           Running         2\r\n  discobot               %s         2\r\n", state)
+	return fmt.Sprintf("  NAME                   STATE           VERSION\r\n* Ubuntu-24.04           Running         2\r\n  discboeing               %s         2\r\n", state)
 }

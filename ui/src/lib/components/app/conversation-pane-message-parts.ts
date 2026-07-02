@@ -219,7 +219,7 @@ function normalizeHookPathFromMetadata(
 		return path;
 	}
 
-	for (const marker of ["/.discobot/hooks/", "/.claude/hooks/"]) {
+	for (const marker of ["/.discboeing/hooks/", "/.claude/hooks/"]) {
 		const markerIndex = path.indexOf(marker);
 		if (markerIndex !== -1) {
 			return path.slice(markerIndex + 1);
@@ -236,7 +236,7 @@ export function getHookPathDisplayLabel(
 		return undefined;
 	}
 
-	for (const marker of [".discobot/hooks/", "/.discobot/hooks/"]) {
+	for (const marker of [".discboeing/hooks/", "/.discboeing/hooks/"]) {
 		if (path.startsWith(marker)) {
 			return path.slice(marker.length);
 		}
@@ -257,12 +257,12 @@ export function getHookFailureMessageMetadata(
 		return null;
 	}
 
-	const discobot = (metadata as { discobot?: unknown }).discobot;
-	if (!discobot || typeof discobot !== "object") {
+	const discboeing = (metadata as { discboeing?: unknown }).discboeing;
+	if (!discboeing || typeof discboeing !== "object") {
 		return null;
 	}
 
-	const candidate = discobot as Record<string, unknown>;
+	const candidate = discboeing as Record<string, unknown>;
 	if (
 		candidate.kind !== "hook-failure" ||
 		typeof candidate.hookName !== "string" ||

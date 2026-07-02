@@ -108,7 +108,7 @@
 		executionPaused: sessionHooks?.executionPaused ?? false,
 	}));
 	const hookOutputById = $derived.by(() => sessionHooks?.outputsById ?? {});
-	const sandboxProvidersUpdatedEvent = "discobot:sandbox-providers-updated";
+	const sandboxProvidersUpdatedEvent = "discboeing:sandbox-providers-updated";
 
 	let attachmentFiles = $state<ComposerAttachment[]>([]);
 	let composerContainer = $state<HTMLDivElement | null>(null);

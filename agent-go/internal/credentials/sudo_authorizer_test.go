@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/obot-platform/discobot/agent-go/internal/sudoauth"
+	"github.com/boeing-ai-gateway/discboeing/agent-go/internal/sudoauth"
 )
 
 func applySudoCredentialHeader(t *testing.T, mgr *Manager) {
@@ -19,7 +19,7 @@ func applySudoCredentialHeader(t *testing.T, mgr *Manager) {
 		"category":            sudoauth.TokenCategory,
 		"envVar":              SudoTokenEnvVar,
 		"value":               "sudo-token",
-		"provider":            "discobot",
+		"provider":            "discboeing",
 		"authType":            "approval",
 		"agentVisible":        true,
 	}})
@@ -149,7 +149,7 @@ func TestSudoAuthorizer_RejectsExpiredAgentSudoUse(t *testing.T) {
 		"category":     sudoauth.TokenCategory,
 		"envVar":       SudoTokenEnvVar,
 		"value":        "sudo-token",
-		"provider":     "discobot",
+		"provider":     "discboeing",
 		"authType":     "approval",
 		"agentVisible": true,
 	}})

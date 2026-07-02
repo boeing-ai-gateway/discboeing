@@ -27,7 +27,7 @@ const (
 )
 
 var defaultReasoningLevelOverrides = map[string]string{
-	// Codex currently advertises xhigh for GPT-5.4, but Discobot uses medium
+	// Codex currently advertises xhigh for GPT-5.4, but Discboeing uses medium
 	// as the default to keep new sessions balanced unless users opt in.
 	"gpt-5.4": "medium",
 }

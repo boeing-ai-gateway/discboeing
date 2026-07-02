@@ -16,8 +16,8 @@ type StorageLike = {
 	clear: () => void;
 };
 
-const PROMPT_HISTORY_STORAGE_KEY = "discobot:composer-history";
-const PINNED_PROMPTS_STORAGE_KEY = "discobot:composer-history:pinned";
+const PROMPT_HISTORY_STORAGE_KEY = "discboeing:composer-history";
+const PINNED_PROMPTS_STORAGE_KEY = "discboeing:composer-history:pinned";
 
 function readPromptHistoryFromStorage(storage: StorageLike): string[] {
 	const stored = storage.getItem(PROMPT_HISTORY_STORAGE_KEY);
